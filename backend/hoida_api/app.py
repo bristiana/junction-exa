@@ -44,6 +44,13 @@ class ExecuteBody(BaseModel):
     profile: dict[str, str] | None = None
 
 
+class MessageBody(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+ACTIVE_EXECUTION = {'starting', 'running', 'awaiting_approval', 'submitting'}
+
+
 def research_from_run(run, kind='agent'):
     error = run.get('error')
     return dict(kind=kind, status=run.get('status', 'queued'), run_id=run.get('id'), progress=[],
@@ -146,15 +153,52 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
         store.patch_execution(task_id, {'status': 'stopped', 'approval_decision': 'stopped', 'error': 'Approval timed out.'})
         return False
 
+    def on_frame(jpeg):
+        store.put_live_frame(task_id, jpeg)
+
+    def on_usage(usage):
+        store.patch_execution(task_id, {'usage': usage})
+
+    def unread():
+        execution = store.get_task(task_id)['execution'] or {}
+        inbox = execution.get('inbox') or []
+        return inbox, min(int(execution.get('inbox_read') or 0), len(inbox))
+
+    def pending_messages():
+        inbox, read = unread()
+        if read >= len(inbox):
+            return []
+        store.patch_execution(task_id, {'inbox_read': len(inbox)})
+        return [m.get('text', '') for m in inbox[read:]]
+
+    def ask_user(question):
+        store.patch_execution(task_id, {'question': {'text': question, 'at': now()}})
+        deadline = time.monotonic() + 300
+        try:
+            while time.monotonic() < deadline and not should_stop():
+                inbox, read = unread()
+                if read < len(inbox):
+                    store.patch_execution(task_id, {'inbox_read': len(inbox)})
+                    return ' / '.join(m.get('text', '') for m in inbox[read:])
+                time.sleep(1.5)
+            return None
+        finally:
+            store.patch_execution(task_id, {'question': None})
+
     try:
         if should_stop():
             return
         store.patch_execution(task_id, {'status': 'running'})
-        result = run_browser_agent(goal=goal, start_url=start_url, profile=profile,
-                                   hooks=AgentHooks(on_step=on_step, wait_for_approval=wait_for_approval, should_stop=should_stop))
+        base = dict(on_step=on_step, wait_for_approval=wait_for_approval, should_stop=should_stop)
+        try:
+            hooks = AgentHooks(**base, on_frame=on_frame, on_usage=on_usage, pending_messages=pending_messages, ask_user=ask_user)
+        except TypeError:  # an agent build without live view, usage or inbox hooks
+            hooks = AgentHooks(**base)
+        result = run_browser_agent(goal=goal, start_url=start_url, profile=profile, hooks=hooks)
         value = result if isinstance(result, dict) else vars(result)
         store.patch_execution(task_id, {'status': 'stopped' if should_stop() else value['status'],
-                                       'result': value.get('result', ''), 'current_url': value.get('final_url'), 'error': value.get('error')})
+                                       'result': value.get('result', ''), 'current_url': value.get('final_url'), 'error': value.get('error'),
+                                       **{k: value[k] for k in ('usage', 'sources') if value.get(k) is not None}})
     except Exception:
         store.patch_execution(task_id, {'status': 'stopped' if should_stop() else 'failed', 'error': 'Browser session failed.'})
 
@@ -324,6 +368,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if not task['execution'] or task['execution']['status'] != 'awaiting_approval' or task['execution'].get('approval_decision') == 'stopped':
             raise HTTPException(409, 'Execution is not awaiting approval')
         application.state.store.patch_execution(tid, {'approval_decision': 'approved'})
+        return application.state.store.get_task(tid)
+
+    @application.post('/v1/tasks/{tid}/messages')
+    def message(tid: str, body: MessageBody, user=Depends(authenticate)):
+        task = owned(tid, user)
+        if not task['execution'] or task['execution']['status'] not in ACTIVE_EXECUTION:
+            raise HTTPException(409, 'No running execution')
+        application.state.store.patch_execution(tid, message={'at': now(), 'text': body.text, 'source': 'extension'})
         return application.state.store.get_task(tid)
 
     @application.post('/v1/tasks/{tid}/stop')
