@@ -1,0 +1,13 @@
+<!doctype html><title>Custom dropdowns</title>
+<div role="combobox" tabindex="0" aria-label="Destination" aria-controls="cities" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true'); setTimeout(()=>document.querySelector('#cities').hidden=false,80)">Choose city</div>
+<div role="listbox" id="cities" hidden>
+ <div role="option" onclick="choose(this,'[role=combobox]')">Helsinki Airport</div>
+ <div role="option" onclick="choose(this,'[role=combobox]')">Helsinki</div>
+ <div role="option" onclick="choose(this,'[role=combobox]')">Tampere Central</div>
+</div>
+<button type="button" id="ticket" onclick="setTimeout(()=>document.querySelector('ul').hidden=false,80)">Ticket class</button>
+<ul hidden><li onclick="choose(this,'#ticket')">Standard fare</li><li onclick="choose(this,'#ticket')">Flexible fare</li></ul>
+<button type="button" id="seat" aria-controls="seats" onclick="document.querySelector('#seats').hidden=false">Seat</button>
+<div role="listbox" id="seats" hidden><span onclick="choose(this,'#seat')">Window</span></div>
+<label for="native">Native choice</label><select id="native"><option value="one">One</option><option value="two">Two</option></select>
+<script>function choose(el,selector){document.querySelector(selector).textContent=el.textContent; el.parentElement.hidden=true;}</script>

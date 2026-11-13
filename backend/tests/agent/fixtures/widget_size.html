@@ -1,0 +1,10 @@
+<!doctype html><title>Large page</title>
+<select aria-label="Long choices"></select><div role="listbox"></div>
+<div id="buttons"></div><div style="position:absolute;top:5000px"><button>Distant action</button><label>Distant field <input></label></div>
+<p id="long"></p>
+<script>
+document.querySelector('select').innerHTML=Array.from({length:80},(_,i)=>`<option>Native ${i+1}</option>`).join('');
+document.querySelector('[role=listbox]').innerHTML=Array.from({length:80},(_,i)=>`<span role="option" style="display:inline-block">Custom ${i+1}</span>`).join('');
+document.querySelector('#buttons').innerHTML=Array.from({length:210},(_,i)=>`<button>Action ${i+1}</button>`).join('');
+document.querySelector('#long').textContent='Long page text '.repeat(400);
+</script>

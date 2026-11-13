@@ -1,0 +1,10 @@
+<!doctype html><title>Identification</title><main></main>
+<script>
+const q=new URLSearchParams(location.search), kind=q.get('kind');
+const texts={suomi:'Suomi.fi',finnish:'Tunnistaudu pankkitunnukset mobiilivarmenne',bank:'BankID',english:'Strong identification',human:'Verify you are human'};
+const sources={identity:'https://tunnistus.suomi.fi/',turnstile:'https://challenges.cloudflare.com/'};
+const main=document.querySelector('main');
+if(texts[kind]) main.textContent=texts[kind];
+if(sources[kind]) { const frame=document.createElement('iframe'); frame.src=sources[kind]; main.append(frame); }
+if(kind==='link') main.innerHTML='<a href="https://tunnistus.suomi.fi/">Continue</a>';
+</script>

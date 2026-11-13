@@ -1,0 +1,4 @@
+<!doctype html><title>Frame host</title>
+<button onclick="this.textContent='Host clicked'">Host action</button>
+<iframe title="Same origin" src="widget_frame_child.html"></iframe>
+<iframe title="Sandboxed opaque origin" sandbox="allow-scripts" srcdoc="<!doctype html><label>Opaque name <input></label><button onclick=&quot;this.textContent='Opaque clicked'&quot;>Opaque action</button><select aria-label='Opaque choice'><option>One</option><option>Two</option></select><button type='submit'>Confirm booking</button>"></iframe>
