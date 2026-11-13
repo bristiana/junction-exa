@@ -30,6 +30,7 @@ WhatsApp (Meta) ──┘     │  Postgres (Aiven)     └─ browser sandbox (
 | `EXA_API_KEY` | research | yes |
 | `ANTHROPIC_API_KEY` | browser agent | yes for "do it" |
 | `HOIDA_MODEL` | Claude model for the browser agent, default `claude-opus-5-5` | no |
+| `JEV_API_KEY` | errand routing with Jev; without it keyword rules route | no |
 | `DATABASE_URL` | Postgres (Aiven). Without it: SQLite at `HOIDA_SQLITE_PATH` (default `hoida.db`) | no |
 | `CLOUDINARY_URL` | screenshot hosting. Without it: screenshots served by the API from the store | no |
 | `ELEVENLABS_API_KEY` | WhatsApp voice notes to text | no |
@@ -87,7 +88,7 @@ Personal details (name, email, address, ...) live in the extension. The LLMs onl
 
 ### Modes and research kinds
 
-`POST /v1/tasks` first routes the errand (`backend/hoida_api/router.py`): a cheap heuristic, then one small Claude call only when the heuristic is unsure. The task gets `"mode": "find | check | claim | book | watch | write"` and `research.kind`:
+`POST /v1/tasks` first routes the errand (`backend/hoida_api/router.py`): Jev (TypeSafe AI, a typed decision model, ~0.3 s) picks the mode, with each choice asked twice in reversed order; keyword rules take over when Jev is not configured, fails or is unsure. The task gets `"mode": "find | check | claim | book | watch | write"` and `research.kind`:
 
 | kind | Exa call | Used for | Latency |
 |---|---|---|---|

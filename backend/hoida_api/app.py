@@ -18,6 +18,7 @@ from .config import Config
 from .exa import ExaClient, ExaError
 from .guard import SlidingWindow, authenticate, check_origin, check_task_budget
 from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, map_find_output, progress_from_events
+from .jev import JevClient
 from .router import route
 from .store import make_store, now
 from .whatsapp import handle_whatsapp_message, send_whatsapp_message
@@ -162,7 +163,7 @@ def spawn_thread(target, *args):
     threading.Thread(target=target, args=args, daemon=True).start()
 
 
-def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None):
+def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None):
     config = config or Config()
 
     @asynccontextmanager
@@ -174,11 +175,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             application.state.store.close()
         if exa is None:
             application.state.exa.close()
+        if jev is None and application.state.jev:
+            application.state.jev.close()
 
     application = FastAPI(title='Hoida', lifespan=lifespan)
     application.state.config = config
     application.state.store = store
     application.state.exa = exa or ExaClient(config.exa_api_key)
+    application.state.jev = jev or (JevClient(config.jev_api_key) if config.jev_api_key else None)
     application.state.limiter = SlidingWindow()
     application.state.spawn_research_poller = spawn_research_poller or (lambda tid: spawn_thread(research_poller_loop, tid, application))
     application.state.spawn_browser_session = spawn_browser_session or (lambda tid, goal, url, profile: spawn_thread(run_browser_session, tid, goal, url, profile, application))
@@ -237,7 +241,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(422, 'Task must not be blank')
         check_task_budget(request, user)
         state = application.state
-        mode, kind = route(body.task, body.page)
+        mode, kind = route(body.task, body.page, classify=state.jev.classify if state.jev else None)
         previous_run = None
         if body.previous_task_id:
             previous_run = owned(body.previous_task_id, user)['research'].get('run_id')

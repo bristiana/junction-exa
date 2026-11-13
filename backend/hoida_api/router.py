@@ -1,8 +1,15 @@
-"""Deterministic errand routing before the optional classifier hook."""
+"""Errand routing: the optional classifier (Jev) first, keyword rules as the fallback."""
 import re
 
+KINDS = {'find': 'search', 'watch': 'monitor', 'check': 'agent', 'claim': 'agent', 'book': 'agent', 'write': 'agent'}
+MIN_CONFIDENCE = 0.5
 
-def route(task, page=None):
+
+def route(task, page=None, classify=None):
+    if classify:
+        decided = classify(task, page)
+        if decided and decided[0] in KINDS and decided[1] >= MIN_CONFIDENCE:
+            return decided[0], KINDS[decided[0]]
     text = task.lower()
     rules = [
         ('watch', 'monitor', ['watch', 'notify', 'tell me when', 'ilmoita']),
@@ -17,5 +24,4 @@ def route(task, page=None):
             return mode, kind
     if (page or {}).get('selection'):
         return 'check', 'agent'
-    # Optional small classifier hook belongs here when no rule matches.
     return 'check', 'agent'
