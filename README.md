@@ -1,28 +1,43 @@
-# junction-exa
+# The Internet Butler / Your Personal Assistant
+by Exa
 
-Our entry for the **Exa "Internet Butler / Your Personal Assistant"** challenge at Junction 2026 (Espoo, 13–15 Nov 2026).
+## The Challenge
+Build an agent that takes tedious tasks in people's lives off their hands.
 
-## The challenge
-Build a personal agent that takes a tedious task off people's hands. It searches the live web with [Exa](https://exa.ai), works out what needs to happen, and gets the task as close to done as it can. The user gives the final approval.
+**Introduction:** Everyone has pain points in their day to day which require hours of digging and research like checking whether a rent increase is legal, or finding out which benefits a family qualifies for, which vegan restaurant to pick for an anniversary date, and more. The answers exist, but they are buried across the web. Exa is the search engine built for AI. It can find, read and compare information from across the web and pull it back as structured data, so your agent can do the digging and the task can be handed off completely.
 
-**Judged on:**
-- how well it uses Exa to find information that isn't in a model's training data;
-- how useful it is to a specific group of real people;
-- how clearly it shows its sources;
-- originality;
-- whether the demo works on live queries, including ones the judges try themselves.
+**The challenge:** Develop a personal agent that helps people get stuff done. Your agent should find what matters across the web, work out what needs to happen and get the task as close to done as it can, leaving the final approval to the user if needed. Demo on a real case.
 
-## Status
-The idea isn't picked yet. The candidates:
-1. **Can I fly my drone here?** Checks local drone rules, restricted zones and NOTAMs, with sources, then drafts the permit request.
-2. **Moving-to-Finland helper for international students.** Covers the residence permit, registration, insurance, housing and benefits.
-3. **EU261 flight-disruption claims.** Checks whether a delayed or cancelled flight qualifies for compensation and drafts the claim.
+**Areas of interest:** General tasks. Examples: planning special occasions, handling daily living errands, rent, missed benefits, business information, travel disruption, etc.
 
-## Brief
-The full brief, judging criteria and Exa resources are in [docs/CHALLENGE.md](docs/CHALLENGE.md). Judging is 20% each: use of Exa, usefulness, clarity of sources, originality, and a working live demo.
+**How we judge:** We will judge projects on how well they use Exa to get information that could not have come from a model's training data alone, how useful they are to a specific group of real people, and how clearly they show their sources. We will also look at originality and at whether the demo works on live queries, including ones the judges try themselves.
 
-## Setup
-Get the Exa key at dashboard.exa.ai and redeem `EXA50JUNCTION` for $50 in credits. Copy `.env.example` to `.env` and fill in your keys. Never commit `.env`.
+**About Exa:** Exa is a search engine built for AI. We index the web by meaning, so AI applications can find information by describing what they need, and we return clean, structured content that models can use directly. Companies such as Cursor, Cognition, HubSpot and AWS use Exa to connect their products to the web. We are joining Junction to meet builders, see new ideas for what AI can do with access to the whole web, and keep supporting promising teams after the event.
 
-## Deadline
-The final submission is due **Sun 15 Nov, 10:00** (Helsinki). Aim to submit by 09:30.
+## Resources
+**What we'll bring:** Every participant will get $50 in Exa Credits and access to our full API for the event. This includes the Search API with fast, balanced and deep research modes, and the Contents API for full page text, highlights, summaries and crawling a site's subpages.
+
+Teams can filter results by date, domain and category (such as news, research papers, companies, people and personal websites), request results as structured JSON, and retrieve past versions of web pages.
+
+We will also provide Websets for building verified lists of people, companies and opportunities, Monitors for recurring searches, our hosted MCP server, and Python and JavaScript SDKs. Our demo gallery at demos.exa.ai has working examples teams can build from.
+
+Exa engineers will be on site throughout the event to help with technical questions and project ideas, and there will also be a Discord channel to receive asynchronous advice.
+
+**Free $50 Exa Credits:** EXA50JUNCTION (Redeem it at dashboard.exa.ai/billing)
+
+Company website: https://exa.ai/
+
+## Judging Criteria
+| Criterion | Weight | Description |
+|---|---|---|
+| Use of Exa | 20% | Use of Exa to retrieve information that could not have come from a model's training data alone |
+| Usefulness | 20% | Usefulness to a specific group of real people |
+| Clarity | 20% | Clarity in showing sources |
+| Originality | 20% | How original the idea is? |
+| Working Implementation | 20% | Whether the demo works on live queries, including ones the judges try themselves |
+
+## Prizes
+- **1st Place:** $2,500 Cash, $5,000 in Exa credits, Exa hoodie per person & Exa branded TRMNL dashboard
+- **2nd Place:** $1500 cash, $3,000 in Exa credits, Exa hoodie per person & Exa branded macropad
+- **3rd Place:** $500 Cash, $1k Exa credits & Exa hoodie per person
+- **Participation Trophy:** Every Junction participant get free $50 Exa Credits
