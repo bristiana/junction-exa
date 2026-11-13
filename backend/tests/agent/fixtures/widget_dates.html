@@ -1,0 +1,5 @@
+<!doctype html><title>Booking date and time</title>
+<label>Date <input type="date"></label><label>Time <input type="time"></label>
+<label>Appointment <input type="datetime-local"></label><label>Passengers <input type="number"></label>
+<button type="button" onclick="document.querySelector('#calendar').hidden=false">Choose date</button>
+<div id="calendar" role="grid" hidden><button type="button" onclick="document.querySelector('input').value='2026-11-14';this.parentElement.hidden=true">14 November</button></div>

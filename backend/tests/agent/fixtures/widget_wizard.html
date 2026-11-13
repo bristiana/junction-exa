@@ -1,0 +1,5 @@
+<!doctype html><title>Booking wizard</title>
+<section id="step1"><label>Passenger <input></label><button type="button" onclick="next()">Next / Seuraava</button></section>
+<section id="step2" hidden><p>Review your booking</p><button type="submit" onclick="document.querySelector('#result').textContent='Booking confirmed'">Confirm booking</button></section>
+<p id="result"></p>
+<script>function next(){document.querySelector('#step1').hidden=true;document.querySelector('#step2').hidden=false;}</script>

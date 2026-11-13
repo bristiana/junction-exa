@@ -1,0 +1,18 @@
+<!doctype html><title>ARIA and shadow widgets</title>
+<div id="shadow"></div>
+<div role="button" tabindex="0" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true')">Open panel</div>
+<div role="link" tabindex="0">Help link</div>
+<div role="tab" tabindex="0" aria-selected="false" onclick="this.setAttribute('aria-selected','true')">Details tab</div>
+<div role="checkbox" tabindex="0" aria-checked="false" onclick="this.setAttribute('aria-checked',this.getAttribute('aria-checked')==='true'?'false':'true')">Accept policy</div>
+<div role="radio" tabindex="0" aria-checked="true">Email radio</div>
+<div role="menuitem" tabindex="0">Menu action</div>
+<div role="switch" tabindex="0" aria-checked="false" onclick="setTimeout(()=>this.setAttribute('aria-checked',this.getAttribute('aria-checked')==='true'?'false':'true'),80)">Notifications</div>
+<div role="checkbox" aria-disabled="true" aria-checked="false">Disabled choice</div>
+<div contenteditable="true" aria-label="Editable notes">Notes</div>
+<div tabindex="0" onclick="this.textContent='Focus clicked'">Focusable action</div>
+<div tabindex="-1">Skip negative tabindex</div>
+<script>
+const root=document.querySelector('#shadow').attachShadow({mode:'open'});
+root.innerHTML='<label>Shadow name <input></label><select aria-label="Shadow choice"><option>One</option><option>Two</option></select><button type="submit" onclick="this.textContent=\'Shadow clicked\'">Shadow action</button><div id="nested"></div>';
+root.querySelector('#nested').attachShadow({mode:'open'}).innerHTML='<button>Nested action</button>';
+</script>
