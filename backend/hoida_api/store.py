@@ -118,17 +118,17 @@ class Store:
             params += (json.dumps(previous),)
         return bool(self.sql(query + ' RETURNING id', params))
 
-    def patch_execution(self, tid, patch=None, step=None, shot=None):
+    def patch_execution(self, tid, patch=None, step=None, shot=None, message=None):
         # A row lock protects approval decisions from concurrent sandbox steps.
         with self.lock:
             if self.postgres:
                 with self.connection.transaction():
                     row = self.sql('SELECT execution_json FROM tasks WHERE id=? FOR UPDATE', (tid,), one=True)
-                    return self._patch_execution(tid, row, patch, step, shot)
+                    return self._patch_execution(tid, row, patch, step, shot, message)
             row = self.sql('SELECT execution_json FROM tasks WHERE id=?', (tid,), one=True)
-            return self._patch_execution(tid, row, patch, step, shot)
+            return self._patch_execution(tid, row, patch, step, shot, message)
 
-    def _patch_execution(self, tid, row, patch, step, shot):
+    def _patch_execution(self, tid, row, patch, step, shot, message=None):
         execution = json.loads(row['execution_json'] or '{}')
         stopped = execution.get('approval_decision') == 'stopped'
         execution.update(patch or {})
@@ -140,6 +140,9 @@ class Store:
             execution.setdefault('steps', []).append(step)
         if shot:
             execution.setdefault('shots', []).append(shot)
+        if message:
+            # Messages the user sends to a running sandbox (extension or WhatsApp); read by the agent between steps.
+            execution.setdefault('inbox', []).append(message)
         self.update_execution(tid, execution)
         return execution
 
