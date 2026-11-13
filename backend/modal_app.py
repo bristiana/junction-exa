@@ -7,7 +7,7 @@ image = (
     modal.Image.debian_slim(python_version='3.13')
     .pip_install_from_requirements(str(Path(__file__).with_name('requirements.txt')))
     .run_commands('playwright install --with-deps chromium')
-    .add_local_python_source('hoida_api', 'hoida_agent')
+    .add_local_python_source('hoida_api', 'hoida_agent', 'hoida_media', 'hoida_wa')
 )
 secret = modal.Secret.from_name('hoida')
 
@@ -24,7 +24,9 @@ def worker_app():
                       spawn_browser_session=lambda tid, goal, url, profile: browser_session.spawn(tid, goal, url, profile))
 
 
-@app.function(image=image, secrets=[secret])
+# One warm container keeps webhooks and the extension fast; it shares one DB connection.
+@app.function(image=image, secrets=[secret], min_containers=1, max_containers=2)
+@modal.concurrent(max_inputs=20)
 @modal.asgi_app()
 def web():
     return worker_app()
