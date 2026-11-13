@@ -27,7 +27,7 @@ test("calendar links handle all-day and timed events", () => {
   assert.equal(e.searchParams.get("dates"), "20261231/20270101");
 });
 
-test("sources are numbered once and mapped to fields, including nested paths", () => {
+test("sources are numbered once and mapped to fields, including deeper paths", () => {
   const grounding = [
     { field: "answer", citations: [{ url: "https://europa.eu/a", title: "Air passenger rights" }, { url: "https://finnair.com/claim" }], confidence: "high" },
     { field: "steps.1.detail", citations: [{ url: "https://finnair.com/claim" }], confidence: "low" },

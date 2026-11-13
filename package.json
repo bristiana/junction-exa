@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "try": "node --env-file-if-exists=.env scripts/try.mjs"
+    "try": "node --env-file-if-exists=.env scripts/try.mjs",
+    "mock": "node scripts/mock-backend.mjs"
   }
 }

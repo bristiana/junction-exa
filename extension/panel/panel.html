@@ -35,6 +35,25 @@
         <option value="medium">Thorough</option>
       </select>
     </label>
+    <label class="check toggle"><input type="checkbox" id="presence" checked /> <span>Show Hoida on form pages</span></label>
+    <h3>Hoida server</h3>
+    <p class="muted small">Leave empty to talk to Exa directly from this browser. With a server, errands run in the cloud and are shared with WhatsApp; the Exa key above is then not needed.</p>
+    <label class="field">
+      <span>Server URL</span>
+      <div class="row">
+        <input id="backendUrl" type="url" autocomplete="off" spellcheck="false" placeholder="https://…" />
+        <button id="connectBtn" class="btn ghost" type="button">Connect</button>
+      </div>
+      <small id="backendStatus" class="muted"></small>
+    </label>
+    <div class="field">
+      <span>WhatsApp</span>
+      <div class="row">
+        <button id="pairBtn" class="btn ghost" type="button">Link WhatsApp</button>
+        <small id="waStatus" class="muted"></small>
+      </div>
+      <p id="pairInfo" class="pair" hidden></p>
+    </div>
     <h3>Your details</h3>
     <p class="muted small">Used to fill forms and drafts. They stay in this browser: Exa only sees placeholders like {{name}}.</p>
     <div id="profileFields" class="profile"></div>

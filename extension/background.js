@@ -1,12 +1,17 @@
-// Hoida service worker: starts Exa Agent runs, keeps polling them in the background, notifies when an errand is ready,
+// Hoida service worker: starts errands, keeps polling them in the background, notifies when one is ready,
 // and fills forms in the user's tab once they approve. Only this file writes the task list; the panel reads it.
+// Two modes: with no "Hoida server" set it talks to Exa directly (direct mode); with one, errands go through the
+// Hoida API (lib/backend.js) and tasks started on WhatsApp show up here too.
 
 import { createRun, getRun, getRunEvents, cancelRun, TERMINAL } from "./lib/exa.js";
 import { buildRunRequest } from "./lib/task.js";
 import { capturePage, fillPage } from "./lib/page-scripts.js";
 import { fillPlaceholders } from "./lib/actions.js";
+import { redactText } from "./lib/redact.js";
+import * as backend from "./lib/backend.js";
 
 const MAX_TASKS = 30;
+const MAX_HIDDEN = 200;
 
 // ---------- storage (serialized so two polls never overwrite each other) ----------
 let chain = Promise.resolve();
@@ -20,8 +25,12 @@ function withTasks(fn) {
   return chain;
 }
 async function settings() {
-  const { exaKey = "", profile = {}, effort = "low" } = await chrome.storage.local.get(["exaKey", "profile", "effort"]);
-  return { exaKey, profile, effort };
+  const { exaKey = "", profile = {}, effort = "low", backendUrl = "" } = await chrome.storage.local.get(["exaKey", "profile", "effort", "backendUrl"]);
+  return { exaKey, profile, effort, backendUrl };
+}
+async function findTask(id) {
+  const { tasks = [] } = await chrome.storage.local.get("tasks");
+  return tasks.find((x) => x.id === id) || null;
 }
 
 // ---------- setup ----------
@@ -31,8 +40,12 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({ id: "hoida-selection", title: "Hoida: take care of this", contexts: ["selection"] });
     chrome.contextMenus.create({ id: "hoida-page", title: "Hoida: help with this page", contexts: ["page", "link"] });
   });
+  schedulePoll();
 });
 chrome.runtime.onStartup.addListener(() => schedulePoll());
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.backendUrl?.newValue) schedulePoll();
+});
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
@@ -51,23 +64,45 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 // ---------- runs ----------
 async function startTask({ task, tabId, usePage, selection, previousRunId, parentId }) {
-  const { exaKey, profile, effort } = await settings();
+  const { exaKey, profile, effort, backendUrl } = await settings();
   let page = null;
   if (usePage && tabId) {
     try {
       const [res] = await chrome.scripting.executeScript({ target: { tabId }, func: capturePage });
-      page = res?.result || null;
+      page = res?.result || null; // text, selection and title come back redacted
     } catch (e) {
       page = null; // chrome:// pages, the Web Store and PDFs cannot be read
     }
     if (selection) {
       if (!page) {
         const tab = await chrome.tabs.get(tabId).catch(() => null);
-        page = { url: tab?.url || "", title: tab?.title || "", text: "", fields: [] };
+        page = { url: tab?.url || "", title: redactText(tab?.title || ""), text: "", fields: [] };
       }
-      page.selection = selection;
+      page.selection = redactText(selection);
     }
   }
+  const localPage = page ? { url: page.url, title: page.title, fields: page.fields || [], hadSelection: !!page.selection } : null;
+
+  if (backendUrl) {
+    const parent = parentId ? await findTask(parentId) : null;
+    const remote = await backend.createTask({
+      task,
+      page: backend.backendPage(page),
+      effort,
+      previous_task_id: parent?.remoteId || undefined,
+    });
+    const seed = { parentId: parentId || null, tabId: tabId || null, page: localPage, seen: false };
+    const record = await withTasks((tasks) => {
+      const i = tasks.findIndex((x) => x.remoteId === remote.id); // a poll may have brought it in already
+      const rec = backend.toLocalTask(remote, i >= 0 ? { ...tasks[i], ...seed } : seed);
+      if (i >= 0) tasks[i] = rec;
+      else tasks.unshift(rec);
+      return rec;
+    });
+    schedulePoll();
+    return record;
+  }
+
   const request = buildRunRequest(task, page, profile, { effort });
   if (previousRunId) request.previousRunId = previousRunId;
   const run = await createRun(exaKey, request);
@@ -79,7 +114,7 @@ async function startTask({ task, tabId, usePage, selection, previousRunId, paren
     createdAt: Date.now(),
     status: run.status || "queued",
     tabId: tabId || null,
-    page: page ? { url: page.url, title: page.title, fields: page.fields || [], hadSelection: !!page.selection } : null,
+    page: localPage,
     progress: [],
     output: null,
     error: null,
@@ -110,15 +145,44 @@ function progressFromEvents(events = []) {
   return lines.filter((l) => { const k = l.kind + l.text; if (seen.has(k)) return false; seen.add(k); return true; }).slice(-12);
 }
 
+// Server mode: one list call brings updates for this browser's errands and new ones from WhatsApp.
+async function pollBackend() {
+  const { tasks: remote = [] } = (await backend.listTasks()) || {};
+  const { hiddenTasks = [] } = await chrome.storage.local.get("hiddenTasks");
+  const finished = [];
+  const merge = (list) => withTasks((tasks) => {
+    const res = backend.mergeRemoteTasks(tasks, list, { hidden: hiddenTasks });
+    tasks.splice(0, tasks.length, ...res.tasks);
+    finished.push(...res.finished);
+  });
+  await merge(remote);
+  // Active errands that fell off the first page of the list.
+  const listed = new Set(remote.map((r) => r.id));
+  const { tasks = [] } = await chrome.storage.local.get("tasks");
+  for (const t of tasks.filter((x) => x.backend && backend.isActive(x) && !listed.has(x.remoteId))) {
+    try {
+      await merge([await backend.getTask(t.remoteId)]);
+    } catch (e) {
+      if (e.status === 404) await withTasks((ts) => { const x = ts.find((y) => y.id === t.id); if (x) { x.status = "failed"; x.error = "The task was not found on the Hoida server."; } });
+    }
+  }
+  for (const t of finished) notify(t);
+}
+
 let polling = false;
 async function pollAll() {
   if (polling) return;
   polling = true;
   try {
-    const { exaKey } = await settings();
+    const { exaKey, backendUrl } = await settings();
+    if (backendUrl) await pollBackend().catch(() => {});
+    // Direct-mode errands keep polling Exa even after a server is set, until they finish.
     const { tasks = [] } = await chrome.storage.local.get("tasks");
-    const active = tasks.filter((t) => !TERMINAL.has(t.status));
-    if (!active.length) { chrome.alarms.clear("hoida-poll"); return; }
+    const active = tasks.filter((t) => !t.backend && !TERMINAL.has(t.status));
+    if (!active.length) {
+      if (!backendUrl) chrome.alarms.clear("hoida-poll");
+      return;
+    }
     for (const t of active) {
       let run;
       try { run = await getRun(exaKey, t.runId); } catch (e) {
@@ -143,27 +207,27 @@ async function pollAll() {
           if (run.status === "failed") x.error = run.error?.message || "The run failed.";
         }
       });
-      if (done) notify(t, run);
+      if (done) notify({ ...t, output: run.output });
     }
   } finally {
     polling = false;
   }
 }
 
-function notify(t, run) {
-  const answer = run.output?.structured?.answer || run.output?.text || "Your errand is ready.";
+function notify(t) {
+  const answer = t.output?.structured?.answer || t.output?.text || "Your errand is ready.";
+  const task = String(t.task || "");
   chrome.notifications.create(t.id, {
     type: "basic",
     iconUrl: "icons/icon-128.png",
-    title: "Hoida: " + (t.task.length > 50 ? t.task.slice(0, 50) + "…" : t.task),
+    title: "Hoida: " + (task.length > 50 ? task.slice(0, 50) + "…" : task),
     message: String(answer).slice(0, 180),
     priority: 1,
   });
 }
 
 chrome.notifications.onClicked.addListener(async (id) => {
-  const { tasks = [] } = await chrome.storage.local.get("tasks");
-  const t = tasks.find((x) => x.id === id);
+  const t = await findTask(id);
   await chrome.storage.session.set({ focusTask: id });
   if (t?.tabId) {
     try {
@@ -184,8 +248,7 @@ chrome.alarms.onAlarm.addListener((a) => { if (a.name === "hoida-poll") pollAll(
 // ---------- approve: fill the form on the page ----------
 async function fillForm(taskId) {
   const { profile } = await settings();
-  const { tasks = [] } = await chrome.storage.local.get("tasks");
-  const t = tasks.find((x) => x.id === taskId);
+  const t = await findTask(taskId);
   const values = t?.output?.structured?.form_fill || [];
   if (!t || !values.length) return { filled: 0, skipped: [], error: "Nothing to fill." };
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -201,27 +264,87 @@ function sameDoc(a, b) {
   try { const x = new URL(a), y = new URL(b); return x.origin === y.origin && x.pathname === y.pathname; } catch (_) { return false; }
 }
 
-// ---------- messages from the panel ----------
-chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+// ---------- server-only actions on one task (cancel, do it, approve, stop) ----------
+async function onServerTask(taskId, fn) {
+  const t = await findTask(taskId);
+  if (!t?.backend) throw new Error("This needs a Hoida server (settings).");
+  const remote = await fn(t);
+  const rec = await withTasks((tasks) => {
+    const i = tasks.findIndex((x) => x.id === t.id);
+    if (i < 0) return null;
+    tasks[i] = backend.toLocalTask(remote, tasks[i]);
+    return tasks[i];
+  });
+  schedulePoll();
+  return rec;
+}
+
+// ---------- the badge on form pages (content/presence.js) ----------
+function openFromPresence(msg, sender, reply) {
+  const tabId = sender.tab?.id;
+  if (!tabId) { reply({ ok: false, error: "No tab." }); return false; }
+  // Called synchronously from the click on the badge, so Chrome can count it as a user gesture.
+  let opening;
+  try { opening = chrome.sidePanel.open({ tabId }); } catch (e) { opening = Promise.reject(e); }
+  // The panel picks this up now, or the next time it opens (Alt+H) if Chrome refused to open it.
+  chrome.storage.session.set({
+    prefill: {
+      at: Date.now(),
+      tabId,
+      source: "presence",
+      task: "Help me fill in this form",
+      usePage: true,
+      selection: "",
+      link: "",
+      pageTitle: String(msg.title || sender.tab.title || "").slice(0, 200),
+    },
+  }).catch(() => {});
+  Promise.resolve(opening).then(
+    () => reply({ ok: true, data: { opened: true } }),
+    () => reply({ ok: true, data: { opened: false } })
+  );
+  return true;
+}
+
+// ---------- messages from the panel and the badge ----------
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg?.type === "presence-open") return openFromPresence(msg, sender, reply);
   const handlers = {
     start: () => startTask(msg),
     poll: () => pollAll().then(() => true),
     fill: () => fillForm(msg.taskId),
     cancel: async () => {
+      const t = await findTask(msg.taskId);
+      if (t?.backend) {
+        if (!TERMINAL.has(t.status)) await onServerTask(t.id, (x) => backend.cancel(x.remoteId));
+        return true;
+      }
       const { exaKey } = await settings();
-      const { tasks = [] } = await chrome.storage.local.get("tasks");
-      const t = tasks.find((x) => x.id === msg.taskId);
       if (t && !TERMINAL.has(t.status)) await cancelRun(exaKey, t.runId).catch(() => {});
       await withTasks((ts) => { const x = ts.find((y) => y.id === msg.taskId); if (x && !TERMINAL.has(x.status)) x.status = "cancelled"; });
       return true;
     },
-    remove: () => withTasks((ts) => { const i = ts.findIndex((y) => y.id === msg.taskId); if (i >= 0) ts.splice(i, 1); return true; }),
+    execute: () => onServerTask(msg.taskId, async (t) => {
+      const { profile } = await settings();
+      return backend.execute(t.remoteId, { action_index: msg.actionIndex, start_url: msg.startUrl, goal: msg.goal, profile });
+    }),
+    approve: () => onServerTask(msg.taskId, (t) => backend.approve(t.remoteId)),
+    stop: () => onServerTask(msg.taskId, (t) => backend.stop(t.remoteId)),
+    remove: async () => {
+      const t = await findTask(msg.taskId);
+      if (t?.remoteId) {
+        // keep it from coming back with the next poll of the server's list
+        const { hiddenTasks = [] } = await chrome.storage.local.get("hiddenTasks");
+        await chrome.storage.local.set({ hiddenTasks: [t.remoteId, ...hiddenTasks.filter((x) => x !== t.remoteId)].slice(0, MAX_HIDDEN) });
+      }
+      return withTasks((ts) => { const i = ts.findIndex((y) => y.id === msg.taskId); if (i >= 0) ts.splice(i, 1); return true; });
+    },
     seen: () => withTasks((ts) => { const x = ts.find((y) => y.id === msg.taskId); if (x) x.seen = true; return true; }),
   };
   const h = handlers[msg?.type];
   if (!h) return false;
   Promise.resolve()
     .then(h)
-    .then((data) => reply({ ok: true, data }), (e) => reply({ ok: false, error: e?.message || String(e), status: e?.status }));
+    .then((data) => reply({ ok: true, data }), (e) => reply({ ok: false, error: e?.message || String(e), status: e?.status, backend: !!e?.backend }));
   return true;
 });

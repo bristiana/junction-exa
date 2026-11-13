@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+httpx
+anthropic
+psycopg[binary]
+cloudinary
+python-multipart
+pytest
+playwright
+modal
