@@ -83,6 +83,8 @@ def test_exa_tools_sources_usage_and_messages(local_site):
     assert {s['url'] for s in result.sources} == {'https://eur-lex.europa.eu/eli/reg/2004/261', 'https://example.com/claim'}
     assert result.usage['input_tokens'] == 4000 and result.usage['model_calls'] == 4 and result.usage['exa_cost_usd'] == 0.008
     assert usage[-1]['cache_read_input_tokens'] == 3200
+    # 4 calls x (1000 in, 50 out, 800 cache read): (4000*4 + 200*20 + 3200*0.2) / 1e6
+    assert result.usage['claude_cost_usd'] == 0.0206
     assert any(s.startswith('Searched the web with Exa') for s in steps)
     assert any(s.startswith('Message from you') for s in steps)
     for _, _, sent in llm.received:
@@ -180,3 +182,17 @@ def test_forms_that_only_mention_identification_or_recaptcha_are_not_blocked(loc
         assert browser.blockers() == []
     finally:
         browser.close()
+
+
+import pytest
+from hoida_agent.guard import is_final_submit
+
+
+@pytest.mark.parametrize('label,final', [
+    ('Jatka', False), ('Seuraava', False), ('Next', False), ('4 henkilöä', False), ('19:00', False), ('la 21.11.', False),
+    ('21', False), ('Palaa vaiheeseen Seurueen koko', False), ('Lisää vaihtoehtoja', False),
+    ('Vahvista varaus', True), ('Tee varaus', True), ('Varaa pöytä', True), ('Jatka maksamaan', True),
+    ('Continue to payment', True), ('Lähetä', True), ('Book now', True), ('Something unclear', True),
+])
+def test_wizard_steps_pass_on_submit_buttons_but_final_steps_do_not(label, final):
+    assert is_final_submit(f'<button type="submit">{label}</button> button type=submit {label}', label) is final

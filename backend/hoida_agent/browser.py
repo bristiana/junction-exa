@@ -141,6 +141,14 @@ class Browser:
           (el.localName==='button' ? 'button type='+el.type : '') + ' ' +
           (el.innerText||'') + ' ' + (el.getAttribute('aria-label')||'')''')
 
+    def element_info(self, ref):
+        """Visible label and whether the element sits inside a cookie/consent banner."""
+        return self._element(ref).evaluate('''el => ({
+          label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\\s+/g,' ').trim().slice(0,120),
+          consent: !!el.closest('[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[id*=usercentrics i],[id*=onetrust i],#CybotCookiebotDialog,[aria-label*=cookie i],[aria-label*=eväst i]')
+            || (el.getRootNode() instanceof ShadowRoot && /usercentrics|cookie|consent/i.test(el.getRootNode().host.id + ' ' + el.getRootNode().host.className))
+        })''')
+
     def click(self, ref):
         self._element(ref).click()
         self._settle()
@@ -252,7 +260,7 @@ class Browser:
               if(els.some(el=>el.matches('input[type=password]'))
                  || /(^|\.)tunnistus\.suomi\.fi$/i.test(location.hostname)
                  || els.some(el=>el.matches('iframe') && /tunnistus\.suomi\.fi/i.test(el.src||''))
-                 || (!fields.length && strongAuth.test(text))) found.push('login');
+                 || (!fields.length && strongAuth.test(text) && els.filter(el=>el.matches('a[href],button,[role=button]')).length < 8)) found.push('login');
               // Only challenges a person must solve; invisible reCAPTCHA v3 badges and "protected by reCAPTCHA" notes do not block.
               const challengeFrame=el=>el.matches('iframe') && big(el) && !/size=invisible/i.test(el.src||'') && !el.closest('.grecaptcha-badge') &&
                  (/challenges\.cloudflare\.com|recaptcha\/(api2|enterprise)\/(anchor|bframe)|hcaptcha\.com/i.test(el.src||'') || /captcha|turnstile/i.test(el.title||''));
