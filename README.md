@@ -18,6 +18,9 @@ The idea isn't picked yet. The candidates:
 2. **Moving-to-Finland helper for international students.** Covers the residence permit, registration, insurance, housing and benefits.
 3. **EU261 flight-disruption claims.** Checks whether a delayed or cancelled flight qualifies for compensation and drafts the claim.
 
+## Brief
+The full brief, judging criteria and Exa resources are in [docs/CHALLENGE.md](docs/CHALLENGE.md). Judging is 20% each: use of Exa, usefulness, clarity of sources, originality, and a working live demo.
+
 ## Setup
 Get the Exa key at dashboard.exa.ai and redeem `EXA50JUNCTION` for $50 in credits. Copy `.env.example` to `.env` and fill in your keys. Never commit `.env`.
 
