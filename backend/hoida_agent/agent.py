@@ -82,6 +82,16 @@ def _validate(value, schema):
 
 
 _USAGE_KEYS = ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')
+# USD per million tokens (claude-opus-5-5 list price; cache writes at 1.25x input). Override with HOIDA_PRICES=in,out,read,write.
+_PRICES = dict(zip(_USAGE_KEYS, (4.0, 20.0, 0.20, 5.0)))
+
+
+def _cost(usage):
+    import os
+    prices = _PRICES
+    if os.environ.get('HOIDA_PRICES'):
+        prices = dict(zip(_USAGE_KEYS, (float(x) for x in os.environ['HOIDA_PRICES'].split(','))))
+    return round(sum(usage.get(k, 0) * prices[k] for k in _USAGE_KEYS) / 1_000_000, 4)
 
 
 def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
@@ -137,6 +147,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         usage['model_calls'] += 1
         for key in _USAGE_KEYS:
             usage[key] += int(getattr(found, key, 0) or 0)
+        usage['claude_cost_usd'] = _cost(usage)
         if hooks.on_usage:
             try:
                 hooks.on_usage(dict(usage))
@@ -172,9 +183,16 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                 'request_approval': 'Waiting for your approval', 'finish': 'Finished', 'fail': 'Stopped'}.get(name, name.replace('_', ' '))
         return mask(text, profile)
 
+    consent_done = set()
+
     def consent():
+        # Consent managers often load a second after the page; retry on later steps until one is closed per site.
+        host = browser.current_url.split('/')[2] if '//' in browser.current_url else ''
+        if host in consent_done:
+            return
         label = dismiss_cookie_banner(browser.page)
         if label:
+            consent_done.add(host)
             hooks.on_step(f'Cookie banner closed with "{mask(label, profile)}"', None)
 
     def snapshot():
@@ -310,8 +328,10 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                         else:
                             if name == 'click':
                                 described = browser.element_text(args['ref'])
-                                final = is_final_submit(described)
-                                if not final and not approved:
+                                info = browser.element_info(args['ref'])
+                                # Cookie consent is never an irreversible commitment ("Confirm my choices").
+                                final = False if info['consent'] else is_final_submit(described, info['label'])
+                                if not final and not approved and not info['consent']:
                                     # Jev can only make the guard stricter: a confident "irreversible" blocks the click.
                                     p = final_submit_probability(jev, mask(described, profile), last_snapshot)
                                     final = p is not None and p >= 0.6
@@ -337,6 +357,8 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                 browser.press(args['key'])
                             elif name == 'scroll':
                                 browser.scroll(args['direction'])
+                            if name != 'scroll':
+                                consent()
                             content = snapshot()
                         final_url = browser.current_url
                         if name not in ('exa_search', 'exa_read', 'ask_user'):
