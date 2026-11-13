@@ -1,5 +1,6 @@
 """Bounded, append-only tool loop for Hoida's browser hand."""
 import base64
+import re
 from dataclasses import dataclass
 from typing import Literal
 from .browser import Browser
@@ -153,6 +154,24 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
             hooks.on_step('Message from you: ' + mask(texts[-1], profile)[:200], None)
         return [{'type': 'text', 'text': 'Message from the user, sent while you work: ' + mask(t, profile)[:2000]} for t in texts]
 
+    def label_of(ref):
+        for line in last_snapshot.splitlines():
+            if line.startswith(f'[{ref}] '):
+                match = re.search(r'"((?:[^"\\]|\\.)*)"', line)
+                return (match.group(1) if match else line.split(' ', 2)[-1])[:60] or ref
+        return ref
+
+    def describe(name, args):
+        target = label_of(args['ref']) if 'ref' in args else ''
+        text = {'click': f'Clicked "{target}"',
+                'type_text': f'Filled "{target}"' + (f" with {args.get('text', '')[:60]}" if '{{' in args.get('text', '') else ''),
+                'select_option': f'Chose "{args.get("option", "")[:40]}" in "{target}"',
+                'set_checkbox': ('Ticked' if args.get('checked') else 'Unticked') + f' "{target}"',
+                'press_key': f'Pressed {args.get("key", "")}', 'scroll': f'Scrolled {args.get("direction", "")}',
+                'open_url': f'Opened {args.get("url", "")[:120]}', 'read_page': 'Read the page', 'look': 'Looked at the page',
+                'request_approval': 'Waiting for your approval', 'finish': 'Finished', 'fail': 'Stopped'}.get(name, name.replace('_', ' '))
+        return mask(text, profile)
+
     def consent():
         label = dismiss_cookie_banner(browser.page)
         if label:
@@ -243,6 +262,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                         if spec is None:
                             raise ValueError('Unknown tool')
                         _validate(args, spec['input_schema'])
+                        step_text = describe(name, args)  # before the action: refs point at the page the model saw
                         blockers = browser.blockers()
                         if blockers and name not in ('fail', 'read_page', 'look', 'exa_search', 'exa_read', 'ask_user'):
                             status, result, terminal = 'failed', 'needs ' + '/'.join(blockers) + ': finish by hand at ' + browser.current_url, True
@@ -320,7 +340,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                             content = snapshot()
                         final_url = browser.current_url
                         if name not in ('exa_search', 'exa_read', 'ask_user'):
-                            hooks.on_step(mask(name.replace('_', ' '), profile), shot())
+                            hooks.on_step(step_text, shot())
                     except Exception as exc:
                         error = True
                         content = mask(f'Tool error: {exc}', profile)
