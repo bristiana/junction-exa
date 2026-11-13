@@ -4,6 +4,7 @@
 import { PROFILE_FIELDS } from "../lib/task.js";
 import { numberSources, citesFor, resolveAction, fillPlaceholders, unfilledPlaceholders } from "../lib/actions.js";
 import { search } from "../lib/exa.js";
+import { connect, me as serverMe, pair, normalizeBaseUrl } from "../lib/backend.js";
 
 const $ = (id) => document.getElementById(id);
 const PRESETS = [
@@ -27,7 +28,8 @@ const RESULT_PILL = {
   info_only: ["Answer", "ready"],
 };
 
-let state = { tasks: [], profile: {}, exaKey: "", effort: "low" };
+const DEFAULTS = { tasks: [], profile: {}, exaKey: "", effort: "low", backendUrl: "", presence: true };
+let state = { ...DEFAULTS };
 let activeTab = null;
 let prefill = null;
 const open = new Set();
@@ -63,6 +65,10 @@ function send(msg) {
 function renderSettings() {
   $("exaKey").value = state.exaKey;
   $("effort").value = state.effort;
+  $("presence").checked = state.presence !== false;
+  $("backendUrl").value = state.backendUrl;
+  $("pairInfo").hidden = true;
+  refreshServerStatus();
   const box = $("profileFields");
   box.replaceChildren(
     ...PROFILE_FIELDS.map(([k, label]) =>
@@ -78,10 +84,107 @@ $("settingsBtn").addEventListener("click", () => {
 $("saveSettings").addEventListener("click", async () => {
   const profile = {};
   for (const i of $("profileFields").querySelectorAll("input")) if (i.value.trim()) profile[i.dataset.k] = i.value.trim();
-  await chrome.storage.local.set({ exaKey: $("exaKey").value.trim(), effort: $("effort").value, profile });
+  await chrome.storage.local.set({ exaKey: $("exaKey").value.trim(), effort: $("effort").value, profile, presence: $("presence").checked });
+  // The first time a server URL is saved, this browser gets a user on it (same as pressing Connect).
+  const url = $("backendUrl").value.trim();
+  try {
+    if (!url) await useDirectMode();
+    else if (normalizeBaseUrl(url) !== state.backendUrl) await connectServer(url);
+  } catch (e) {
+    $("backendStatus").textContent = e.message;
+    toast("Saved, but the Hoida server did not connect");
+    return;
+  }
   $("settings").hidden = true;
   toast("Saved");
 });
+
+// ---------- Hoida server and WhatsApp ----------
+async function useDirectMode() {
+  await chrome.storage.local.remove("backendUrl"); // the token stays, so saving the same URL again keeps the WhatsApp link
+  state.backendUrl = "";
+  refreshServerStatus();
+}
+
+async function connectServer(url) {
+  const who = await connect(url);
+  state.backendUrl = normalizeBaseUrl(url);
+  $("backendUrl").value = state.backendUrl;
+  showServerStatus(who);
+  send({ type: "poll" }).catch(() => {});
+  return who;
+}
+
+function showServerStatus(who) {
+  $("backendStatus").textContent = "Connected";
+  $("pairBtn").disabled = false;
+  $("waStatus").textContent = who?.whatsapp_linked ? `Linked${who.whatsapp_last4 ? " (…" + who.whatsapp_last4 + ")" : ""}` : "Not linked yet";
+}
+
+async function refreshServerStatus() {
+  const st = $("backendStatus");
+  $("pairBtn").disabled = !state.backendUrl;
+  if (!state.backendUrl) {
+    st.textContent = "Not set: Hoida talks to Exa directly.";
+    $("waStatus").textContent = "Needs a Hoida server.";
+    return;
+  }
+  st.textContent = "Checking…";
+  $("waStatus").textContent = "";
+  try {
+    showServerStatus(await serverMe());
+  } catch (e) {
+    st.textContent = "Not connected: " + e.message;
+  }
+}
+
+$("connectBtn").addEventListener("click", async () => {
+  const url = $("backendUrl").value.trim();
+  const btn = $("connectBtn");
+  if (!url) { await useDirectMode(); return; }
+  btn.disabled = true;
+  $("backendStatus").textContent = "Connecting…";
+  try {
+    await connectServer(url);
+  } catch (e) {
+    $("backendStatus").textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+let linkWatch = 0;
+$("pairBtn").addEventListener("click", async () => {
+  const info = $("pairInfo");
+  info.hidden = false;
+  info.textContent = "Getting a code…";
+  try {
+    const { code, expires_at } = await pair();
+    const until = Date.parse(expires_at || "");
+    const kids = ["Send ", h("code", { text: `link ${code}` }), " to Hoida on WhatsApp."];
+    if (Number.isFinite(until)) kids.push(h("span", { class: "muted", text: ` The code expires at ${new Date(until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` }));
+    info.replaceChildren(...kids);
+    watchLink(Number.isFinite(until) ? until : Date.now() + 10 * 60 * 1000);
+  } catch (e) {
+    info.textContent = e.message;
+  }
+});
+
+// While the code is valid and settings are open, check every few seconds whether the phone sent it.
+function watchLink(until) {
+  clearInterval(linkWatch);
+  linkWatch = setInterval(async () => {
+    if (Date.now() > until || $("settings").hidden || !state.backendUrl) { clearInterval(linkWatch); return; }
+    try {
+      const who = await serverMe();
+      if (who?.whatsapp_linked) {
+        clearInterval(linkWatch);
+        showServerStatus(who);
+        $("pairInfo").textContent = "WhatsApp is linked. Errands from your phone now show up here.";
+      }
+    } catch (_) {}
+  }, 4000);
+}
 $("testKey").addEventListener("click", async () => {
   const st = $("keyStatus");
   st.textContent = "Checking…";
@@ -116,7 +219,7 @@ $("composer").addEventListener("submit", async (e) => {
   const err = $("composerError");
   err.hidden = true;
   if (!task) { $("task").focus(); return; }
-  if (!state.exaKey) { err.textContent = "Add your Exa API key in settings first."; err.hidden = false; $("settings").hidden = false; renderSettings(); return; }
+  if (!state.exaKey && !state.backendUrl) { err.textContent = "Add your Exa API key or a Hoida server in settings first."; err.hidden = false; $("settings").hidden = false; renderSettings(); return; }
   $("send").disabled = true;
   try {
     const usePage = !$("context").hidden && $("usePage").checked;
@@ -127,7 +230,8 @@ $("composer").addEventListener("submit", async (e) => {
     chrome.storage.session.remove("prefill");
     refreshActiveTab();
   } catch (e2) {
-    err.textContent = e2.status === 401 ? "Exa rejected the API key. Check it in settings." : e2.status === 402 ? "The Exa key is out of credits." : e2.message;
+    if (state.backendUrl) err.textContent = e2.status === 401 ? "The Hoida server did not accept this browser. Press Connect in settings." : e2.message;
+    else err.textContent = e2.status === 401 ? "Exa rejected the API key. Check it in settings." : e2.status === 402 ? "The Exa key is out of credits." : e2.message;
     err.hidden = false;
   } finally {
     $("send").disabled = false;
@@ -290,7 +394,9 @@ function renderCard(t) {
   const meta = [elapsed(t)];
   if (t.page?.title) meta.push(t.page.title.slice(0, 40));
   if (t.cost != null) meta.push("$" + Number(t.cost).toFixed(3));
-  card.querySelector(".meta").textContent = meta.join(" · ");
+  const metaEl = card.querySelector(".meta");
+  metaEl.textContent = meta.join(" · ");
+  if (t.source === "whatsapp") metaEl.prepend(h("span", { class: "tag", text: "WhatsApp" }));
   if (t.status === "completed" && !t.seen) card.classList.add("unseen");
   if (!open.has(t.id)) card.classList.add("collapsed");
   card.querySelector(".card-head").addEventListener("click", () => {
@@ -320,26 +426,33 @@ function render() {
 
 // ---------- state ----------
 async function load() {
-  const s = await chrome.storage.local.get(["tasks", "profile", "exaKey", "effort"]);
-  state = { tasks: s.tasks || [], profile: s.profile || {}, exaKey: s.exaKey || "", effort: s.effort || "low" };
+  const s = await chrome.storage.local.get(Object.keys(DEFAULTS));
+  state = Object.fromEntries(Object.entries(DEFAULTS).map(([k, d]) => [k, s[k] ?? d]));
   const sess = await chrome.storage.session.get(["prefill", "focusTask"]);
   if (sess.prefill && Date.now() - sess.prefill.at < 5 * 60 * 1000) applyPrefill(sess.prefill);
   if (sess.focusTask) { open.add(sess.focusTask); chrome.storage.session.remove("focusTask"); }
-  if (!state.exaKey) { $("settings").hidden = false; renderSettings(); }
+  if (!state.exaKey && !state.backendUrl) { $("settings").hidden = false; renderSettings(); }
+  if (state.backendUrl) send({ type: "poll" }).catch(() => {}); // bring in errands started on WhatsApp
   await refreshActiveTab();
   render();
 }
 
 function applyPrefill(p) {
   prefill = p;
-  if (p.link && !p.selection) $("task").value = `Help me with this link: ${p.link}\n`;
+  if (p.task) {
+    // from the badge on a form page: "Help me fill in this form", with this page attached
+    $("task").value = p.task;
+    $("usePage").checked = p.usePage !== false;
+  } else if (p.link && !p.selection) {
+    $("task").value = `Help me with this link: ${p.link}\n`;
+  }
   $("task").focus();
   refreshActiveTab();
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local") {
-    for (const k of ["tasks", "profile", "exaKey", "effort"]) if (changes[k]) state[k] = changes[k].newValue ?? (k === "tasks" ? [] : k === "profile" ? {} : "");
+    for (const k of Object.keys(DEFAULTS)) if (changes[k]) state[k] = changes[k].newValue ?? DEFAULTS[k];
     render();
   }
   if (area === "session" && changes.prefill?.newValue) applyPrefill(changes.prefill.newValue);
@@ -347,11 +460,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // Poll faster than the background alarm while the panel is open and something is running.
+// With a Hoida server, also look for new errands from WhatsApp every ~16 s.
+const BUSY_EXEC = new Set(["starting", "running", "awaiting_approval", "submitting"]);
+let ticks = 0;
 setInterval(() => {
   if (document.hidden) return;
-  if (state.tasks.some((t) => t.status === "queued" || t.status === "running")) {
+  ticks++;
+  const busy = state.tasks.some((t) => t.status === "queued" || t.status === "running" || BUSY_EXEC.has(t.execution?.status));
+  if (busy || (state.backendUrl && ticks % 4 === 0)) {
     send({ type: "poll" }).catch(() => {});
-    render();
+    if (busy) render();
   }
 }, 4000);
 

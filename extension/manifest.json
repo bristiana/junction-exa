@@ -13,6 +13,23 @@
   },
   "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
   "side_panel": { "default_path": "panel/panel.html" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": [
+        "*://*.google.com/*", "*://*.google.fi/*",
+        "*://*.whatsapp.com/*", "*://*.messenger.com/*", "*://*.slack.com/*", "*://*.discord.com/*",
+        "*://outlook.live.com/*", "*://outlook.office.com/*", "*://outlook.office365.com/*",
+        "*://*.op.fi/*", "*://*.nordea.fi/*", "*://*.danskebank.fi/*", "*://*.s-pankki.fi/*", "*://*.aktia.fi/*",
+        "*://*.saastopankki.fi/*", "*://*.omasp.fi/*", "*://*.handelsbanken.fi/*"
+      ],
+      "js": ["content/presence.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["icons/icon-48.png"], "matches": ["<all_urls>"] }
+  ],
   "commands": {
     "_execute_action": { "suggested_key": { "default": "Alt+H" }, "description": "Open Hoida" }
   }
