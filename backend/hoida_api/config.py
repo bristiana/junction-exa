@@ -8,6 +8,7 @@ class Config:
     exa_api_key: str = field(default_factory=lambda: os.getenv('EXA_API_KEY', ''))
     anthropic_api_key: str = field(default_factory=lambda: os.getenv('ANTHROPIC_API_KEY', ''))
     model: str = field(default_factory=lambda: os.getenv('HOIDA_MODEL', 'claude-opus-5-5'))
+    jev_api_key: str = field(default_factory=lambda: os.getenv('JEV_API_KEY', ''))
     database_url: str = field(default_factory=lambda: os.getenv('DATABASE_URL', ''))
     sqlite_path: str = field(default_factory=lambda: os.getenv('HOIDA_SQLITE_PATH', 'hoida.db'))
     cloudinary_url: str = field(default_factory=lambda: os.getenv('CLOUDINARY_URL', ''))
@@ -22,6 +23,6 @@ class Config:
 
     def services(self):
         return dict(ok=True, exa=bool(self.exa_api_key), anthropic=bool(self.anthropic_api_key),
-                    db=True, cloudinary=bool(self.cloudinary_url),
+                    jev=bool(self.jev_api_key), db=True, cloudinary=bool(self.cloudinary_url),
                     whatsapp=bool(self.whatsapp_token and self.whatsapp_phone_number_id),
                     elevenlabs=bool(self.elevenlabs_api_key))
