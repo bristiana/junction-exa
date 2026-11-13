@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Hoida",
+  "version": "0.1.0",
+  "description": "Hand off an errand. Hoida researches it with Exa in the background, shows its sources and prepares the next step for you to approve.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "sidePanel", "contextMenus", "notifications", "alarms", "scripting", "activeTab", "tabs"],
+  "host_permissions": ["https://api.exa.ai/*", "<all_urls>"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": {
+    "default_title": "Hoida: hand off an errand",
+    "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" }
+  },
+  "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+  "side_panel": { "default_path": "panel/panel.html" },
+  "commands": {
+    "_execute_action": { "suggested_key": { "default": "Alt+H" }, "description": "Open Hoida" }
+  }
+}
