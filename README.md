@@ -19,7 +19,7 @@ The idea isn't picked yet. The candidates:
 3. **EU261 flight-disruption claims.** Checks whether a delayed or cancelled flight qualifies for compensation and drafts the claim.
 
 ## Setup
-Copy `.env.example` to `.env` and fill in your keys. Never commit `.env`.
+Get the Exa key at dashboard.exa.ai and redeem `EXA50JUNCTION` for $50 in credits. Copy `.env.example` to `.env` and fill in your keys. Never commit `.env`.
 
 ## Deadline
 The final submission is due **Sun 15 Nov, 10:00** (Helsinki). Aim to submit by 09:30.
