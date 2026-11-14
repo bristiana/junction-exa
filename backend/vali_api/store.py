@@ -1,5 +1,6 @@
 """One SQL store interface backed by SQLite locally or Postgres on Modal."""
 import hashlib
+import base64
 import json
 import math
 import secrets
@@ -29,6 +30,7 @@ class Store:
             'users(id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL, profile_json TEXT NOT NULL, wa_number TEXT UNIQUE)',
             'wa_seen(message_id TEXT PRIMARY KEY, at TEXT NOT NULL)',
             'pair_codes(code TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL)',
+            'device_link_codes(code_hash TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL, sealed_token TEXT NOT NULL, salt TEXT NOT NULL, expires_at TEXT NOT NULL)',
             'tasks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, source TEXT NOT NULL, mode TEXT NOT NULL, task TEXT NOT NULL, page_json TEXT NOT NULL, research_json TEXT NOT NULL, execution_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
             'watches(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, query TEXT NOT NULL, exa_monitor_id TEXT, created_at TEXT NOT NULL)',
             f'shots(task_id TEXT NOT NULL, n INTEGER NOT NULL, jpeg {blob} NOT NULL, PRIMARY KEY(task_id,n))',
@@ -66,6 +68,45 @@ class Store:
                 if rows:
                     return {'code': code, 'expires_at': expiry}
         raise RuntimeError('Unable to allocate pairing code')
+
+    @staticmethod
+    def _link_cipher(code, salt):
+        from cryptography.fernet import Fernet
+        # The short code is a temporary password. Keep the bearer token out of
+        # plaintext storage; online guesses are separately API-limited.
+        key = hashlib.scrypt(code.encode(), salt=bytes.fromhex(salt), n=16384, r=8, p=1, dklen=32)
+        return Fernet(base64.urlsafe_b64encode(key))
+
+    def create_link_code(self, uid, token):
+        user = self.user_by_token(token)
+        if not user or user['id'] != uid:
+            raise ValueError('Invalid link identity')
+        expiry = (datetime.now(timezone.utc) + timedelta(seconds=600)).isoformat()
+        with self.lock:
+            self.sql('DELETE FROM device_link_codes WHERE user_id=? OR expires_at<=?', (uid, now()))
+            for _ in range(100):
+                code = f'{secrets.randbelow(1000000):06d}'
+                salt = secrets.token_hex(16)
+                sealed = self._link_cipher(code, salt).encrypt(token.encode()).decode()
+                rows = self.sql('INSERT INTO device_link_codes VALUES(?,?,?,?,?) ON CONFLICT(code_hash) DO NOTHING RETURNING code_hash',
+                                (token_hash(code), uid, sealed, salt, expiry))
+                if rows:
+                    return {'code': code, 'expires_in': 600}
+        raise RuntimeError('Unable to allocate device code')
+
+    def redeem_link_code(self, code):
+        # DELETE RETURNING is atomic across connections/replicas on both engines.
+        row = self.sql('DELETE FROM device_link_codes WHERE code_hash=? AND expires_at>? RETURNING user_id,sealed_token,salt',
+                       (token_hash(code), now()), one=True)
+        if not row:
+            return None
+        from cryptography.fernet import InvalidToken
+        try:
+            token = self._link_cipher(code, row['salt']).decrypt(row['sealed_token'].encode()).decode()
+        except (InvalidToken, ValueError):
+            return None
+        user = self.user_by_token(token)
+        return token if user and user['id'] == row['user_id'] else None
 
     def link_number(self, code, number):
         # Consume the code atomically so only one delivery can use it.

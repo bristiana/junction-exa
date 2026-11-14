@@ -173,8 +173,11 @@ def build_query(task, page=None, profile=None):
     if profile.get('city'):
         parts.append(f"The user lives in {profile['city']}" + (', ' + profile['country'] if profile.get('country') else '') + '.')
     parts.append(f'Today is {datetime.now(timezone.utc).date().isoformat()}.')
-    if page.get('url'):
-        parts.append('The user is on this page: ' + (clip(page['title'], 140) + ' — ' if page.get('title') else '') + page['url'])
+    if page.get('url') or page.get('selection') or page.get('text'):
+        if page.get('url'):
+            parts.append('The user is on this page: ' + (clip(page['title'], 140) + ' — ' if page.get('title') else '') + page['url'])
+        else:
+            parts.append('The user provided this document: ' + clip(page.get('title'), 140))
         if page.get('selection'):
             parts.append('They selected this text:\n"""' + clip(page['selection'], 2500) + '"""')
         elif page.get('text'):

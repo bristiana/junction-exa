@@ -8,3 +8,7 @@ python-multipart
 pytest
 playwright
 modal
+pypdf
+Pillow
+pillow-heif
+cryptography
