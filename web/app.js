@@ -1,6 +1,6 @@
 // The page controller: routes (#/ home, #/t/<id> one errand), the ask box, and polling the open errand.
 import { api } from './api.js';
-import { $ } from './dom.js';
+import { $, h } from './dom.js';
 import { TERMINAL, isActive, moodOf } from './model.js';
 import { renderWorking, tickClock } from './working.js';
 import { renderAnswer } from './answer.js';
@@ -13,12 +13,14 @@ import { openDetails } from './details.js';
 import { openWhatsapp } from './whatsapp.js';
 import { loadProfile } from './profile.js';
 import { openHub } from './hub.js';
+import { EXA_USES } from './exa-uses.js';
 
 const POLL_MS = 2000;
 const BUSY_MS = 10000;
 let followed = null; // { id, task, key, timer, clock }
 const mascot = window.Butler ? createMascot() : null;
 if (mascot) mountPalettePicker($('palette'), mascot);
+$('exa-uses').replaceChildren(...EXA_USES.map(([label, detail]) => h('div', {}, h('dt', {}, label), h('dd', {}, detail))));
 
 function showView(name) {
   for (const id of ['home', 'working', 'answer', 'hub']) $(id).hidden = id !== name;

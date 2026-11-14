@@ -4,6 +4,7 @@ import { claimsOf, draftsOf, factsOf, runStatus, findStats, missingInfo, primary
 import { renderExecution } from './execution.js';
 import { citePill } from './cite.js';
 import { loadProfile, missingDetails } from './profile.js';
+import { exaUses } from './exa-uses.js';
 
 export function renderAnswer(task, handlers) {
   const research = task.research || {};
@@ -27,7 +28,8 @@ export function renderAnswer(task, handlers) {
         renderExecution(task, handlers)),
       h('aside', { class: 'answer-side' },
         sourceList(task, sources),
-        howFound(findStats(task, sources)))));
+        howFound(findStats(task, sources)),
+        exaUsed(exaUses(task)))));
 }
 
 function back() {
@@ -128,6 +130,14 @@ function sourceList(task, sources) {
           source.stale ? h('span', { class: 'tag stale' }, 'may be outdated') : null,
           publishedStamp(source.published) ? h('span', { class: 'stamp' }, publishedStamp(source.published)) : null,
           h('span', { class: 'stamp' }, readStamp(task, source))))))));
+}
+
+// The Exa capabilities this errand used, with their counts (shared/exa-uses.js).
+function exaUsed(rows) {
+  if (!rows.length) return null;
+  return h('section', { class: 'side card' },
+    h('h2', { class: 'section-title' }, 'Exa'),
+    h('dl', { class: 'exa-uses' }, rows.map((row) => h('div', {}, h('dt', {}, row.label), h('dd', {}, row.detail)))));
 }
 
 function howFound(stats) {

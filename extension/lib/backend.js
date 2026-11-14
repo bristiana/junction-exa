@@ -220,7 +220,8 @@ export function toLocalTask(remote, prev = null) {
     completedAt: terminal ? prev?.completedAt || time(remote.updated_at) || Date.now() : null,
     seen: prev?.seen ?? false,
     mode: remote.mode ?? null,
-    research: { kind: r.kind, sources: r.sources, citations: r.citations, usage: r.usage },
+    research: { kind: r.kind, sources: r.sources, citations: r.citations, usage: r.usage, activity: r.activity,
+      watch_id: r.watch_id, monitor_stubbed: r.monitor_stubbed, reused_from: r.reused_from },
     source: remote.source || "extension",
     execution: remote.execution ?? null,
   };
