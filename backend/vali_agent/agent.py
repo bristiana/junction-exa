@@ -46,7 +46,8 @@ TOOLS = [
           'or contact page) when the search highlights do not answer it; pass a question to get the most relevant parts.',
           {'url': _STRING, 'question': _NULLABLE}),
     _tool('ask_user', 'Ask the user one short question when a choice is theirs (e.g. which slot) or a needed fact is '
-          'missing and the web cannot answer it; waits for the answer. Never ask for personal details: use placeholders.',
+          'missing and the web cannot answer it; waits for the answer. Ask for personal details only when the rules '
+          'below allow it; otherwise use placeholders.',
           {'question': _STRING}),
     _tool('request_approval', 'Ask the human before one final submission. Give each filled value its source URL when it '
           'came from research or the web (null for profile placeholders and the user\'s own words).', {
@@ -205,10 +206,15 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         + ('If Exa' + (' and ask_user' if hooks.ask_user else '') + ' cannot give you a needed fact, call '
            'fail("missing: <the fact>") instead of retrying in a loop or inventing it. ' if exa.enabled else '')
         + 'A sign-in box next to a guest option (e.g. "as a guest", "without an account") is not a login wall: pick the '
-        'guest option and continue. On a contact or address step, fill every field you have a placeholder for. If a '
-        'required field needs a personal detail you have no placeholder for, never invent it, never ask for it and '
-        'never fail over it: fill the rest, then call request_approval and name each missing field in the summary '
-        '("Missing: Phone") so the user can finish it by hand. '
+        'guest option and continue. On a contact or address step, fill every field you have a placeholder for. '
+        + ('The user saved no details (they chat with you, e.g. on WhatsApp): when required fields need personal '
+           'details, call ask_user once for all of them together (e.g. "Which name and email should I book this '
+           'under?") and type exactly what the user answers; never invent them. If there is no answer, fill the rest '
+           'and name each missing field in request_approval ("Missing: Phone"). '
+           if hooks.ask_user and not any(str(v or '').strip() for v in (profile or {}).values()) else
+           'If a required field needs a personal detail you have no placeholder for, never invent it, never ask for it '
+           'and never fail over it: fill the rest, then call request_approval and name each missing field in the '
+           'summary ("Missing: Phone") so the user can finish it by hand. ')
         + 'When everything is filled and only the final submit or payment is left, call request_approval with a summary '
         'of every value (never fail at that point); if payment follows, the user finishes it at the bank. '
         'Messages from the user may arrive while you work; follow them unless they conflict with these rules. '
