@@ -1,7 +1,7 @@
 """Regressions from the live tester: answer language, how an answer opens, quote support, find prices, channels."""
 import pytest
 
-from vali_api.citations import FETCH_CHARS, MAP_SYSTEM, PAGE_CHARS, _facts, cite, excerpt, own, unmark, verbatim
+from vali_api.citations import FETCH_CHARS, MAP_SCHEMA, MAP_SYSTEM, PAGE_CHARS, _facts, cite, excerpt, own, unmark, verbatim
 from vali_api.exa import ExaClient
 from vali_api.lang import detect
 from vali_api.research import FIND_RULES, build_query, map_find_output, priced_answer
@@ -191,11 +191,16 @@ def test_channel_from_origin():
 
 # 7. Vali's own actions are not claims
 
+EMAIL_DRAFT = {'type': 'email', 'label': 'Send email', 'body': 'Hello, please return my deposit. {{name}}'}
+
+
 def test_own_actions_skip_the_support_check():
-    assert own('I prepared a short email requesting payment.') and own('Here is a draft email to your landlord.')
-    assert not own('I prezzi variano.') and not own('In Finland rent rises yearly.')
+    drafted = {'structured': {'actions': [EMAIL_DRAFT]}}
+    assert own('I prepared a short email requesting payment.', drafted) and own('Here is a draft email to your landlord.', drafted)
+    assert not own('I prezzi variano.', drafted) and not own('In Finland rent rises yearly.', drafted)
     page = {KELA: 'The landlord must return the deposit.'}
     result = output('The landlord must return the deposit. I prepared a short email requesting payment.', KELA)
+    result['structured']['actions'] = [EMAIL_DRAFT]
     judge = verdicts({0: ('yes', '', 'The landlord must return the deposit.'), 1: ('no', 'Not confirmed by the sources: x', '')})
     cite(result, FakeExa(page), judge)
     assert result['claims'][1] == {'text': 'I prepared a short email requesting payment.', 'sources': [], 'supported': None,
@@ -203,10 +208,31 @@ def test_own_actions_skip_the_support_check():
     assert len(judge.seen) == 1 and 'Not confirmed' not in result['structured']['answer']
 
 
-def test_a_self_verdict_is_not_softened():
-    result = output('Laadin sinulle lyhyen sähköpostin.', KELA)
-    cite(result, FakeExa({KELA: 'Vuokranantaja palauttaa vakuuden.'}), verdicts({0: ('self', '', '')}))
-    assert result['claims'][0]['supported'] is None and result['structured']['answer'] == 'Laadin sinulle lyhyen sähköpostin.'
+@pytest.mark.parametrize('sentence', [
+    'I can confirm that every student receives 500 euros monthly.',
+    'I can confirm that every student receives a monthly grant.',
+    'I will check that the deposit comes back.',
+    'I prepared an email asking for the 900 € deposit.',
+    'I prepared an email asking for the deposit by 1 May.',
+    'I wrote a letter to Kela in May.'])
+def test_a_factual_sentence_is_never_own(sentence):
+    assert not own(sentence, {'structured': {'actions': [EMAIL_DRAFT]}})
+
+
+def test_a_draft_report_needs_a_real_draft():
+    assert not own('I prepared a short email requesting payment.')
+    assert not own('I prepared a short email requesting payment.', {'structured': {'actions': [
+        {'type': 'open_link', 'label': 'Open', 'url': 'https://kela.fi'}, {'type': 'email', 'label': 'Send', 'body': ''}]}})
+    assert own('I prepared a short message to paste.', {'structured': {'actions': [
+        {'type': 'copy_text', 'label': 'Copy', 'body': 'Hei, olen muuttanut.'}]}})
+    assert own('Laadin sinulle lyhyen sähköpostin.', {'structured': {'actions': [EMAIL_DRAFT]}})
+
+
+def test_a_self_verdict_counts_as_unconfirmed():
+    assert '"self"' not in MAP_SYSTEM and 'self' not in MAP_SCHEMA['properties']['claims']['items']['properties']['verdict']['enum']
+    result = output('I can confirm that every student receives 500 euros monthly.', KELA)
+    cite(result, FakeExa({KELA: 'Opintotuki is student financial aid.'}), verdicts({0: ('self', '', '')}))
+    assert result['claims'][0]['supported'] is False and not result['claims'][0].get('own')
 
 
 def test_a_short_table_row_quote_still_counts():
@@ -229,10 +255,6 @@ def test_a_watch_confirmation_leads_and_is_not_judged():
     cite(result, FakeExa({KELA: 'Studios cost 600 to 850 euros.'}), judge)
     assert [c['supported'] for c in result['claims']] == [None, None, None, True] and len(judge.seen) == 1
     assert 'Not confirmed' not in result['structured']['answer']
-
-
-def test_self_is_only_for_the_assistants_own_work():
-    assert 'Usually, yes.' in MAP_SYSTEM and 'never "self"' in MAP_SYSTEM
 
 
 # Round 2: the opener only when nothing is backed, and the answer's own order stays
