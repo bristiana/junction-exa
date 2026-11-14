@@ -63,3 +63,14 @@ def test_keyboard_cannot_activate_an_unrecognized_final_control(key):
     with pytest.raises(ValueError, match='request_approval'):
         browser.press(key)
     browser.page.keyboard.press.assert_not_called()
+
+
+@pytest.mark.parametrize('label', ['Accept necessary', 'Reject all', 'Only necessary',
+                                   'Accept only essential cookies', 'Vain välttämättömät',
+                                   'Continue with only necessary cookies'])
+def test_nonfinal_minimal_consent_labels_are_dismissed(label):
+    frame = Mock()
+    frame.evaluate.return_value = [{'label': label, 'description': '<button type="button">' + label + '</button>',
+                                    'around': 'Cookie consent'}]
+    assert dismiss_cookie_banner(Mock(frames=[frame])) == label
+    frame.locator.return_value.first.click.assert_called_once()

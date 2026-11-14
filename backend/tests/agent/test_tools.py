@@ -96,26 +96,32 @@ def test_exa_tools_sources_usage_and_messages(local_site):
 def test_exa_calls_are_recorded_masked_and_reported_live(local_site):
     seen, live = [], []
     exa = exa_fake(seen)
+    def refused(messages):
+        assert messages[-1]['content'][0]['is_error']
+        assert 'only allowed in approved fields' in messages[-1]['content'][0]['content']
+        return 'exa_read', {'url': 'ftp://example.com/x', 'question': None}
+
+    def private_read(messages):
+        assert messages[-1]['content'][0]['is_error']
+        return 'exa_read', {'url': 'https://example.com/claim?who=Test Person', 'question': 'Opening hours for Test Person?'}
+
+    def finish(messages):
+        assert messages[-1]['content'][0]['is_error']
+        assert 'only allowed in approved fields' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'ok'}
+
     llm = Scripted([
         ('exa_search', {'query': 'Kela office near Test Person {{city}}', 'include_domains': ['kela.fi']}),
-        ('exa_read', {'url': 'ftp://example.com/x', 'question': None}),
-        ('exa_read', {'url': 'https://example.com/claim?who=Test Person', 'question': 'Opening hours for Test Person?'}),
-        ('finish', {'result': 'ok'}),
+        refused, private_read, finish,
     ])
     hooks = plain_hooks(on_exa=live.append)
     result = run_browser_agent('x', local_site + '/claim.html', PROFILE | {'city': 'Espoo'}, hooks, llm, exa=exa, jev=Jev(api_key=''))
     assert result.status == 'done'
-    search, bad, read = result.exa
-    assert search == {'kind': 'search', 'query': 'Kela office near {{name}} Espoo', 'domains': ['kela.fi'], 'cost_usd': 0.007,
-                      'results': [{'url': 'https://eur-lex.europa.eu/eli/reg/2004/261', 'title': 'EU261 compensation'}]}
+    assert len(result.exa) == 1
+    bad = result.exa[0]
     assert bad['kind'] == 'read' and bad['results'] == [] and 'http' in bad['error'] and bad['cost_usd'] == 0
-    assert read == {'kind': 'read', 'url': 'https://example.com/claim?who={{name}}', 'question': 'Opening hours for {{name}}?',
-                    'cost_usd': 0.001, 'results': [{'url': 'https://example.com/claim?who={{name}}', 'title': 'Claim form'}]}
-    assert [len(calls) for calls in live] == [1, 2, 3] and live[-1] == result.exa
-    # What is sent to Exa is masked too; only the public city is filled in.
-    assert seen[0][1]['query'] == 'Kela office near {{name}} Espoo'
-    assert seen[1][1]['urls'] == ['https://example.com/claim?who={{name}}']
-    assert seen[1][1]['highlights']['query'] == 'Opening hours for {{name}}?'
+    assert live[-1] == result.exa
+    assert seen == [] and result.sources == []
     assert 'Test Person' not in json.dumps([result.exa, result.sources, seen])
 
 
@@ -236,20 +242,20 @@ import pytest
 from vali_agent.guard import is_final_submit, without_default_submit
 
 
-@pytest.mark.parametrize('label,final', [
-    ('Jatka', False), ('Seuraava', False), ('Next', False), ('4 henkilöä', False), ('19:00', False), ('la 21.11.', False),
-    ('21', False), ('Palaa vaiheeseen Seurueen koko', False), ('Lisää vaihtoehtoja', False),
-    ('Vahvista varaus', True), ('Tee varaus', True), ('Varaa pöytä', True), ('Jatka maksamaan', True),
-    ('Continue to payment', True), ('Lähetä', True), ('Book now', True), ('Something unclear', True),
+@pytest.mark.parametrize('label', [
+    'Jatka', 'Seuraava', 'Next', '4 henkilöä', '19:00', 'la 21.11.',
+    '21', 'Palaa vaiheeseen Seurueen koko', 'Lisää vaihtoehtoja',
+    'Vahvista varaus', 'Tee varaus', 'Varaa pöytä', 'Jatka maksamaan',
+    'Continue to payment', 'Lähetä', 'Book now', 'Something unclear',
 ])
-def test_wizard_steps_pass_on_submit_buttons_but_final_steps_do_not(label, final):
-    assert is_final_submit(f'<button type="submit">{label}</button> button type=submit {label}', label) is final
+def test_explicit_submit_buttons_always_require_approval(label):
+    assert is_final_submit(f'<button type="submit">{label}</button> button type=submit {label}', label)
 
 
 def test_filled_values_kept_for_handoff(local_site):
     llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{name}}'}), ('select_option', {'ref': 'e4', 'option': 'Refund'}),
                     ('fail', {'reason': 'needs captcha: finish by hand'})])
-    result = run_browser_agent('x', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    result = run_browser_agent('Fill name', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert result.status == 'failed'
     assert result.filled == [{'label': 'Full name', 'value': '{{name}}'}, {'label': 'Claim type', 'value': 'Refund'}]
 
@@ -258,9 +264,10 @@ from vali_agent.guard import is_navigation
 from vali_agent.live import _MINIMAL, _ACCEPT_ALL
 
 
-def test_landing_page_links_are_not_final_but_paying_links_are():
-    assert is_navigation('a', '/en/saunas/helsinki/booking', False, 'Book now')
-    assert is_navigation('a', 'https://example.com/varaa', False, 'Varaa aika')
+def test_final_labels_on_links_still_require_approval():
+    assert is_navigation('a', '/locations', False, 'Locations')
+    assert not is_navigation('a', '/en/saunas/helsinki/booking', False, 'Book now')
+    assert not is_navigation('a', 'https://example.com/varaa', False, 'Varaa aika')
     assert not is_navigation('a', '/checkout/pay', False, 'Pay now')
     assert not is_navigation('a', '#', False, 'Book now')
     assert not is_navigation('button', '', True, 'Book now')
@@ -315,9 +322,9 @@ def test_follows_a_popup_window_and_keeps_streaming(local_site):
         assert 'Booking window' in snap and 'input[email]' in snap
         ref = next(l.split(']')[0][1:] for l in snap.splitlines() if 'input[email]' in l)
         return 'type_text', {'ref': ref, 'text': '{{email}}'}
-    llm = Scripted([('click', {'ref': 'e1'}), in_popup, ('finish', {'result': 'ok'})])
+    llm = Scripted([('request_approval', {'summary': 'Open booking window', 'filled': []}), ('click', {'ref': 'e1'}), in_popup, ('finish', {'result': 'ok'})])
     hooks = AgentHooks(lambda t, j: steps.append(t), lambda s, f: True, lambda: False, on_frame=frames.append)
-    result = run_browser_agent('x', local_site + '/popup.html', PROFILE, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    result = run_browser_agent('Fill email', local_site + '/popup.html', PROFILE, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert result.status == 'done', result
     assert result.final_url.endswith('/popup_child.html') and frames
 
@@ -394,7 +401,7 @@ def test_menu_toggles_skip_jev_and_filter_buttons_pass(local_site):
     llm = Scripted([('click', {'ref': 'e1', 'target': 'Paikat'}), opened])
     result = run_browser_agent('x', local_site + '/dropdown_toggle.html', {}, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=jev)
     assert result.status == 'done' and jev.calls == 0
-    assert not is_final_submit('<button type="submit">Kaikki</button> button type=submit Kaikki', 'Kaikki')
+    assert is_final_submit('<button type="submit">Kaikki</button> button type=submit Kaikki', 'Kaikki')
 
 
 def test_toggles_that_order_or_submit_are_still_gated(local_site):
