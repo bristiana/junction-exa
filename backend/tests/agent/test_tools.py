@@ -588,6 +588,17 @@ def test_a_no_keeps_unnamed_details_refused(local_site):
     assert result.status == 'done' and len(asked) == 1
 
 
+def test_details_typed_as_the_answer_are_used_instead(local_site):
+    def told(messages):
+        content = messages[-1]['content'][0]['content']
+        assert 'answered with the details to use' in content and 'Mia Virtanen, mia@example.fi' in content
+        return 'finish', {'result': 'ok'}
+    llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{name}}'}), told])
+    hooks = plain_hooks(ask_user=lambda q: 'Mia Virtanen, mia@example.fi')
+    result = run_browser_agent('Book a sauna', local_site + '/claim.html', PROFILE, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done'
+
+
 def test_without_ask_user_unnamed_details_stay_refused(local_site):
     def refused(messages):
         assert 'Missing profile placeholder: email' in messages[-1]['content'][0]['content']

@@ -156,9 +156,14 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         answer = hooks.ask_user(f'May I use your saved {names} on {site_name} for this? Reply yes or no.') or ''
         if re.match(r'\s*(yes|y|ok|okay|sure|go|kyllä|joo|ja|da|sí|si|oui)\b', answer, re.I):
             allowed_profile.update(rest)
-        else:
+        elif re.match(r'\s*(no|nope|n|ei|nu|nej|nein|non|stop|don\'t|do not)\b', answer, re.I) or not answer.strip():
             declined.add(True)
             raise ValueError('The user did not allow their saved details; leave the field or ask the user what to do')
+        else:
+            # They answered with the details themselves (common on WhatsApp): type those, not the saved ones.
+            declined.add(True)
+            raise ValueError(f'The user answered with the details to use instead of the saved ones: "{answer.strip()[:300]}". '
+                             'Type exactly those values into the matching fields.')
     browser = None
     screencast = None
     personal_visible = False
