@@ -1,8 +1,9 @@
 """POST /v1/check: is this landlord, agency or company real, old enough, free of scam warnings, on its own domain?
 
 Two Exa searches run side by side (a category "company" search and an open search aimed at the business
-register and at warnings), each returning page text plus highlights. Findings are rules over that text, so
-every quote is a sentence of the fetched page, checked with citations.verbatim before it is returned.
+register and at warnings), each with bare `highlights: true`, the content mode Exa recommends; highlights are
+excerpts of the fetched page. Findings are rules over those excerpts, so every quote is a sentence of the page,
+checked with citations.verbatim against the excerpt it came from before it is returned.
 """
 import logging
 import re
@@ -21,13 +22,22 @@ logger = logging.getLogger('vali.company_check')
 
 CACHE_SECONDS = 6 * 3600
 DEADLINE_SECONDS = 7.0  # both searches together; the endpoint answers within 8 s
-# Exa list prices: $0.005 a search (1-25 results), $0.001 a page for text, $0.001 a page for highlights.
-# Company search 3 pages text + highlights ($0.011) + risk search 3 pages text ($0.008) = $0.019 a call.
-RESULTS_PER_SEARCH = 3
-PAGE_CHARS = 4000
+# A product decision for the $0.02 budget. Estimated at Exa list prices ($0.005 a search, $0.001 a page of
+# highlights): 2 x (0.005 + 4 x 0.001) = $0.018 a call; the live costDollars is logged on every call.
+RESULTS_PER_SEARCH = 4
 QUOTE_CHARS = 320
-REGISTRY_DOMAINS = ('ytj.fi', 'prh.fi', 'virre.prh.fi', 'finder.fi', 'asiakastieto.fi', 'kauppalehti.fi',
-                    'fonecta.fi', 'yritystele.fi', 'proff.fi', 'vainu.com')
+COMPANY_OBJECTIVE = ("Identify the company or landlord with this name in Finland. Rank first its own website and its "
+                     "entries in Finnish company registers (ytj.fi, prh.fi, Finder, Asiakastieto). Pull its Business "
+                     "ID (Y-tunnus), its founding or registration year and its website domain.")
+RISK_OBJECTIVE = ("Check whether renting from this company or landlord is safe. Rank first Finnish business register "
+                  "entries and pages warning about scams or fraud under this name, then tenant reviews. Pull the "
+                  "Business ID, the registration date, and any scam warnings or bad reviews that name it.")
+# The PRH register itself (ytj.fi, prh.fi) and the directories that republish its entries with the Business ID
+REGISTRY_DOMAINS = ('ytj.fi', 'prh.fi', 'finder.fi', 'asiakastieto.fi', 'kauppalehti.fi', 'fonecta.fi', 'odata.fi',
+                    '0100100.fi', 'yritystele.fi', 'proff.fi', 'vainu.com')
+# Where a "scam" is one tenant's opinion, not a warning from an authority or the press
+REVIEW_DOMAINS = ('trustpilot.com', 'revieweuro.com', 'suomi24.fi', 'vauva.fi', 'reddit.com', 'facebook.com',
+                  'google.com', 'yelp.com', 'tripadvisor.com', 'suomenparas.com', 'exa.ai')
 LEGAL_SUFFIXES = {'oy', 'oyj', 'ab', 'ltd', 'ky', 'tmi', 'ry', 'ay', 'inc', 'llc', 'gmbh', 'as'}
 BUSINESS_ID = re.compile(r'\b\d{7}-\d\b')
 FOUNDED = re.compile(
@@ -69,12 +79,10 @@ def same_site(host, domain):
 
 def searches(body):
     place = f' {body.city}' if body.city else ''
-    company = dict(query=f'{body.name}{place} Finland', category='company', type='auto', numResults=RESULTS_PER_SEARCH,
-                   userLocation='FI', contents={'text': {'maxCharacters': PAGE_CHARS},
-                                                'highlights': {'query': 'founded registered business ID',
-                                                               'maxCharacters': QUOTE_CHARS}})
-    risk = dict(query=f'"{body.name}"{place} y-tunnus rekisteröity huijaus arvostelut scam reviews', type='auto',
-                numResults=RESULTS_PER_SEARCH, userLocation='FI', contents={'text': {'maxCharacters': PAGE_CHARS}})
+    company = dict(query=f'{body.name}{place} Finland', type='auto', category='company', numResults=RESULTS_PER_SEARCH,
+                   userLocation='FI', objective=COMPANY_OBJECTIVE, contents={'highlights': True})
+    risk = dict(query=f'{body.name}{place} Y-tunnus, scam warnings and tenant reviews', type='auto',
+                numResults=RESULTS_PER_SEARCH, userLocation='FI', objective=RISK_OBJECTIVE, contents={'highlights': True})
     return [company, risk]
 
 
@@ -111,9 +119,9 @@ def pages_of(responses):
             if not url or url in seen:
                 continue
             seen.add(url)
+            excerpts = [h for h in result.get('highlights') or [] if isinstance(h, str)]
             pages.append({'url': url, 'title': squash(result.get('title')) or domain_of(url), 'domain': domain_of(url),
-                          'text': result.get('text') or '', 'highlights': result.get('highlights') or [],
-                          'company': index == 0})
+                          'text': '\n'.join(excerpts), 'company': index == 0})
     return pages
 
 
@@ -122,15 +130,8 @@ def brand_matches(host, tokens):
     return any(len(t) >= 3 and t in label for t in tokens)
 
 
-def candidate_sentences(page):
-    """Highlights first (Exa picked them as relevant), then the page's own sentences; all from the page text."""
-    for highlight in page['highlights']:
-        yield from split_sentences(highlight, strip_markers=False)
-    yield from split_sentences(page['text'], strip_markers=False)
-
-
 def find_quote(page, pattern, tokens=None):
-    for sentence in candidate_sentences(page):
+    for sentence in split_sentences(page['text'], strip_markers=False):
         sentence = squash(sentence).lstrip('#*>|- ')
         if len(sentence) > QUOTE_CHARS or not pattern.search(sentence):
             continue
@@ -146,18 +147,23 @@ def finding(kind, text, page, quote):
             'source': {'url': page['url'], 'title': page['title'], 'domain': page['domain'], 'quote': quote}}
 
 
+def on(page, domains):
+    return any(same_site(page['domain'], d) for d in domains)
+
+
 def registry_findings(pages, tokens):
-    out = []
     for page in pages:
-        if not any(same_site(page['domain'], d) for d in REGISTRY_DOMAINS) or not mentions(page['text'] + ' ' + page['title'], tokens):
+        if not on(page, REGISTRY_DOMAINS) or not mentions(page['text'] + ' ' + page['title'], tokens):
             continue
         quote = find_quote(page, BUSINESS_ID)
+        in_url = BUSINESS_ID.search(page['url'])  # some directories print the ID only in the entry's address
+        if not quote and in_url:
+            quote = find_quote(page, re.compile('.'), tokens)
         if quote:
-            business_id = BUSINESS_ID.search(quote).group(0)
-            out.append(finding('registered', f'Listed in a Finnish company register ({page["domain"]}) with Business ID {business_id}.',
-                               page, quote))
-            break
-    return out
+            business_id = (BUSINESS_ID.search(quote) or in_url).group(0)
+            return [finding('registered', f'Listed in a Finnish company register ({page["domain"]}) with Business ID {business_id}.',
+                            page, quote)]
+    return []
 
 
 def age_findings(pages, tokens, today=None):
@@ -177,18 +183,21 @@ def age_findings(pages, tokens, today=None):
     return [], None
 
 
-def warning_findings(pages, tokens):
+def warning_findings(pages, tokens, domain):
+    """Warnings from authorities or the press; tenant reviews and forum posts are reviews, whatever words they use.
+    A company's own site warning about scammers who use its name is not a warning against it."""
     out = []
     for page in pages:
-        if not mentions(page['text'] + ' ' + page['title'], tokens):
+        if not mentions(page['text'] + ' ' + page['title'], tokens) or on(page, REGISTRY_DOMAINS):
+            continue
+        review = on(page, REVIEW_DOMAINS)
+        if not review and (same_site(page['domain'], domain) or brand_matches(page['domain'], tokens)):
             continue
         quote = find_quote(page, WARNING, tokens)
-        if quote:
-            out.append(finding('warning', f'A page mentions this name together with a scam or fraud warning ({page["domain"]}).', page, quote))
-            continue
-        quote = find_quote(page, BAD_REVIEW, tokens)
-        if quote:
-            out.append(finding('review', f'A negative review mentions this name ({page["domain"]}).', page, quote))
+        if quote and not review:
+            out.append(finding('warning', f'A page warns about scams or fraud under this name ({page["domain"]}).', page, quote))
+        elif quote or (review and (quote := find_quote(page, BAD_REVIEW, tokens))):
+            out.append(finding('review', f'A tenant review or forum post complains about it ({page["domain"]}).', page, quote))
     return out[:3]
 
 
@@ -218,7 +227,7 @@ def verdict_of(findings, domain_ok, years):
     kinds = {f['kind'] for f in findings}
     if 'warning' in kinds or domain_ok is False or (years is not None and years < 1):
         return 'caution'
-    if 'registered' in kinds and domain_ok is not False:
+    if 'registered' in kinds:  # bad reviews of a registered company are listed, not a verdict on it
         return 'ok'
     if 'review' in kinds:
         return 'caution'
@@ -233,7 +242,7 @@ def check_company(exa, body, today=None):
     found = registry_findings(pages, tokens)
     ages, years = age_findings(pages, tokens, today)
     sites, domain_ok = domain_findings(pages, tokens, domain)
-    warnings = warning_findings(pages, tokens)
+    warnings = warning_findings(pages, tokens, domain)
     findings = found + ages + warnings + sites
     logger.info('company_check pages=%d findings=%d cost=%.4f seconds=%.2f', len(pages), len(findings), cost,
                 time.monotonic() - started)

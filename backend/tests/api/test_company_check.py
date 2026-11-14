@@ -15,15 +15,15 @@ from vali_api.exa import ExaClient, TTLCache
 from vali_api.store import SQLiteStore
 
 TODAY = date(2026, 11, 14)
+# Exa returns highlights (excerpts of the page), not full text, for contents={'highlights': True}
 YTJ = {'url': 'https://tietopalvelu.ytj.fi/yritys/1234567-8', 'title': 'Kotikoti Oy - YTJ',
-       'text': 'Kotikoti Oy\nBusiness ID 1234567-8. Registered 12.03.2009 in the Trade Register.\nWebsite: kotikoti.fi',
-       'highlights': ['Business ID 1234567-8.']}
+       'highlights': ['Kotikoti Oy', 'Business ID 1234567-8. Registered 12.03.2009 in the Trade Register.',
+                      'Website: kotikoti.fi']}
 HOME = {'url': 'https://www.kotikoti.fi/', 'title': 'Kotikoti Oy | Rental homes in Helsinki',
-        'text': 'Kotikoti Oy rents homes in Helsinki and Espoo. Founded in 2009, we manage 400 apartments.',
-        'highlights': ['Founded in 2009, we manage 400 apartments.']}
+        'highlights': ['Kotikoti Oy rents homes in Helsinki and Espoo. Founded in 2009, we manage 400 apartments.']}
 SCAM = {'url': 'https://www.poliisi.fi/tiedote/vuokrahuijaus', 'title': 'Poliisi varoittaa vuokrahuijauksesta',
-        'text': 'Poliisi varoittaa: Kotikoti Oy -nimellä on tehty vuokrahuijauksia Facebookissa. Älä maksa takuuvuokraa etukäteen.',
-        'highlights': ['Poliisi varoittaa: Kotikoti Oy -nimellä on tehty vuokrahuijauksia Facebookissa.']}
+        'highlights': ['Poliisi varoittaa: Kotikoti Oy -nimellä on tehty vuokrahuijauksia Facebookissa. '
+                       'Älä maksa takuuvuokraa etukäteen.']}
 
 
 def responder(company=(), risk=(), cost=0.007, fail=None, calls=None, delay=None):
@@ -51,7 +51,7 @@ def run(name='Kotikoti Oy', domain=None, city='Helsinki', **kwargs):
 
 
 def all_quotes_verbatim(result, pages):
-    texts = {p['url']: p['text'] for p in pages}
+    texts = {p['url']: '\n'.join(p['highlights']) for p in pages}
     return all(verbatim(f['source']['quote'], texts[f['source']['url']]) for f in result['findings'])
 
 
@@ -71,7 +71,7 @@ def test_registered_old_company_on_its_own_domain_is_ok():
 def test_scam_warning_means_caution_even_when_registered():
     result, _ = run(company=[HOME], risk=[YTJ, SCAM])
     assert result['verdict'] == 'caution'
-    warning = next(f for f in result['findings'] if 'scam or fraud warning' in f['text'])
+    warning = next(f for f in result['findings'] if f['text'].startswith('A page warns about scams'))
     assert warning['source']['domain'] == 'poliisi.fi' and 'vuokrahuijauksia' in warning['source']['quote']
     assert all_quotes_verbatim(result, [HOME, YTJ, SCAM])
 
@@ -93,20 +93,20 @@ def test_nothing_found_is_unknown():
     assert complete and result == {'verdict': 'unknown', 'findings': []}
 
 
-def test_a_quote_that_is_not_in_the_page_text_is_never_returned():
-    fake = {**YTJ, 'text': 'Kotikoti Oy listing.', 'highlights': ['Business ID 1234567-8.']}
-    result, _ = run(company=[], risk=[fake])
+def test_a_name_only_in_the_title_never_becomes_a_quote():
+    bare = {**YTJ, 'highlights': []}
+    result, _ = run(company=[], risk=[bare])
     assert result['verdict'] == 'unknown' and result['findings'] == []
 
 
 def test_a_founding_year_needs_the_company_named_on_the_page():
-    other = {**HOME, 'title': 'Another landlord', 'text': 'Vuokratalo Oy was founded in 2025.', 'highlights': []}
+    other = {**HOME, 'title': 'Another landlord', 'highlights': ['Vuokratalo Oy was founded in 2025.']}
     result, _ = run(company=[other], risk=[])
     assert result['findings'] == []
 
 
 def test_a_brand_new_company_means_caution():
-    young = {**HOME, 'text': 'Kotikoti Oy was founded in 2026 to rent homes.', 'highlights': []}
+    young = {**HOME, 'highlights': ['Kotikoti Oy was founded in 2026 to rent homes.']}
     result, _ = run(company=[young], risk=[YTJ])
     assert result['verdict'] == 'caution' and any('less than a year' in f['text'] for f in result['findings'])
 
@@ -117,20 +117,22 @@ def test_one_failed_search_still_answers_but_is_not_complete():
     assert any('2009' in f['text'] for f in result['findings'])
 
 
-def test_search_bodies_use_company_category_highlights_and_few_results():
+def test_search_bodies_follow_exa_guidance():
     calls = []
     run(company=[], risk=[], calls=calls)
     assert len(calls) == 2
-    company = next(c for c in calls if c.get('category') == 'company')
-    assert 'highlights' in company['contents'] and 'Kotikoti Oy' in company['query'] and 'Helsinki' in company['query']
+    company, risk = (next(c for c in calls if (c.get('category') == 'company') == want) for want in (True, False))
+    assert 'Kotikoti Oy' in company['query'] and 'Helsinki' in company['query']
     for body in calls:
-        assert body['numResults'] <= 3 and 'text' in body['contents']
+        assert body['contents'] == {'highlights': True}  # one content mode, bare highlights
+        assert body['type'] == 'auto' and body['objective'] and body['numResults'] == 4
+        assert not {'text', 'highlights', 'summary'} & set(body)
 
 
 def test_cost_per_call_stays_under_two_cents():
-    # Exa list prices: $0.005 per search (1-25 results), $0.001 per page for text and again for highlights
+    # Exa list prices: $0.005 per search (1-25 results) + $0.001 per page of highlights
     searches = company_check.searches(CheckBody(name='Kotikoti Oy'))
-    estimate = sum(0.005 + b['numResults'] * 0.001 * len(b['contents']) for b in searches)
+    estimate = sum(0.005 + b['numResults'] * 0.001 for b in searches)
     assert estimate < 0.02
 
 
@@ -175,3 +177,35 @@ def test_endpoint_answers_and_caches_for_six_hours():
 def test_endpoint_rejects_a_blank_name():
     client, _, _ = make_client()
     assert client.post('/v1/check', json={'name': ''}).status_code == 422
+
+
+TRUSTPILOT = {'url': 'https://www.trustpilot.com/review/kotikoti.fi', 'title': 'Kotikoti Reviews',
+              'highlights': ['Kotikoti Oy are scammers, they kept my whole deposit.']}
+OWN_NOTICE = {'url': 'https://www.kotikoti.fi/uutiset/huijausvaroitus', 'title': 'Kotikoti Oy: huijausvaroitus',
+              'highlights': ['Kotikoti Oy varoittaa: huijarit tarjoavat asuntoja Kotikoti Oy:n nimissä.']}
+
+
+def test_a_tenant_review_calling_it_a_scam_is_a_review_not_a_warning():
+    result, _ = run(company=[HOME], risk=[YTJ, TRUSTPILOT])
+    assert result['verdict'] == 'ok'
+    review = next(f for f in result['findings'] if f['source']['domain'] == 'trustpilot.com')
+    assert review['text'].startswith('A tenant review') and 'scammers' in review['source']['quote']
+
+
+def test_reviews_alone_mean_caution():
+    result, _ = run(company=[], risk=[TRUSTPILOT])
+    assert result['verdict'] == 'caution'
+
+
+def test_the_company_warning_about_impostors_is_not_a_warning_against_it():
+    result, _ = run(domain='kotikoti.fi', company=[HOME], risk=[YTJ, OWN_NOTICE])
+    assert result['verdict'] == 'ok'
+    assert not any(f['source']['url'] == OWN_NOTICE['url'] and 'warns' in f['text'] for f in result['findings'])
+
+
+def test_a_business_id_printed_only_in_the_register_address_counts():
+    odata = {'url': 'https://odata.fi/fi/yritys/1234567-8', 'title': 'Kotikoti Oy',
+             'highlights': ['# Kotikoti Oy 00100 HELSINKI ## Toiminta Kotikoti Oy rents homes.']}
+    result, _ = run(company=[], risk=[odata])
+    assert result['verdict'] == 'ok'
+    assert result['findings'][0]['text'] == 'Listed in a Finnish company register (odata.fi) with Business ID 1234567-8.'
