@@ -43,7 +43,7 @@ test("never touches passwords, cards, bank details, identity codes or what the u
     { id: "e", type: "text", label: "Henkilötunnus" },
     { id: "f", type: "text", label: "Username", hint: "username" },
     { id: "g", type: "text", label: "Bank account holder name" },
-    { id: "h", type: "email", label: "Email", current: "mine@example.org" },
+    { id: "h", type: "email", label: "Email", filled: true },
     { id: "i", type: "text", label: "Verification code" },
   ];
   assert.deepEqual(planFill(fields, { profile: PROFILE, values: [{ label: "IBAN", value: "FI00 1234" }] }), []);

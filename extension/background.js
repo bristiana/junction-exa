@@ -10,7 +10,7 @@ import { fillPlaceholders } from "./lib/actions.js";
 import { redactText } from "./lib/redact.js";
 import * as backend from "./lib/backend.js";
 import { isLinkSender, linkCodeInput } from "./lib/device-link.js";
-import { planFill, errandValues } from "./lib/fill-here.js";
+import { planFill, errandValues, samePage, PAGE_CHANGED } from "./lib/fill-here.js";
 import { cacheKey, helpfulPage, companionPayload, cleanTip, cachedEntry, remember } from "./lib/companion.js";
 
 const MAX_TASKS = 30;
@@ -262,32 +262,36 @@ async function fillForm(taskId) {
   const t = await findTask(taskId);
   const values = t?.output?.structured?.form_fill || [];
   if (!t || !values.length) return { filled: 0, skipped: [], error: "Nothing to fill." };
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const target = tab && t.page?.url && sameDoc(tab.url, t.page.url) ? tab.id : t.tabId;
-  if (!target) return { filled: 0, skipped: [], error: "Open the page with the form first." };
+  const want = t.page?.url;
+  if (!want) return { filled: 0, skipped: [], error: "Open the page with the form first." };
+  // The active tab or the errand's own tab, only while it still shows the page the errand was started on.
+  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const own = t.tabId ? await chrome.tabs.get(t.tabId).catch(() => null) : null;
+  const tab = [active, own].find((x) => x?.id && samePage(x.url, want));
+  if (!tab) return { filled: 0, skipped: [], error: PAGE_CHANGED };
   // Re-tag the fields in case the page re-rendered since the errand started.
-  await chrome.scripting.executeScript({ target: { tabId: target }, func: capturePage });
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage });
   const resolved = values.map((v) => ({ field_id: v.field_id, value: fillPlaceholders(v.value, profile) }));
-  const [res] = await chrome.scripting.executeScript({ target: { tabId: target }, func: fillPage, args: [resolved] });
+  const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPage, args: [resolved, want] });
   return res?.result || { filled: 0, skipped: [] };
 }
 // "Fill it here": the form on the tab the user is on, from this browser's details and the errand's values.
 // Never submits; passwords, cards and bank fields are left alone (lib/fill-here.js). Vali on the page says the rest.
-async function fillHere(taskId, tabId) {
+// tabId and url: the tab and page the panel showed when the user pressed it; refused if the tab has moved on since.
+async function fillHere(taskId, tabId, url) {
   const { profile } = await settings();
   const t = taskId ? await findTask(taskId) : null;
-  const tab = tabId ? await chrome.tabs.get(tabId).catch(() => null) : (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
-  if (!tab?.id || !/^https?:/.test(tab.url || "")) return { filled: 0, error: "Open the page with the form first." };
+  if (!tabId || !/^https?:/.test(url || "")) return { filled: 0, error: "Open the page with the form first." };
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (!tab || !samePage(tab.url, url)) return { filled: 0, error: PAGE_CHANGED };
   const [cap] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage });
   const plan = planFill(cap?.result?.fields, { profile, values: errandValues(t) });
   if (!plan.length) return { filled: 0, error: "I found nothing here I can fill from your details. Check them in settings." };
-  const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPage, args: [plan.map(({ field_id, value }) => ({ field_id, value }))] });
+  const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPage, args: [plan.map(({ field_id, value }) => ({ field_id, value })), url] });
+  if (res?.result?.error) return { filled: 0, error: res.result.error };
   const filled = res?.result?.filled || 0;
   if (filled) chrome.tabs.sendMessage(tab.id, { type: "vali-say", text: `I filled ${filled} field${filled === 1 ? "" : "s"}. Check and send it yourself.` }).catch(() => {});
   return { filled };
-}
-function sameDoc(a, b) {
-  try { const x = new URL(a), y = new URL(b); return x.origin === y.origin && x.pathname === y.pathname; } catch (_) { return false; }
 }
 
 // ---------- server-only actions on one task (cancel, do it, approve, stop) ----------
@@ -403,7 +407,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     "companion-tip": () => companionTip(msg.page, sender),
     "companion-seen": () => markTipSeen(sender.url),
     fill: () => fillForm(msg.taskId),
-    fillHere: () => fillHere(msg.taskId, msg.tabId),
+    fillHere: () => fillHere(msg.taskId, msg.tabId, msg.url),
     cancel: async () => {
       const t = await findTask(msg.taskId);
       if (t?.backend) {

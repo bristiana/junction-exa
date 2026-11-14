@@ -4,6 +4,18 @@
 
 import { fillPlaceholders, unfilledPlaceholders } from "./actions.js";
 
+export const PAGE_CHANGED = "The page changed. Open it again and retry."; // also inlined in page-scripts.js fillPage()
+
+// True when both are the same web page (origin and path), so a fill never lands on a page the user did not choose.
+export function samePage(a, b) {
+  try {
+    const x = new URL(a), y = new URL(b);
+    return /^https?:$/.test(x.protocol) && x.origin === y.origin && x.pathname === y.pathname;
+  } catch (_) {
+    return false;
+  }
+}
+
 // Never touched: passwords, cards, bank details, identity codes, usernames and one-time codes.
 const SENSITIVE = /pass(word)?|salasana|\bpin\b|card|kortti|cvc|cvv|\bcc-|expir|iban|\bbic\b|swift|account|tilinumero|bank|pankki|identity code|henkilötunnus|\bhetu\b|social security|ssn|username|user name|käyttäjätunnus|one-time|otp|verification code|vahvistuskoodi/i;
 // Text-like fields only. Checkboxes are never ticked: they are consents and terms.
@@ -66,7 +78,7 @@ function errandValueFor(field, values) {
 export function planFill(fields, { profile = {}, values = [] } = {}) {
   const plan = [];
   for (const f of fields || []) {
-    if (!FILLABLE.has(f.type) || f.current || SENSITIVE.test(`${f.label || ""} ${f.hint || ""}`)) continue;
+    if (!FILLABLE.has(f.type) || f.filled || SENSITIVE.test(`${f.label || ""} ${f.hint || ""}`)) continue;
     const kind = f.type === "radio" ? null : detailOf(f);
     let value = errandValueFor(f, values) ?? (kind ? profileValue(kind, profile) : "");
     value = fillPlaceholders(String(value || ""), profile).trim();

@@ -227,7 +227,7 @@ export function capturePage(mode) {
     // hint (autocomplete, name, id) stays in the browser: backendPage() does not send it.
     const f = { id, type, label: clip(labelOf(el), 120), required: !!el.required, hint: clip(`${el.getAttribute("autocomplete") || ""} ${el.name || ""} ${el.id || ""}`, 120) };
     if (el.localName === "select") f.options = [...el.options].map((o) => clip(o.text, 60)).filter(Boolean);
-    if (el.value && type !== "checkbox") f.current = clip(el.value, 60);
+    if (el.value && type !== "checkbox") f.filled = true; // whether, never what: typed values are not read
     fields.push(f);
     if (fields.length >= 60) break;
   }
@@ -246,8 +246,12 @@ export function pageRedactor() {
   return capturePage("redactor");
 }
 
-// Fills the tagged fields with the approved values. It never submits the form.
-export function fillPage(values) {
+// Fills the tagged fields with the approved values. It never submits the form. expectedUrl is the page the user chose:
+// if this document is another page (origin or path), nothing is filled.
+export function fillPage(values, expectedUrl) {
+  let want = "";
+  try { const u = new URL(expectedUrl); want = u.origin + u.pathname; } catch (_) {}
+  if (!want || location.origin + location.pathname !== want) return { filled: 0, skipped: [], error: "The page changed. Open it again and retry." };
   const setNative = (el, v) => {
     const proto = el.localName === "textarea" ? HTMLTextAreaElement.prototype : el.localName === "select" ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;

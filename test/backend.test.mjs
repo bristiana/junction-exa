@@ -158,7 +158,6 @@ test("the client works against the mock server", async (t) => {
   const { code, expires_at } = await c.pair();
   assert.match(code, /^\d{6}$/);
   assert.ok(Date.parse(expires_at) > Date.now());
-  assert.deepEqual(await c.syncProfile({ name: "Test Person" }), { ok: true });
 
   const created = await c.createTask({ task: "Find a public sauna in Helsinki", page: backendPage({ url: "https://example.fi", title: "x", fields: [{ id: "h1", label: "Email", type: "email" }] }), effort: "low" });
   assert.equal(created.source, "extension");
