@@ -760,7 +760,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     @application.post('/webhooks/whatsapp')
     async def whatsapp(request: Request, background_tasks: BackgroundTasks):
         raw = await request.body()
-        if config.whatsapp_app_secret and not verify_signature(
+        if not config.whatsapp_app_secret or not verify_signature(  # fail closed without a secret
                 raw, request.headers.get('x-hub-signature-256', ''), config.whatsapp_app_secret):
             raise HTTPException(403, 'Invalid signature')
         try:

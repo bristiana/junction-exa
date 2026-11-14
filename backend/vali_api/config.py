@@ -37,6 +37,7 @@ class Config:
         return dict(ok=True, exa=bool(self.exa_api_key), anthropic=bool(self.anthropic_api_key),
                     jev=bool(self.jev_api_key), db=True, cloudinary=bool(self.cloudinary_url),
                     whatsapp=bool(self.whatsapp_token and self.whatsapp_phone_number_id),
+                    whatsapp_signed=bool(self.whatsapp_app_secret),
                     elevenlabs=bool(self.elevenlabs_api_key), voice_agent=self.voice_agent_ready())
 
     def voice_agent_ready(self):
