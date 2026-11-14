@@ -308,7 +308,7 @@ $("talk").addEventListener("click", () => {
 
 // ---------- composer ----------
 $("presets").replaceChildren(
-  ...PRESETS.map(([label, text]) => h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => { $("task").value = text; $("task").focus(); } }))
+  ...PRESETS.map(([label, text]) => h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => { $("task").value = text; fitTask(); $("task").focus(); } }))
 );
 
 async function refreshActiveTab() {
@@ -336,6 +336,7 @@ $("composer").addEventListener("submit", async (e) => {
     const rec = await send({ type: "start", task, tabId: activeTab?.id, usePage, selection: usePage ? prefill?.selection || "" : "" });
     open.add(rec.id);
     $("task").value = "";
+    fitTask();
     prefill = null;
     chrome.storage.session.remove("prefill");
     refreshActiveTab();
@@ -350,6 +351,15 @@ $("composer").addEventListener("submit", async (e) => {
 $("task").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("composer").requestSubmit();
 });
+// One line when errands are listed, two when empty, growing to ~5 lines as you type.
+function fitTask() {
+  const ta = $("task");
+  ta.style.height = "auto";
+  const min = state.tasks.length ? 1 : 2, lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+  const pad = ta.offsetHeight - ta.clientHeight + parseFloat(getComputedStyle(ta).paddingTop) * 2;
+  ta.style.height = Math.min(Math.max(ta.scrollHeight, min * lh + pad), 5 * lh + pad) + "px";
+}
+$("task").addEventListener("input", fitTask);
 
 // ---------- cards ----------
 function elapsed(t) {
@@ -714,7 +724,7 @@ function renderCard(t) {
   card.dataset.id = t.id;
   const actions = card.querySelector(".v-row__actions");
   const v = executionView(t, { answered: answered.get(t.id) ?? null });
-  const detail = [statusDetail(t, v), t.source === "whatsapp" ? "WhatsApp" : ""].filter(Boolean).join(" · ");
+  const detail = [statusDetail(t, v)].filter(Boolean).join(" · ");
   card.querySelector(".meta").textContent = detail ? " · " + detail : "";
   card.querySelector(".v-row__status").title = label + card.querySelector(".meta").textContent;
   if ((v?.question && !v.question.answered) || (!v && t.output?.structured?.missing_info?.length)) {
@@ -817,6 +827,7 @@ function render() {
   const next = !$("detail").hidden && $("detail").querySelector(".v-btn:not(.v-btn--quiet, .v-btn--soft, .v-btn--danger)");
   $("send").classList.toggle("v-btn--soft", !!next);
   $("empty").hidden = state.tasks.length > 0;
+  fitTask();
 }
 
 $("list").addEventListener("focusout", () => setTimeout(() => {

@@ -117,3 +117,8 @@ sup.cite a, .exec-values .src { text-decoration: none; background: var(--v-accen
 .exa-queries li::after { content: "”"; color: var(--v-muted); }
 .exa-hosts { display: flex; flex-wrap: wrap; gap: var(--v-s-1); }
 .exa-host { padding: 0 var(--v-s-2); border: 1px solid var(--v-line); border-radius: var(--v-r-pill); background: var(--v-surface); font-size: var(--v-fs-sm); text-decoration: none; }
+
+#task { min-height: var(--v-tap); resize: none; overflow-y: auto; }
+.developer { margin: var(--v-s-3) 0; font-size: var(--v-fs-sm); color: var(--v-muted); }
+.developer summary { cursor: pointer; }
+.developer .server-presets { margin: var(--v-s-2) 0 0; }
