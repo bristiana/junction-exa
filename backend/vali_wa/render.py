@@ -229,7 +229,17 @@ def render_result(task, profile=None, buttons=False):
     return split_messages("\n\n".join(sections))
 
 
-def render_execution_update(task, profile=None):
+CONTINUE_HINT = "\nReply *continue* to pick up where it stopped."
+
+
+def continue_buttons(task):
+    """A stopped or failed run can pick up where it stopped: one Continue button."""
+    if ((task or {}).get("execution") or {}).get("status") in {"stopped", "failed"}:
+        return [(f"continue:{task['id']}", "Continue")]
+    return []
+
+
+def render_execution_update(task, profile=None, buttons=False):
     execution = task.get("execution") or {}
     status = execution.get("status")
     if status == "awaiting_approval":
@@ -247,8 +257,10 @@ def render_execution_update(task, profile=None):
         url = execution.get("final_url") or execution.get("current_url") or execution.get("start_url")
         if url:
             message += f"\nfinish here: {url}"
+        if not buttons:
+            message += CONTINUE_HINT
     elif status == "stopped":
-        message = "Stopped. Vali will not submit this errand."
+        message = "Stopped. Nothing was sent." + ("" if buttons else CONTINUE_HINT)
     elif status == "submitting":
         message = "Submitting your approved errand."
     else:

@@ -244,7 +244,7 @@ def test_mutations_render_returned_task(task):
     assert bodies == ["Submitting your approved errand."]
     updated = {**task, "execution": {"status": "stopped"}}
     bodies, _, _ = flow_scenario(task, msg("stop"), mutation_result=updated)
-    assert bodies == ["Stopped. Vali will not submit this errand."]
+    assert bodies == ["Stopped. Nothing was sent.\nReply *continue* to pick up where it stopped."]
 
 
 def test_upload_and_send_image_by_id():
