@@ -557,20 +557,35 @@ def test_unnamed_details_need_the_users_yes(local_site):
     asked = []
 
     def typed(messages):
-        assert 'May I use' not in messages[-1]['content'][0]['content']
+        assert 'did not allow' not in messages[-1]['content'][0]['content']
         return 'type_text', {'ref': 'e1', 'text': '{{email}}'}
 
-    def refused(messages):
-        assert 'did not allow their email' in messages[-1]['content'][0]['content']
+    def done(messages):
+        assert 'did not allow' not in messages[-1]['content'][0]['content']
         return 'finish', {'result': 'ok'}
-    # The request names no detail: the saved name is typed only after a yes, the email is refused after a no.
-    answers = iter(['Yes, go ahead', 'no'])
-    llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{name}}'}), typed, refused])
-    hooks = plain_hooks(ask_user=lambda q: asked.append(q) or next(answers))
+    # The request names no detail: one yes covers the name and the email, asked once.
+    llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{first_name}}'}), typed, done])
+    hooks = plain_hooks(ask_user=lambda q: asked.append(q) or 'Yes, go ahead')
     result = run_browser_agent('Book a sauna', local_site + '/claim.html', PROFILE, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
-    assert result.status == 'done' and len(asked) == 2
-    assert asked[0].startswith('May I use your saved name on ') and 'email' in asked[1]
+    assert result.status == 'done' and len(asked) == 1
+    assert asked[0].startswith('May I use your saved name, email and phone on ')
     assert '{{email}}' in llm.received[0][0] and 'With the user' in llm.received[0][0]
+
+
+def test_a_no_keeps_unnamed_details_refused(local_site):
+    asked = []
+
+    def refused(messages):
+        assert 'did not allow their saved details' in messages[-1]['content'][0]['content']
+        return 'type_text', {'ref': 'e1', 'text': '{{email}}'}
+
+    def again(messages):
+        assert 'did not allow their saved details' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'ok'}
+    llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{name}}'}), refused, again])
+    hooks = plain_hooks(ask_user=lambda q: asked.append(q) or 'no thanks')
+    result = run_browser_agent('Book a sauna', local_site + '/claim.html', PROFILE, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done' and len(asked) == 1
 
 
 def test_without_ask_user_unnamed_details_stay_refused(local_site):
