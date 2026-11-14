@@ -30,6 +30,7 @@ from .jev import JevClient
 from .llm import make_fast_json
 from .questions import early_question, with_answer
 from .router import route
+from .services import create_router as services_router
 from .stats import pick_channel, summarize
 from .store import make_store, now
 from .uploads import oversized_request
@@ -812,7 +813,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         create=lambda text, user: create_task_for_user(TaskBody(task=text), user, 'voice'),
         stop=lambda tid, user: stop_for_user(tid, user),
         message=lambda tid, text, user: message_for_user(tid, MessageBody(text=text), user, 'voice'))
-    application.include_router(__import__("vali_api.services", fromlist=["create_router"]).create_router(), dependencies=[Depends(authenticate)])
+    application.include_router(services_router(), dependencies=[Depends(authenticate)])
     mount_web(application)
     return application
 
