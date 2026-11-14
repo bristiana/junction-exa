@@ -43,8 +43,12 @@ def spawn_browser_session(tid, goal, url, profile):
 @modal.asgi_app()
 def web():
     import logging
+    from vali_api.app import research_poller_loop, spawn_thread
     logging.basicConfig(level=logging.INFO, force=True)
-    return worker_app()
+    application = worker_app()
+    # A quote check needs no cold research_poller container: run it in this warm one.
+    application.state.spawn_quote_check = lambda tid: spawn_thread(research_poller_loop, tid, application)
+    return application
 
 
 @app.function(image=image, secrets=[secret], timeout=900)

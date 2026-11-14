@@ -148,11 +148,16 @@ def map_lexical(claims, pages):
 
 
 def map_with_llm(llm, claims, pages):
-    listing = '\n'.join(f'[C{i}] {c}' for i, c in enumerate(claims))
+    """One fast call per claim, all at once: the wait is the slowest claim, not the sum of them."""
+    from concurrent.futures import ThreadPoolExecutor
     texts = '\n\n'.join(f'[P{i}] {p["url"]}\n{p["text"]}' for i, p in enumerate(pages))
-    result = llm(MAP_SYSTEM, f'Claims:\n{listing}\n\nPages:\n{texts}', MAP_SCHEMA)
-    if not isinstance(result, dict):
+    def ask(i):
+        return llm(MAP_SYSTEM, f'Claims:\n[C{i}] {claims[i]}\n\nPages:\n{texts}', MAP_SCHEMA)
+    with ThreadPoolExecutor(max_workers=min(8, len(claims))) as pool:
+        results = list(pool.map(ask, range(len(claims))))
+    if not all(isinstance(r, dict) for r in results):
         return None
+    result = {'claims': [item for r in results for item in r.get('claims') or []]}
     support, softer = [[] for _ in claims], [''] * len(claims)
     for item in result.get('claims') or []:
         i = item.get('i')

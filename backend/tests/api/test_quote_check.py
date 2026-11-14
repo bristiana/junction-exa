@@ -62,3 +62,26 @@ def test_a_claimed_check_is_left_alone_until_it_goes_stale():
     store.update_research(task['id'], stale)
     assert poll_research_once(task['id'], application) is True
     assert store.get_task(task['id'])['research']['status'] == 'completed'
+
+
+def test_the_same_question_reuses_recent_research_at_no_cost():
+    client, application, store, polls = make()
+    first = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki'}).json()
+    poll_research_once(first['id'], application)
+    again = client.post('/v1/tasks', json={'task': '  Find a SAUNA in   Helsinki '}).json()
+    research = again['research']
+    assert research['status'] == 'completed' and research['cost'] == 0 and research['reused_from']
+    assert research['output']['claims'] == store.get_task(first['id'])['research']['output']['claims']
+    assert [e['kind'] for e in research['activity']] == ['think', 'think', 'done'] and polls == [first['id']]
+    other = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki', 'page': {'url': 'https://x.fi'}}).json()
+    assert other['research']['status'] == 'running'  # page context is never reused
+
+
+def test_a_stalled_quote_check_restarts_on_the_next_poll():
+    client, application, store, polls = make()
+    task = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki'}).json()
+    assert client.get('/v1/tasks/' + task['id']).status_code == 200 and polls == [task['id']]
+    stale = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    store.sql('UPDATE tasks SET updated_at=? WHERE id=?', (stale, task['id']))
+    client.get('/v1/tasks/' + task['id'])
+    assert polls == [task['id'], task['id']]
