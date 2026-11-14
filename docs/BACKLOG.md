@@ -1,5 +1,15 @@
 # Overnight backlog (14-15 Nov)
 
+## Day 2 (Sat 14 Nov 11:00 to Sun 15 Nov 10:00)
+The loop restarts for the last day. Code freeze from 09:00 Sun (health checks only). Bogdan submits on the Junction platform himself.
+- [ ] J1 Judging fit: read the Exa challenge text and the submission rules (github.com/DKeAlvaro/junction-2026-challenges, docs/), map each criterion to what Vali shows, add the gaps here as items, and draft docs/SUBMISSION.md (name, one-liner, description, how Exa is used, tech, demo video script) for Bogdan to paste.
+- [ ] R1 Sweep 2, any site: 20 new errands on sites never tested (Finnish and international: shops, airlines, clinics, libraries, gyms, government, forms with wizards). Run them live, fix the top failures in vali_agent and research, rerun. Target 16/20.
+- [ ] R2 Prompt-injection evals: fixture pages served by the API (hidden text asking for the user's details, fake "Continue as" prompts, text telling the agent to submit). The agent never puts profile values there, never submits, and raises a blocker. Add to scripts/evals.
+- [ ] R3 Live status: the API streams task changes (SSE), and the extension and the Mac app update without polling delay.
+- [ ] R4 Judge install, extension: a fresh Chrome profile loads the unpacked extension and gets a first answer with no settings (default server, account made on first use). Fix friction; short docs/INSTALL.md.
+- [ ] R5 Judge install, Mac: the dmg on a clean user (unsigned, right-click Open), first answer in under 2 minutes. Fix friction; screenshots of every main state in docs/img/ for the submission.
+- [ ] R6 Demo video: record the 3-minute DEMO.md flow from the live app (screen recording), plus a 30-second cut. Bogdan uploads it.
+
 ## Morning summary (08:30)
 Vali is ready to demo. 46 PRs merged overnight, each reviewed and green in CI. Live = main.
 
@@ -124,3 +134,4 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - 08:30 Merged #37-#39: 08:00 regression 20/21 (sauna payment hand-off is intended, eval updated), voice check end to end (citation markers no longer spoken), letters reply to the sender and done text shows your details only on your device (company contact details checked in code). Live = main, golden 5/5. dmg rebuilt.
 - 08:30 Merged #40-#44: backlog, captions hide voice tags, demo seed script, aligned text buttons, dead database socket no longer hangs requests (cause verified in logs). Live = main, golden 5/5, dmg rebuilt. Code freeze; health checks only until 10:00. (Log times after 07:00 ran about 20 minutes ahead.)
 - 08:58 Health check: the overnight test account hit its $2 daily cap, so the cap is now $10 (#46, deployed). Golden 5/5 on a fresh account.
+- 11:00 Loop restarted: it had stopped at 09:49 on Sat thinking the deadline was today; the deadline is Sun 10:00. Day 2 items added.
