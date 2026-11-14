@@ -92,6 +92,25 @@ def quoting(task, research):
             'activity': (research.get('activity') or []) + [activity.checking(task, research['output'])]}
 
 
+REUSE_FOR = timedelta(minutes=30)
+
+
+def reused_research(task, research, answered_at):
+    minutes = max(1, round((datetime.now(timezone.utc) - datetime.fromisoformat(answered_at)).total_seconds() / 60))
+    return {**research, 'cost': 0, 'question': research.get('question'), 'reused_from': answered_at, 'activity': [
+        activity.opening(task),
+        activity.entry(task['created_at'], 'think', f'Same question answered {minutes} min ago: reusing that research'),
+        activity.done(task, research['output'])]}
+
+
+def quote_check_stalled(task):
+    started = task['research'].get('quoting')
+    if not started:
+        return False
+    since = task['updated_at'] if started == 'pending' else started
+    return datetime.now(timezone.utc) - datetime.fromisoformat(since) > QUOTE_TIMEOUT
+
+
 def check_quotes(application, task, research):
     """Claim the quote check, run it, and complete the task whatever happens: it never stays running."""
     store = application.state.store
@@ -195,7 +214,9 @@ def refine_research(application, task, answer):
         refined = {**research, 'question': question}
     if not state.store.update_research(task['id'], refined, expected=research):
         raise HTTPException(409, 'Research changed meanwhile; try again')
-    if research['kind'] == 'search' or (research['kind'] == 'agent' and research['status'] in TERMINAL):
+    if refined.get('quoting'):
+        state.spawn_quote_check(task['id'])
+    elif research['kind'] == 'agent' and research['status'] in TERMINAL:
         state.spawn_research_poller(task['id'])  # a running agent poller follows the new run by itself
     return state.store.get_task(task['id'])
 
@@ -206,7 +227,7 @@ def research_poller_loop(task_id, application=None):
     while time.monotonic() < deadline:
         if poll_research_once(task_id, application):
             return
-        time.sleep(2)
+        time.sleep(1)
     store = application.state.store
     task = store.get_task(task_id)
     if task and task['research']['status'] not in TERMINAL:
@@ -345,7 +366,7 @@ TERMS_HTML = PAGE.format(title='terms', body=(
     'button until you approve. You stay responsible for what you approve. No warranty.</p>'))
 
 def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None, whatsapp_api=None,
-               llm=None):
+               llm=None, spawn_quote_check=None):
     config = config or Config()
 
     @asynccontextmanager
@@ -371,6 +392,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     application.state.resolve_host = resolve_host
     application.state.limiter = SlidingWindow()
     application.state.spawn_research_poller = spawn_research_poller or (lambda tid: spawn_thread(research_poller_loop, tid, application))
+    # The quote check of an errand whose answer is already in: on Modal a thread in the warm web container (no cold start).
+    application.state.spawn_quote_check = spawn_quote_check or application.state.spawn_research_poller
     application.state.spawn_browser_session = spawn_browser_session or (lambda tid, goal, url, profile: spawn_thread(run_browser_session, tid, goal, url, profile, application))
     application.state.whatsapp_api = whatsapp_api or ChannelAPI(config)
     application.add_middleware(UploadLimit)
@@ -452,7 +475,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             previous_run = owned(body.previous_task_id, user)['research'].get('run_id')
         research = dict(kind=kind, status='queued', run_id=None, progress=[], output=None, cost=None, stop_reason=None, error=None,
                         question=early_question(body.task, mode))
+        reused = None if body.page or previous_run or kind == 'monitor' else state.store.recent_research(
+            body.task, mode, (datetime.now(timezone.utc) - REUSE_FOR).isoformat())
         task = state.store.create_task(user['id'], body.task, body.page, mode, research, source=source)
+        if reused:  # the same question minutes ago: its cited research, at no cost and no wait
+            research = reused_research(task, *reused)
+            state.store.update_research(task['id'], research)
+            push_task(application, task['id'], render_result)
+            return state.store.get_task(task['id'])
         try:
             if kind == 'search':
                 research.update(find_research(state, task, body.task))
@@ -484,7 +514,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise
         if research['status'] in {'completed', 'failed'}:
             push_task(application, task['id'], render_result)
-        if research['status'] not in TERMINAL:
+        if research.get('quoting'):
+            state.spawn_quote_check(task['id'])
+        elif research['status'] not in TERMINAL:
             state.spawn_research_poller(task['id'])
         return state.store.get_task(task['id'])
 
@@ -567,7 +599,10 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.get('/v1/tasks/{tid}')
     def get_task(tid: str, user=Depends(authenticate)):
-        return owned(tid, user)
+        task = owned(tid, user)
+        if quote_check_stalled(task):  # its checker died with its container; a poll restarts it
+            application.state.spawn_quote_check(tid)
+        return task
 
     @application.post('/v1/tasks/{tid}/cancel')
     def cancel(tid: str, user=Depends(authenticate)):

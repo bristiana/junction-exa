@@ -256,6 +256,18 @@ class Store:
         self.update_execution(tid, execution)
         return execution
 
+    def recent_research(self, task, mode, since):
+        """The latest completed research for the same errand words (no page, no follow-up) since a time."""
+        wanted = ' '.join(task.lower().split())
+        rows = self.sql("SELECT task, research_json, created_at FROM tasks WHERE mode=? AND page_json='null' AND created_at>=? "
+                        'ORDER BY created_at DESC LIMIT 200', (mode, since))
+        for row in rows:
+            research = json.loads(row['research_json'])
+            if (' '.join(row['task'].lower().split()) == wanted and research.get('status') == 'completed'
+                    and research.get('output') and not (research.get('question') or {}).get('answer')):
+                return research, row['created_at']
+        return None
+
     def daily_spend(self, uid=None):
         """Today's research cost for one user, or for everyone when uid is None."""
         today = datetime.now(timezone.utc).date().isoformat()
