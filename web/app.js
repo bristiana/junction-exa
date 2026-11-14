@@ -1,6 +1,7 @@
 // The page controller: routes (#/ home, #/t/<id> one errand, #/dashboard, #/dashboard/<id> one errand as a chat),
 // the ask box, and polling the open errand.
-import { api } from './api.js';
+import { api, session } from './api.js';
+import { renderLogin } from './login.js';
 import { $, h } from './dom.js';
 import { TERMINAL, isActive, moodOf, primaryAction } from './model.js';
 import { renderWorking, tickClock } from './working.js';
@@ -26,7 +27,8 @@ if (mascot) mountPalettePicker($('palette'), mascot);
 $('exa-uses').replaceChildren(...EXA_USES.map(([label, detail]) => h('div', {}, h('dt', {}, label), h('dd', {}, detail))));
 
 function showView(name) {
-  for (const id of ['home', 'working', 'answer', 'hub', 'dashboard']) $(id).hidden = id !== name;
+  for (const id of ['home', 'working', 'answer', 'hub', 'dashboard', 'login']) $(id).hidden = id !== name;
+  document.body.classList.toggle('signed-in', session.signedIn());
   for (const link of document.querySelectorAll('.top [data-view]')) {
     if (link.dataset.view === name) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
@@ -46,6 +48,7 @@ function notice(text, quiet = false) {
 // ---------- asking ----------
 // The one way an errand starts on this page: the home ask box, follow-ups and the corner bubble all call it.
 function startErrand(errand, previousTaskId) {
+  session.markSignedIn();
   return api.createTask(errand, previousTaskId, Object.keys(loadProfile()));
 }
 
@@ -187,6 +190,7 @@ $('to-trust')?.addEventListener('click', () => openTrust(followed?.task));
 $('trust').addEventListener('click', (event) => { if (event.target === $('trust')) $('trust').close(); });
 $('to-details').addEventListener('click', () => openDetails());
 $('to-whatsapp').addEventListener('click', () => openWhatsapp());
+$('to-logout').addEventListener('click', () => { session.signOut(); location.hash = '#/'; showView('home'); });
 $('whatsapp').addEventListener('click', (event) => { if (event.target === $('whatsapp')) $('whatsapp').close(); });
 $('details').addEventListener('click', (event) => { if (event.target === $('details')) $('details').close(); });
 // Saved or deleted details change the open answer's hint and approval values, so it redraws.
@@ -194,6 +198,21 @@ $('details').addEventListener('close', () => { if (followed?.task) { followed.ke
 
 // ---------- routes ----------
 function route() {
+  // Errands and the dashboard need a signed-in account; the landing page and sign-in do not.
+  const gated = /^#\/(dashboard|t\/)/.test(location.hash);
+  if (gated && !session.signedIn()) {
+    closeBoard();
+    unfollow();
+    renderLogin(location.hash);
+    return showView('login');
+  }
+  if (location.hash === '#/login') {
+    closeBoard();
+    unfollow();
+    if (session.signedIn() && !session.hasDemo()) { location.hash = '#/dashboard'; return; }
+    renderLogin('#/dashboard');
+    return showView('login');
+  }
   if ($('details').open) $('details').close();
   if ($('whatsapp').open) $('whatsapp').close();
   notice(leaving);

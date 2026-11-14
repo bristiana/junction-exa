@@ -153,7 +153,10 @@ function threadHandlers(task) {
       if (![404, 405].includes(error.status) || !action) throw error;
       return api.execute(task.id, action.index, loadProfile());
     }), button),
-    onFollowUp: () => { location.hash = `#/t/${encodeURIComponent(task.id)}`; },
+    onFollowUp: (text) => act(async () => {
+      const next = await api.createTask(text, task.id);
+      location.hash = `#/t/${encodeURIComponent(next.id)}`;
+    }),
     onDetails: () => document.getElementById('to-details')?.click(),
   };
 }
