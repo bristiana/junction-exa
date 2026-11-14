@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { companyVerdict, errandFor, factSources, officeLine, timeline, todayHours } from "../web/hub-model.js";
+import { clipQuote, companyVerdict, errandFor, factSources, officeLine, timeline, todayHours } from "../web/hub-model.js";
 
 const catalog = { groups: [
   { id: "before_arrival", services: [{ id: "residence-permit", name: "Residence permit", applies_to: { citizenship: ["non_eu"], study: ["degree", "exchange"] } }] },
@@ -49,4 +49,12 @@ test("Ask Vali carries the service and who you are, never personal details", () 
   const service = { name: "Student aid", organisation: "Kela", official_url: "https://www.kela.fi/financial-aid-for-students" };
   assert.match(errandFor(service, { citizenship: "non_eu", study: "degree" }), /^Student aid \(Kela\): what do I need to do as a non-EU degree student/);
   assert.match(errandFor(service, {}, true), /Stop before submitting\.$/);
+});
+
+test("long markdown highlights become a short plain quote", () => {
+  const raw = "## How do I get one? You can register at a DVV service point if you live in Finland. ### Read more [here](https://dvv.fi/x) about the **appointment** and what to bring with you. " + "x ".repeat(300);
+  const quote = clipQuote(raw);
+  assert.ok(quote.length <= 241);
+  assert.match(quote, /^You can register at a DVV service point if you live in Finland\./);
+  assert.doesNotMatch(quote, /[#*\]]/);
 });

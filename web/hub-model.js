@@ -46,13 +46,26 @@ export function timeline(catalog, about) {
   })).filter((group) => group.services.length);
 }
 
+// Exa highlights can be long page excerpts with markdown; keep the first plain statements, about two sentences.
+export function clipQuote(text, max = 240) {
+  const clean = String(text || '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[#*_>`|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const statements = clean.split(/(?<=[.!?])\s+/).filter((t) => t.length >= 40 && t.length <= max && !t.endsWith('?'));
+  let out = '';
+  for (const sentence of statements) {
+    if ((out + ' ' + sentence).trim().length > max) break;
+    out = (out + ' ' + sentence).trim();
+  }
+  if (out) return out;
+  return clean.length <= max ? clean : clean.slice(0, max).replace(/\s+\S*$/, '') + '…';
+}
+
 // Live facts as numbered sources (one per page) and quotes that point at them.
 export function factSources(facts) {
   const sources = new Map();
   const quotes = [];
   for (const fact of Array.isArray(facts) ? facts : []) {
     const url = safeUrl(fact?.url);
-    const quote = String(fact?.quote || '').replace(/\s+/g, ' ').trim();
+    const quote = clipQuote(fact?.quote);
     if (!url || !quote) continue;
     if (!sources.has(url)) {
       sources.set(url, { n: sources.size + 1, url, domain: domainOf(url), title: String(fact.title || domainOf(url)), quote, official: true });
