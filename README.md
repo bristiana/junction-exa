@@ -1,36 +1,53 @@
 # Vali
 
-Vali is an errand butler for newcomers and international students in Finland.
-You hand it an errand. Exa researches it on the live web and every fact comes with its source.
-When the errand ends in a form or a booking, a cloud browser fills the real site and stops before the final button until you approve.
+Vali is an errand butler for international students and newcomers in Finland. Message it on WhatsApp like a friend who knows Finland: it reads the live web with Exa, answers in a sentence or two with the exact source links, fills the real booking form in a cloud browser, and books only when you tap Approve.
 
-Built for the Exa "Internet Butler" challenge at Junction 2026. Exa judges on use of Exa, usefulness to real people, clarity of sources, originality and a working demo on live queries (20% each). The 3-minute demo script is in [docs/DEMO.md](docs/DEMO.md).
+**Live:** https://bogdan-c-2206--vali-web.us-east.modal.run/
+
+Built for the Exa "Internet Butler" challenge at Junction 2026. Submission texts, video script and slide outline: [docs/SUBMISSION.md](docs/SUBMISSION.md).
+
+## What it does
+
+- **Cited answers.** "Can I open a bank account without a Finnish ID?" gets an answer in about 30 seconds from the Danske Bank, Nordea and DVV pages, each sentence checked against a quote.
+- **Bookings.** Tap **Book it**. Vali asks once for your name or email (or asks before using saved details), fills the real form, sends a screenshot with **Approve** / **Stop**, and books only after Approve. Pay-on-site bookings (Kulttuurisauna) are completed for real. Paid ones (cinema at Gilda) stop at the payment page, and **Continue in my browser** opens the same cart in your own Chrome so you pay yourself.
+- **Watches.** "Watch ..." creates a daily Exa Monitor. Only new findings reach WhatsApp. "Check now" runs it right away.
+- **Dashboard.** `#/dashboard` shows every errand by channel, Exa searches, pages read, quotes checked, Exa cost, the activity feed and every search query.
+- **Mascot.** Vali sits in a corner of the web app and of every page (Chrome extension). Click it and ask anything about the page.
+
+## Try it
+
+- **WhatsApp:** open the live app, tap **WhatsApp**, and send the `link 123456` message it gives you. Then send an errand. Vali reacts 👀 when it is on it.
+- **Web:** type an errand in the live app, or tap an example.
+- **Chrome extension:** `chrome://extensions`, Developer mode, "Load unpacked", pick `extension/`. The mascot appears on every page.
+
+## How Vali uses Exa
+
+| Exa API | What for |
+|---|---|
+| Agent runs (`/agent/runs` + events) | Research an errand into a structured, cited answer with next steps and actions. |
+| Search (output schema + highlights) | Quick finds. |
+| Contents | Re-read every cited page and check each sentence against a verbatim quote. |
+| Monitors (+ signed webhook, trigger) | "Watch" errands, daily, and "check now". |
+| Fast search | The extension's tip for the page you are on. |
+| Search and Contents in the cloud browser | Facts a form needs, like an address or a fee. |
 
 ## How it works
 
 1. **Route.** The API picks a mode for the errand (find, check, claim, book, write, watch). Jev decides; keyword rules take over when Jev is unsure or not configured.
-2. **Research.** "Find" errands use Exa Search with structured output and answer in about 3 seconds. Other errands use the Exa Agent (`/agent/runs`), which returns a structured answer with field-level citations, the next steps and prepared actions (email draft, link, form values). This takes 10-90 seconds.
-3. **Do it.** "Let Vali do it" starts a browser sandbox on Modal: headless Chromium, driven by Claude, one container per run. It can look things up with Exa Search and Contents while the form stays open. It shows a live view, asks you when a choice is yours, and fills the form.
-4. **Approve.** Anything that sends, pays, confirms or books is blocked until you approve. Logins (Suomi.fi, bank ID), CAPTCHAs, bot walls and card pages stop the run with a one-line reason and a link to finish by hand.
-
-## What's new
-
-- **Exa lookups while filling a form.** When a form asks for an address, a fee, an opening time or which option applies, the browser agent searches Exa instead of guessing. Each lookup is saved on the errand (profile values masked first) and listed under "While filling the form" in "How Vali found this", next to the research queries and sources.
-- **Exa cache.** Read-only Exa calls are cached for 10 minutes (256 entries). A cache hit costs nothing. Each call logs mode, time and hit or miss, never the query.
-- **Questions are answered, not acted on.** "How do I book a dentist and what is the fee?" now routes to check. Vali only books, claims or writes when you ask it to.
-- **Safer last step.** Submit, order and purchase buttons always need your approval. A typed newline never submits a form. A login wall is passed only through a real guest control. Autocomplete fields and dropdowns work on real sites.
-- **Mac app.** A first-run welcome card (three ways to give an errand, a sample errand, link with the extension). Live captions and a state chip while you talk to Vali. The mascot bubble says whether an errand needs an approval, an answer or a hand-off. Visual polish across the quick box, the list and settings.
-- **Extension.** One primary button per view, an amber edge on errands that need you, a status line under each errand, and Approve in the errand detail.
+2. **Research.** Exa Search for quick finds, the Exa Agent for the rest, then Contents to check every sentence against a quote.
+3. **Do it.** A browser sandbox on Modal: headless Chromium driven by Claude, one container per run. It looks things up with Exa while the form stays open and asks you when a choice is yours.
+4. **Approve.** Anything that sends, pays, confirms or books waits for your Approve. Payments always hand off to you. Logins (Suomi.fi, bank ID), CAPTCHAs and bot walls stop the run with a reason and a link to finish yourself.
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (API, task shape) and [docs/SANDBOX.md](docs/SANDBOX.md) (browser agent, guardrails, measured cost).
 
-## Two surfaces, one task list
+## Channels, one task list
 
-- **Mac app** (`desktop/`, Electron). A mascot that stays on screen. Alt+Space opens a quick box. Hold Alt+Shift+Space to say an errand, or press Alt+Shift+V to talk with Vali. Drop a photo or PDF of a letter on the mascot. Select text anywhere and press Alt+Shift+A to ask about it. Hover the mascot to see all errands at a glance, with Approve, Stop and Answer. The profile is encrypted on the Mac. `npm run dist` builds a dmg. Details in [desktop/README.md](desktop/README.md).
-- **Chrome extension** (`extension/`). Side panel on Alt+V, or right-click a selection or page: "Vali: take care of this". It sends the page context with the errand (URL, title, selected text, redacted page text, form fields). The mascot peeks in on pages with a form. Both apps use the shared design system in `shared/`; `extension/shared/` is a copy made by `npm run sync-shared`, which also copies `shared/exa-uses.js` (which Exa calls an errand used) to `web/`.
-- **WhatsApp** (`backend/vali_wa/`) is parked. Meta blocks sending from unverified business portfolios (error 131031), so Vali can receive messages but not reply. The code stays. The iMessage plan is in [docs/IMESSAGE.md](docs/IMESSAGE.md).
+- **WhatsApp** (`backend/vali_wa/`). The main channel: Vali's name and picture, tap buttons for actions, Approve / Stop on bookings, reactions instead of status messages (👀 🚀 ✍️ 👍 ✋), and watch findings pushed to the chat.
+- **Web** (`web/`). Ask box, errands, answers with numbered sources, the dashboard, and the mascot.
+- **Chrome extension** (`extension/`). The mascot on every page, side panel on Alt+V, "Vali: take care of this" on a selection, and **Continue in my browser** for paid bookings. Both use the shared design system in `shared/`; `extension/shared/` is a copy made by `npm run sync-shared`, which also copies `shared/exa-uses.js` to `web/`.
+- **Mac app** (`desktop/`, Electron). A desktop mascot, quick box and voice. Details in [desktop/README.md](desktop/README.md).
 
-Devices link with a 6-digit code (`POST /v1/link/code`, `POST /v1/link`), so the Mac app and the extension share one account.
+Devices link with a 6-digit code (`POST /v1/link/code`, `POST /v1/link`), so every channel shares one account.
 
 ## Privacy
 
@@ -44,7 +61,7 @@ Devices link with a 6-digit code (`POST /v1/link/code`, `POST /v1/link`), so the
 
 | Partner | Where |
 |---|---|
-| Exa | Search with structured output for "find" errands (`vali_api/research.py`). Agent runs for research with citations. Search and Contents as tools inside the browser sandbox (`vali_agent/`). |
+| Exa | Search with structured output for "find" errands (`vali_api/research.py`). Agent runs for research with citations. Contents for the quote check. Monitors for watches. Search and Contents as tools inside the browser sandbox (`vali_agent/`). |
 | Modal | The API (`backend/modal_app.py`, app `vali`) with research pollers, and the browser sandbox as its own app (`backend/modal_sandbox.py`, app `vali-sandbox`, 2 CPU, 4 GB, one container per run). |
 | Aiven | Postgres for users, the shared task list, WhatsApp pairing and watches (`DATABASE_URL`). Locally the store falls back to SQLite. |
 | Jev | Errand routing (`vali_api/router.py`, `vali_api/jev.py`) and, in the sandbox, finding the element to click when the page re-rendered, plus a stricter second opinion on the submit guard (`vali_agent/jev.py`). |
@@ -63,7 +80,7 @@ Cloudinary support exists for screenshots (`vali_media/screenshots.py`) but is n
 | `shared/` | Shared design system (tokens and components). |
 | `backend/vali_api/` | FastAPI app: routes, store, Exa research, routing, limits, uploads, voice agent, WhatsApp webhook. |
 | `backend/vali_agent/` | Browser agent: Playwright wrapper, Claude tool loop, privacy, submit guard, live view. No Modal import, runs locally too. |
-| `backend/vali_wa/` | WhatsApp Cloud API channel (parked): webhook parsing, flow, message rendering. |
+| `backend/vali_wa/` | WhatsApp Cloud API channel: webhook parsing, flow, message rendering. |
 | `backend/vali_media/` | Screenshots, voice notes, letter reading. |
 | `backend/modal_app.py`, `backend/modal_sandbox.py` | Modal apps `vali` and `vali-sandbox`. |
 | `backend/modal_smoke.py` | Ephemeral Modal runs of the sandbox on fixtures or real sites. |
