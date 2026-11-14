@@ -29,7 +29,9 @@ def test_existing_claim_refs(browser, local_site):
     browser.type('e8', 'Claim details')
     assert ref(snapshot, 'Submit claim') == 'e9'
     assert is_final_submit(browser.element_text('e9'))
-    browser.click('e9')  # Browser is driven directly; approval belongs to the agent.
+    with pytest.raises(ValueError, match='request_approval'):
+        browser.click('e9')
+    browser.click('e9', approved=True)
     assert 'Reference FC-1234' in browser.snapshot()
 
 
@@ -45,7 +47,9 @@ def test_frames(browser, local_site):
         assert frame.locator('select').input_value() == 'Two'
         confirm = frame.locator('button[type=submit]').get_attribute('data-vali-ref')
         assert is_final_submit(browser.element_text(confirm))
-        browser.click(ref(snapshot, prefix+' action'))
+        with pytest.raises(ValueError, match='request_approval'):
+            browser.click(ref(snapshot, prefix+' action'))
+        browser.click(ref(snapshot, prefix+' action'), approved=True)
         assert frame.locator('button').first.inner_text() == prefix+' clicked'
     for invalid in ['e0', 'e-1', 'e1"]', 'e999', None]:
         with pytest.raises(ValueError, match='reference'):
@@ -63,7 +67,9 @@ def test_shadow_and_aria(browser, local_site):
     assert browser.page.locator('#shadow input').input_value() == 'Passenger'
     assert browser.page.locator('#shadow select').input_value() == 'Two'
     assert 'type=submit' in browser.element_text(ref(snapshot, 'Shadow action'))
-    browser.click(ref(snapshot, 'Shadow action'))
+    with pytest.raises(ValueError, match='request_approval'):
+        browser.click(ref(snapshot, 'Shadow action'))
+    browser.click(ref(snapshot, 'Shadow action'), approved=True)
     browser.type(ref(snapshot, 'Editable notes'), 'New notes')
     assert browser.page.locator('[contenteditable]').inner_text() == 'New notes'
     for label in ['Accept policy', 'Notifications']:
@@ -187,3 +193,16 @@ def test_newlines_are_never_typed_as_enter(browser, local_site):
 def test_guest_text_outside_a_control_keeps_the_login_wall(browser, local_site):
     browser.goto(local_site + '/login_footer_guest.html')
     assert 'login' in browser.blockers()
+
+
+@pytest.mark.parametrize('markup', [
+    '<button type="submit" role="option">Main Street 1</button>',
+    '<div role="listbox"><button type="submit">Main Street 1</button></div>',
+    '<div role="listbox"><button>Pay</button></div>',
+])
+def test_suggestion_context_does_not_bypass_final_actions(browser, markup):
+    browser.page.set_content(markup)
+    target = ref(browser.snapshot(), 'Pay' if '>Pay<' in markup else 'Main Street 1')
+    assert is_final_submit(browser.element_text(target))
+    with pytest.raises(ValueError, match='request_approval'):
+        browser.click(target)

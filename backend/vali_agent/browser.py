@@ -90,6 +90,18 @@ _CAPTURE = r'''({start, limit}) => {
 }'''
 
 
+_ACTION_DESCRIPTION = r'''el => {
+    // Only recognized suggestions may omit the implicit HTML submit type.
+    const suggestion = el.matches('[role="option"]') ||
+        !!el.closest('typeahead-container,[role="listbox"]');
+    const implicitChoice = suggestion && !el.hasAttribute('type');
+    return [el.outerHTML + ' ' +
+        [...(el.labels || [])].map(label => label.innerText).join(' ') + ' ' +
+        (el.localName === 'button' && !implicitChoice ? 'button type=' + el.type : ''),
+        el.getAttribute('aria-label') || el.innerText || el.value || ''];
+}'''
+
+
 class Browser:
     def __init__(self, headless=True):
         self._refs = {}
@@ -239,9 +251,7 @@ class Browser:
 
     def element_text(self, ref):
         try:
-            return self._element(ref).evaluate('''el => el.outerHTML + ' ' +
-              (el.localName==='button' ? 'button type='+el.type : '') + ' ' +
-              (el.innerText||'') + ' ' + (el.getAttribute('aria-label')||'')''', timeout=2500)
+            return ' '.join(self._element(ref).evaluate(_ACTION_DESCRIPTION, timeout=2500))
         except BrowserTimeout as exc:
             raise ValueError('That element is gone (the page changed); call read_page') from exc
 
@@ -268,10 +278,7 @@ class Browser:
         href = el.evaluate("el => el.closest('a[href]')?.getAttribute('href') || ''")
         if href:
             self._check_url(urljoin(self.page.url, href))
-        description, label = el.evaluate("""el => [el.outerHTML + ' ' +
-            [...(el.labels || [])].map(label => label.innerText).join(' ') + ' ' +
-            (el.localName === 'button' ? 'button type=' + el.type : ''),
-            el.getAttribute('aria-label') || el.innerText || el.value || '']""")
+        description, label = el.evaluate(_ACTION_DESCRIPTION)
         final = is_final_submit(description, label)
         if final and not approved:
             raise ValueError('Call request_approval first')
@@ -350,7 +357,9 @@ class Browser:
             if not el.evaluate(r'''el => {
               const ids = (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\s+/).filter(Boolean);
               const listbox = ids.some(id => el.getRootNode().getElementById(id)?.getAttribute('role') === 'listbox');
-              return el.getAttribute('role') === 'combobox' || listbox || el.getAttribute('aria-haspopup') === 'listbox';
+              const adjacentList = el.matches('button[type=button]') &&
+                  el.nextElementSibling?.matches('ul,ol') && !!el.nextElementSibling.querySelector('li');
+              return el.getAttribute('role') === 'combobox' || listbox || adjacentList || el.getAttribute('aria-haspopup') === 'listbox';
             }'''):
                 raise ValueError('Choose a native select or a validated combobox')
             # Every internal click uses the same guard, with at most one approved final action.

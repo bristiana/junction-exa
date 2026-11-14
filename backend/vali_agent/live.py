@@ -108,7 +108,7 @@ class Screencast:
 
 # Minimal-consent buttons (en, fi, sv, de). Never "accept all".
 _MINIMAL = re.compile(
-    r'reject( all)?|decline( all)?|deny( all)?|refuse( all)?|only (strictly )?(necessary|essential|required)|'
+    r'accept (only )?(strictly )?(necessary|essential|required)( cookies)?|continue with only necessary cookies|reject( all)?|decline( all)?|deny( all)?|refuse( all)?|only (strictly )?(necessary|essential|required)|'
     r'(necessary|essential|required)( cookies)? only|continue without accepting|hylkää( kaikki)?|kiellä( kaikki)?|'
     r'vain (välttämättömät|pakolliset|tarpeelliset)|välttämättömät evästeet|avvisa( alla)?|endast nödvändiga|alle ablehnen|nur notwendige', re.I)
 _ACCEPT_ALL = re.compile(r'accept all|allow all|hyväksy kaikki|salli kaikki|godkänn alla|acceptera alla|alle akzeptieren', re.I)

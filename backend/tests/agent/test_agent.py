@@ -50,7 +50,7 @@ def test_claim_privacy_and_approval(local_site, monkeypatch):
         ('select_option', {'ref': 'e4', 'option': 'Refund'}),
         ('set_checkbox', {'ref': 'e5', 'checked': True}),
         ('set_checkbox', {'ref': 'e7', 'checked': True}),
-        ('type_text', {'ref': 'e8', 'text': 'Contact {{name}} at {{email}}'}),
+        ('type_text', {'ref': 'e8', 'text': 'Please process this claim'}),
         ('click', {'ref': 'e9'}),
     ]
     def approve(messages):
@@ -65,7 +65,7 @@ def test_claim_privacy_and_approval(local_site, monkeypatch):
         return 'finish', {'result':'Claim submitted, reference FC-1234'}
     calls.append(finish)
     llm = ScriptedLLM(calls)
-    result = run_browser_agent('Claim for Test Person', local_site+'/claim.html', PROFILE, hooks(), llm)
+    result = run_browser_agent('Fill name, email and phone in the contact fields', local_site+'/claim.html', PROFILE, hooks(), llm)
     assert result.status == 'done', result
     assert 'FC-1234' in result.result
     assert all(value in instances[0].values for value in PROFILE.values())
