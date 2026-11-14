@@ -217,7 +217,35 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .exa-uses div { display: flex; gap: 10px; }
 .exa-uses dt { min-width: 120px; font-weight: 700; }
 .exa-uses dd { margin: 0; color: var(--muted); }
-.site-foot { max-width: 560px; margin: 0 auto; padding: 0 16px 40px; }
+
+/* ---------- landing (home view only, below the ask box) ---------- */
+.landing { width: min(1100px, calc(100vw - 48px)); position: relative; left: 50%; transform: translateX(-50%); margin-top: 96px; text-align: left; display: grid; gap: 88px; }
+.landing h2 { font-size: clamp(26px, 3.4vw, 38px); line-height: 1.12; letter-spacing: -.03em; font-weight: 800; margin: 0 0 12px; }
+.landing p { margin: 0; }
+.landing .feature-text p:last-child, .band > p:not(.eyebrow) { color: var(--muted); font-size: 18px; }
+.feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
+.feature.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.feature.flip .feature-text { order: 2; }
+.shot.tall { max-width: 400px; justify-self: center; }
+.feature-text { max-width: 420px; }
+.shot { display: block; width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--line-2); box-shadow: var(--shadow-2); background: var(--card); }
+.band { padding: 40px 44px; }
+.band-tags { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; }
+.band-tags li { padding: 7px 14px; border-radius: 999px; background: var(--fill); color: var(--accent); font-size: 14px; font-weight: 700; }
+.exa-band .exa-uses { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 24px; font-size: 14px; }
+.exa-band .exa-uses div { flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 14px; background: var(--fill-2); }
+.exa-band .exa-uses dt { min-width: 0; font-size: 15px; }
+.closer { text-align: center; padding-bottom: 24px; }
+.closer h2 { margin-bottom: 20px; }
+@media (max-width: 760px) {
+  .landing { margin-top: 64px; gap: 56px; }
+  .feature, .feature.flip { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .feature.flip .feature-text { order: 0; }
+  .landing .feature-text p:last-child, .band > p:not(.eyebrow) { font-size: 16px; }
+  .band { padding: 24px 20px; }
+  .exa-band .exa-uses { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .exa-band .exa-uses div { padding: 10px 12px; }
+}
 
 /* ---------- browser run ---------- */
 .run { padding: 18px; }
