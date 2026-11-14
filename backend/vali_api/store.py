@@ -277,8 +277,9 @@ class Store:
         self.update_execution(tid, execution)
         return execution
 
-    def recent_research(self, uid, task, mode, effort, since):
-        """This user's latest completed research for the same errand words and effort (no page, no follow-up)."""
+    def recent_research(self, uid, task, mode, effort, since, known_details=()):
+        """This user's latest completed research for the same errand words, effort and saved detail names (no page,
+        no follow-up)."""
         wanted = ' '.join(task.lower().split())
         rows = self.sql("SELECT task, research_json, created_at FROM tasks WHERE user_id=? AND mode=? AND page_json='null' "
                         'AND created_at>=? ORDER BY created_at DESC LIMIT 200', (uid, mode, since))
@@ -286,6 +287,7 @@ class Store:
             research = json.loads(row['research_json'])
             if (' '.join(row['task'].lower().split()) == wanted and research.get('status') == 'completed'
                     and research.get('effort', 'low') == effort
+                    and sorted(set(research.get('known_details') or ())) == sorted(set(known_details))
                     and research.get('output') and not (research.get('question') or {}).get('answer')):
                 return research, row['created_at']
         return None
