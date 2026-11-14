@@ -589,8 +589,13 @@ async function smokeValet(out) {
   await smokeTalk(out, pose);
   updateTasks(fixture.filter(t => t.id === 'smoke-research'));
   // The microphone message holds the bubble for 8 s before the errand line comes back.
-  await waitFor(mascot, `document.getElementById('line').textContent.includes('on it')`, 'mascot-working line missing', 12000);
+  await waitFor(mascot, `document.getElementById('line').textContent.includes('Searching with Exa: Kela student')`, 'mascot-working line missing', 12000);
   await pose(); await capture(mascot, out, 'mascot-working'); await captureLight(mascot, out, 'mascot-working');
+  // A browser run looking something up: the newest execution.exa call is the bubble line.
+  const exa = [{ kind: 'search', query: 'Allas Sea Pool opening hours' }, { kind: 'read', url: 'https://www.hel.fi/en/sports/allas?ref=x' }];
+  updateTasks([{ ...fixture.find(t => t.id === 'smoke-research'), progress: [], execution: { status: 'running', steps: [{ text: 'Checking opening hours' }], exa } }]);
+  await mascotHas(`document.getElementById('line').textContent === 'Reading hel.fi'`, 'mascot-exa line missing');
+  await pose(); await capture(mascot, out, 'mascot-exa'); await captureLight(mascot, out, 'mascot-exa');
   for (const [name, keep, words] of [['mascot-done', 'smoke-done', 'All done'], ['mascot-error', 'smoke-done', 'couldn']]) {
     updateTasks(fixture.filter(t => t.id === keep).map(t => name === 'mascot-error' ? { ...t, status: 'failed' } : t));
     await mascotHas(`document.getElementById('line').textContent.includes(${JSON.stringify(words)})`, `${name} line missing`);

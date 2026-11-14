@@ -179,10 +179,27 @@ export function glanceItems(tasks = [], now = Date.now()) {
     .filter(({ t, s }) => s.needsYou || s.active || sameDay(t.completedAt || t.createdAt, now))
     .sort((a, b) => rank(a.s) - rank(b.s) || b.t.createdAt - a.t.createdAt);
 }
+
+const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+// The newest Exa call of one errand as a short bubble line (<= 60 chars): the browser run's lookups (execution.exa)
+// first, else the research progress. Only the task's own query / question / url fields are shown, a url as its host.
+export function exaLine(t) {
+  const call = (Array.isArray(t?.execution?.exa) ? t.execution.exa : []).filter(e => e?.kind === 'search' || e?.kind === 'read').at(-1);
+  const step = (Array.isArray(t?.progress) ? t.progress : []).filter(p => p?.text).at(-1);
+  const search = call ? call.kind === 'search' && String(call.query || '') : step?.kind === 'search' && String(step.text);
+  const page = call ? call.kind === 'read' && (hostOf(call.url) || String(call.question || '')) : step?.kind === 'source' && (hostOf(step.text) || String(step.text));
+  if (search) return clip(`Searching with Exa: ${search.trim()}`, 59);
+  if (page && call?.url) return clip(`Reading ${page}`, 59);
+  if (page && call) return clip(`Looking up ${page.replace(/[?.!]+$/, '')} with Exa`, 59);
+  return page ? clip(`Reading ${page}`, 59) : '';
+}
+
+// Everything at once: counts, whether something needs you (and what), and what Exa is doing right now.
 export function badgeOf(tasks = []) {
   const all = tasks.map(plainStatus);
   const attention = all.find(s => s.needsYou)?.attention;
-  return { count: all.filter(s => s.active).length, needsYou: !!attention, ...(attention ? { attention } : {}) };
+  const exa = tasks.filter((t, i) => all[i].active && !all[i].needsYou).map(exaLine).find(Boolean);
+  return { count: all.filter(s => s.active).length, needsYou: !!attention, ...(attention ? { attention } : {}), ...(exa ? { exa } : {}) };
 }
 
 // Console lines forwarded to stderr: tokens in query strings, Bearer headers and token fields are cut out.
