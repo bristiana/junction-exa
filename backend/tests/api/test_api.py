@@ -156,54 +156,43 @@ def test_rate_limits_and_cap(api):
     client, application, store, *_, user = api
     application.state.limiter.user_limit = 1
     assert client.post('/v1/tasks', json={'task': 'find café'}).status_code == 200
-    assert client.post('/v1/tasks', json={'task': 'find café'}).status_code == 429
+    limited = client.post('/v1/tasks', json={'task': 'find café'})
+    assert limited.status_code == 429 and 1 <= int(limited.headers['retry-after']) <= 60
+    assert limited.json() == {'detail': f"Too many errands at once. Try again in {limited.headers['retry-after']} s.",
+                              'retry_after': int(limited.headers['retry-after'])}
     application.state.limiter.events.clear()
     application.state.config.daily_cap_usd = 0.01
     assert client.post('/v1/tasks', json={'task': 'find café'}).status_code == 429
-    application.state.limiter.ip_limit = 1
-    application.state.limiter.events.clear()
-    assert client.get('/health').status_code == 200
-    assert client.get('/health').status_code == 429
 
 
-def test_image_gets_do_not_consume_ip_limit(api):
+def test_polls_and_reads_are_never_limited_per_ip(api, monkeypatch):
     client, application, store, *_, user = api
     task = client.post('/v1/tasks', json={'task': 'find café'}).json()
-    store.put_shot(task['id'], 1, b'shot-jpeg')
     store.put_live_frame(task['id'], b'live-jpeg')
-    limiter = application.state.limiter
-    limiter.events.clear()
-    limiter.ip_limit = 2
-    urls = [f"/v1/tasks/{task['id']}/live.jpg", f"/v1/tasks/{task['id']}/shots/1.jpg"]
-    for _ in range(5):
-        for url in urls:
-            assert client.get(url, params={'t': user['token']}).status_code == 200
-    assert not limiter.events
+    for _ in range(1500):
+        assert client.get('/v1/tasks/' + task['id']).status_code == 200
+    assert client.get(f"/v1/tasks/{task['id']}/live.jpg", params={'t': user['token']}).status_code == 200
     assert client.get('/health').status_code == 200
-    assert client.get('/health').status_code == 200
-    assert client.get('/health').status_code == 429
-    for url in urls:
-        assert client.get(url, params={'t': user['token']}).status_code == 200
-        assert client.get(url, params={'t': 'wrong'}).status_code == 401
+    assert not [k for k in application.state.limiter.events if k.startswith('ip:')]
 
 
-def test_general_ip_limit_is_1200_per_ten_minutes(api, monkeypatch):
+def test_errands_per_account_and_new_accounts_per_ip(api, monkeypatch):
     from types import SimpleNamespace
     from vali_api import guard
 
     client, application, *_ = api
     limiter = application.state.limiter
-    assert (limiter.ip_limit, limiter.seconds, limiter.user_limit) == (1200, 600, 30)
+    assert (limiter.user_limit, limiter.seconds, limiter.signup_limit, limiter.signup_seconds) == (40, 60, 20, 3600)
     current = [1000.0]
     monkeypatch.setattr(guard, 'time', SimpleNamespace(monotonic=lambda: current[0]))
     limiter.events.clear()
-    for _ in range(1200):
-        assert client.get('/health').status_code == 200
-    assert client.get('/health').status_code == 429
-    current[0] += 599
-    assert client.get('/health').status_code == 429
-    current[0] += 1
-    assert client.get('/health').status_code == 200
+    for _ in range(20):
+        assert client.post('/v1/users').status_code == 200
+    blocked = client.post('/v1/users')
+    assert blocked.status_code == 429 and blocked.headers['retry-after'] == '3600'
+    assert blocked.json()['detail'] == 'Too many new accounts at once. Try again in 3600 s.'
+    current[0] += 3600
+    assert client.post('/v1/users').status_code == 200
 
 
 @pytest.mark.parametrize('text,expected', [
