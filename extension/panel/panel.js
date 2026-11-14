@@ -4,10 +4,12 @@
 import { PROFILE_FIELDS } from "../lib/task.js";
 import { numberSources, citesFor, resolveAction, fillPlaceholders, unfilledPlaceholders } from "../lib/actions.js";
 import { search } from "../lib/exa.js";
-import { connect, me as serverMe, pair, normalizeBaseUrl, ensureConnected, liveUrl, shotUrl, DEFAULT_BASE_URL } from "../lib/backend.js";
+import { connect, me as serverMe, pair, normalizeBaseUrl, ensureConnected, liveUrl, shotUrl, DEFAULT_BASE_URL, linkCode } from "../lib/backend.js";
 import { taskMascot, headerMascot, finishFlash, FLASH_MS } from "../lib/mascot.js";
 import { executionView, LIVE } from "../lib/execution.js";
 
+import { linkCodeInput, codeCountdown, linkError } from "../lib/device-link.js";
+import { exaActivity } from "../lib/exa-activity.js";
 import { errandStatus } from "../lib/panel-state.js";
 
 const $ = (id) => document.getElementById(id);
@@ -107,6 +109,7 @@ function renderSettings() {
   $("presence").checked = state.presence !== false;
   $("backendUrl").value = state.backendUrl;
   $("pairInfo").hidden = true;
+  clearMacCode();
   $("serverPresets").replaceChildren(...SERVER_PRESETS.map(([label, url]) =>
     h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, title: url, onclick: () => { $("backendUrl").value = url; $("connectBtn").click(); } })));
   refreshServerStatus();
@@ -121,6 +124,7 @@ $("settingsBtn").addEventListener("click", () => {
   const s = $("settings");
   s.hidden = !s.hidden;
   if (!s.hidden) renderSettings();
+  else clearMacCode();
 });
 $("saveSettings").addEventListener("click", async () => {
   const profile = {};
@@ -143,11 +147,13 @@ $("saveSettings").addEventListener("click", async () => {
 // ---------- Vali server and WhatsApp ----------
 async function useDirectMode() {
   await chrome.storage.local.set({ backendUrl: "" }); // "" = direct mode; the token stays, so saving the same URL again keeps the WhatsApp link
+  clearMacCode();
   state.backendUrl = "";
   refreshServerStatus();
 }
 
 async function connectServer(url) {
+  clearMacCode();
   const who = await connect(url);
   state.backendUrl = normalizeBaseUrl(url);
   $("backendUrl").value = state.backendUrl;
@@ -165,6 +171,8 @@ function showServerStatus(who) {
 async function refreshServerStatus() {
   const st = $("backendStatus");
   $("pairBtn").disabled = !state.backendUrl;
+  $("showMacCode").disabled = !state.backendUrl;
+  $("linkMac").disabled = !state.backendUrl;
   if (!state.backendUrl) {
     st.textContent = "Not set: Vali talks to Exa directly.";
     $("waStatus").textContent = "Needs a Vali server.";
@@ -236,6 +244,67 @@ $("testKey").addEventListener("click", async () => {
   } catch (e) {
     st.textContent = "Key rejected: " + e.message;
   }
+});
+
+// ---------- Mac linking ----------
+let macCodeTimer = 0;
+function clearMacCode() {
+  clearInterval(macCodeTimer);
+  $("macCode").hidden = true;
+  $("macCode").replaceChildren();
+}
+
+$("showMacCode").addEventListener("click", async () => {
+  const button = $("showMacCode");
+  button.disabled = true;
+  clearMacCode();
+  $("macLinkStatus").textContent = "Getting a code…";
+  try {
+    await ensureConnected();
+    const { code, expires_in } = await linkCode();
+    linkCodeInput(code);
+    if (!Number.isFinite(expires_in) || expires_in <= 0) throw new Error("Couldn’t get a code. Try again.");
+    const until = Date.now() + expires_in * 1000;
+    const tick = () => {
+      $("macCode").hidden = false;
+      if (Date.now() >= until) {
+        $("macCode").textContent = codeCountdown(until);
+        clearInterval(macCodeTimer);
+      } else {
+        $("macCode").replaceChildren(h("code", { text: code }), " · " + codeCountdown(until));
+      }
+    };
+    tick();
+    macCodeTimer = setInterval(tick, 1000);
+    $("macLinkStatus").textContent = "Enter this code in Vali on your Mac. Share it only with your own device.";
+  } catch (e) {
+    $("macLinkStatus").textContent = e.message;
+  } finally { button.disabled = false; }
+});
+
+$("linkMac").addEventListener("click", async () => {
+  const button = $("linkMac");
+  button.disabled = true;
+  try {
+    const code = linkCodeInput($("macCodeInput").value);
+    $("macLinkStatus").textContent = "Linking…";
+    await send({ type: "linkAccount", code });
+    clearMacCode();
+    open.clear();
+    drafts.clear();
+    answered.clear();
+    $("macCodeInput").value = "";
+    $("macLinkStatus").textContent = "Linked. Both devices now share the same account.";
+    await refreshServerStatus();
+    await send({ type: "poll" });
+  } catch (e) {
+    $("macLinkStatus").textContent = linkError(e);
+  } finally { button.disabled = false; }
+});
+
+$("talk").addEventListener("click", () => {
+  $("talkHint").hidden = !$("talkHint").hidden;
+  $("talk").setAttribute("aria-expanded", String(!$("talkHint").hidden));
 });
 
 // ---------- composer ----------
@@ -641,9 +710,21 @@ function selectedTask() {
   return selected || state.tasks.find((t) => LIVE.has(t.execution?.status)) || state.tasks[0];
 }
 
+function renderExaActivity(t, expanded) {
+  const view = exaActivity(t);
+  return h("details", { class: "result-details exa-activity", open: expanded },
+    h("summary", {}, h("span", { text: "How Vali found this" }), h("span", { class: "muted small exa-summary", text: view.summary })),
+    h("p", { class: "small", text: view.method }),
+    h("p", { class: "muted small", text: view.note }),
+    view.sources.length ? h("ul", { class: "sources" }, ...view.sources.map((s) => h("li", {},
+      h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer", text: s.title }), " · ", h("span", { class: "host", text: s.host }))))
+      : h("p", { class: "muted small", text: "No sources returned yet." }));
+}
+
 function renderDetail(t) {
   const body = $("detail");
-  const expanded = body.dataset.taskId === t?.id && body.querySelector("details")?.open;
+  const expanded = body.dataset.taskId === t?.id && body.querySelector(".result-details:not(.exa-activity)")?.open;
+  const exaExpanded = body.dataset.taskId === t?.id && body.querySelector(".exa-activity")?.open;
   body.dataset.taskId = t?.id || "";
   body.hidden = !t;
   body.replaceChildren();
@@ -660,6 +741,7 @@ function renderDetail(t) {
     else body.append(...result);
   }
   else body.append(h("p", { class: "error", text: t.error || "Stopped." }));
+  body.append(renderExaActivity(t, exaExpanded));
   if (t.status !== "queued" && t.status !== "running") {
     body.append(h("div", { class: "foot" }, h("span", { class: "muted", text: [elapsed(t), t.page?.title, t.cost != null ? "$" + Number(t.cost).toFixed(3) : null].filter(Boolean).join(" · ") }),
       serverButton("Remove", "v-btn v-btn--quiet v-btn--sm", { type: "remove", taskId: t.id })));

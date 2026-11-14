@@ -100,3 +100,6 @@ h4 { margin: 14px 0 6px; font-size: var(--v-fs-sm); text-transform: uppercase; l
 
 .result-details { margin-top: var(--v-s-3); }
 .result-details summary { cursor: pointer; color: var(--accent); padding: var(--v-s-2) 0; }
+
+.exa-summary { display: block; margin-top: var(--v-s-1); overflow-wrap: anywhere; }
+#macCode code { font-size: var(--v-fs-lg); letter-spacing: 0.15em; }

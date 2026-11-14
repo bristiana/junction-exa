@@ -69,6 +69,8 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
   return {
     createUser: () => call("/v1/users", { method: "POST", body: {}, auth: false }),
     me: () => call("/v1/me"),
+    linkCode: () => call("/v1/link/code", { method: "POST", body: {} }),
+    redeemLink: (code) => call("/v1/link", { method: "POST", body: { code }, auth: false }),
     pair: () => call("/v1/pair", { method: "POST", body: {} }),
     syncProfile: (profile) => call("/v1/profile", { method: "PUT", body: { profile: profile || {} } }),
     createTask: ({ task, page, effort, previous_task_id } = {}) =>
@@ -125,6 +127,7 @@ async function configured() {
 
 export const createUser = async () => (await configured()).createUser();
 export const me = async () => (await configured()).me();
+export const linkCode = async () => (await configured()).linkCode();
 export const pair = async () => (await configured()).pair();
 export const syncProfile = async (profile) => (await configured()).syncProfile(profile);
 export const createTask = async (body) => (await configured()).createTask(body);
@@ -215,6 +218,7 @@ export function toLocalTask(remote, prev = null) {
     completedAt: terminal ? prev?.completedAt || time(remote.updated_at) || Date.now() : null,
     seen: prev?.seen ?? false,
     mode: remote.mode ?? null,
+    research: { kind: r.kind, sources: r.sources, citations: r.citations, usage: r.usage },
     source: remote.source || "extension",
     execution: remote.execution ?? null,
   };
