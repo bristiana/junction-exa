@@ -8,7 +8,7 @@ and make final approval atomic in their task store.
 
 import inspect
 
-from .parse import parse_command
+from .parse import Command, parse_command
 from .render import (render_ack, render_check, render_error, render_execution_update, render_help,
                      render_link_failed, render_link_paused, render_linked, render_result)
 
@@ -85,9 +85,13 @@ class WhatsAppFlow:
         execution = (task or {}).get("execution") or {}
         if msg.kind == "interactive" and msg.reply_id and ":" in msg.reply_id:
             action, tid = msg.reply_id.split(":", 1)
-            if not task or tid != task["id"] or action not in {"approve", "stop"}:
+            n = None
+            if action == "choose" and ":" in tid:
+                tid, n = tid.rsplit(":", 1)
+            if not task or tid != task["id"] or action not in {"approve", "stop", "choose"} or (
+                    action == "choose" and not (n or "").isdigit()):
                 return render_error("That button is no longer active. Reply *status* for the current errand.")
-            command = parse_command(action)
+            command = Command("choose", n=int(n)) if action == "choose" else parse_command(action)
         # Short answers (yes, a number, etc.) belong to an outstanding question.
         if self.message and task and msg.kind == "text" and text.strip() and (
                 execution.get("status") in {"starting", "running"} or execution.get("question")) and (

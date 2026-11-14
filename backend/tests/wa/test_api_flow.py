@@ -282,3 +282,12 @@ def test_reactions_mark_what_vali_did(task):
     flow_scenario(task, msg("link 123456"), reactions=seen)
     flow_scenario(task, msg("help"), reactions=seen)
     assert seen == ["👀", "🤝"]
+
+
+def test_choice_button_starts_the_action(task):
+    task["execution"] = None
+    reply = IncomingMessage(NUMBER, "in_test", "interactive", text="Open it", reply_id=f"choose:{task['id']}:1")
+    bodies, calls, _ = flow_scenario(task, reply)
+    assert ("execute", task["id"], 0) in calls
+    stale = IncomingMessage(NUMBER, "in_test", "interactive", text="Open it", reply_id="choose:other:1")
+    assert "no longer active" in flow_scenario(task, stale)[0][0]

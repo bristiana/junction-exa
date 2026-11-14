@@ -186,7 +186,17 @@ def _short(text, limit=260):
     return out if len(out) <= limit else out[:limit - 1].rstrip() + "…"
 
 
-def render_result(task, profile=None):
+def result_buttons(task, profile=None):
+    """Up to three of the answer's actions as WhatsApp reply buttons (titles are capped at 20 characters)."""
+    actions = ((((task.get("research") or {}).get("output") or {}).get("structured") or {}).get("actions") or [])[:3]
+    buttons = []
+    for i, action in enumerate(actions):
+        title = " ".join(_text(action.get("label") or "Continue", profile).split())
+        buttons.append((f"choose:{task['id']}:{i + 1}", title if len(title) <= 20 else title[:19].rstrip() + "…"))
+    return buttons
+
+
+def render_result(task, profile=None, buttons=False):
     if (task.get("research") or {}).get("status") == "failed":
         return render_error("Research failed. " + ((task.get("research") or {}).get("error") or "Please try again."))
     output = (task.get("research") or {}).get("output") or {}
@@ -201,8 +211,8 @@ def render_result(task, profile=None):
              for i, fact in enumerate((structured.get("key_facts") or [])[:3])]
     if facts:
         sections.append("\n".join(facts))
-    actions = [f"Reply {i + 1} to {_text(action.get('label') or 'continue', profile)}"
-               for i, action in enumerate((structured.get("actions") or [])[:3])]
+    actions = [] if buttons else [f"Reply {i + 1} to {_text(action.get('label') or 'continue', profile)}"
+                                  for i, action in enumerate((structured.get("actions") or [])[:3])]
     questions = structured.get("missing_info") or []
     if questions:
         actions.append(_text(questions[0], profile))
