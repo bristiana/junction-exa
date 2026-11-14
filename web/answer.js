@@ -14,7 +14,7 @@ export function renderAnswer(task, handlers) {
   show('answer',
     back(),
     h('div', { class: 'answer-grid' },
-      h('div', { class: 'answer-main' },
+      h('div', { class: 'answer-main', lang: task.lang || null },
         h('p', { class: 'eyebrow' }, task.task),
         first ? h('h1', { class: 'headline' }, claimText(first, pill)) : null,
         rest.length ? h('p', { class: 'claims' }, rest.map((claim) => [claimText(claim, pill), ' '])) : null,

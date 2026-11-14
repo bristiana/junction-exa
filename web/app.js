@@ -39,7 +39,7 @@ async function ask(text, previousTaskId) {
     $('errand').value = '';
     location.hash = '#/t/' + task.id;
   } catch (error) {
-    notice(error.status === 429 ? 'Vali has done a lot of errands today. Try again in a little while.' : `Couldn't start the errand: ${error.message}`);
+    notice(`Couldn't start the errand: ${error.message}`);
   } finally {
     $('ask').classList.remove('busy');
   }
