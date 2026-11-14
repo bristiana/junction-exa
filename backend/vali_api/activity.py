@@ -5,11 +5,11 @@ from datetime import datetime, timezone
 from .citations import cited_pages, domain_of
 
 MAX_ENTRIES = 80
-_PATTERNS = [
+PERSONAL_PATTERNS = [
     (re.compile(r'[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}'), '{{email}}'),
     (re.compile(r'\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,4})?\b'), '{{account}}'),
     (re.compile(r'\b\d{6}[-+AaBbCcDdEeFfUuVvWwXxY]\d{3}[0-9A-Ya-y]\b'), '{{id_code}}'),
-    (re.compile(r'(?<![\w/])\+?\d[\d ()-]{7,}\d(?![\w/])'), '{{phone}}'),
+    (re.compile(r'(?<![\w/])(?:\+|0)\d[\d ()-]{7,}\d(?![\w/])'), '{{phone}}'),  # + or 0 first: not a year range
 ]
 
 
@@ -17,7 +17,7 @@ def scrub(text, profile=None):
     """Mask the user's saved details (same masker as the browser agent), then anything shaped like personal data."""
     from vali_agent.privacy import mask
     text = mask(str(text or ''), profile or {})
-    for pattern, placeholder in _PATTERNS:
+    for pattern, placeholder in PERSONAL_PATTERNS:
         text = pattern.sub(placeholder, text)
     return text
 

@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from . import activity
 from .citations import cite
+from .companion import CompanionBody, companion_tip, make_cache
 from .config import Config
 from .exa import ExaClient, ExaError
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update
@@ -331,6 +332,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     application.state.exa = exa or ExaClient(config.exa_api_key)
     application.state.jev = jev or (JevClient(config.jev_api_key) if config.jev_api_key else None)
     application.state.llm = llm or make_fast_json(config.anthropic_api_key)
+    application.state.companion_cache = make_cache()
     application.state.limiter = SlidingWindow()
     application.state.spawn_research_poller = spawn_research_poller or (lambda tid: spawn_thread(research_poller_loop, tid, application))
     application.state.spawn_browser_session = spawn_browser_session or (lambda tid, goal, url, profile: spawn_thread(run_browser_session, tid, goal, url, profile, application))
@@ -500,6 +502,11 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     @application.post('/v1/tasks')
     def create_task(body: TaskBody, request: Request, user=Depends(authenticate)):
         return create_task_for_user(body, user, pick_channel(request.headers.get('x-vali-channel'), body.channel))
+
+    @application.post('/v1/companion')
+    def companion(body: CompanionBody, user=Depends(authenticate)):
+        application.state.limiter.check('companion:' + user['id'], 60, what='page tips')
+        return companion_tip(application.state, body)
 
     @application.get('/v1/stats')
     def stats(user=Depends(authenticate)):
