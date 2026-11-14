@@ -490,6 +490,23 @@ def test_whatsapp_unknown_pairing_and_shared_tasks(wa):
     assert len(graph.sent) == before + 1
 
 
+def test_whatsapp_wrong_codes_lock_a_number_then_pause_linking(wa, monkeypatch):
+    api, graph, deliver = wa
+    client, application, store, *_ = api
+    for i in range(5):
+        deliver('link 000000', mid=f'wrong-{i}')
+    code = client.post('/v1/pair').json()['code']
+    deliver('link ' + code, mid='locked')  # the right code, but this number used its five tries
+    assert 'invalid or expired' in graph.sent[-1][1] and not client.get('/v1/me').json()['whatsapp_linked']
+    assert store.sql('SELECT tries FROM code_tries WHERE scope=?', ('pair:358401234567',), one=True)['tries'] >= 5
+    monkeypatch.setattr('vali_api.app.PAIR_BUDGET', 7)  # wrong codes across all numbers, per hour
+    deliver('link 000000', mid='other-1', number='358409999999')
+    deliver('link 000000', mid='other-2', number='358408888888')
+    deliver('link ' + code, mid='paused', number='358407777777')
+    assert graph.sent[-1][1] == 'Linking is paused for now after too many wrong codes. Please try again in an hour.'
+    assert not client.get('/v1/me').json()['whatsapp_linked']
+
+
 def test_whatsapp_inline_search_budget_and_watch(wa):
     api, graph, deliver = wa
     client, application, store, calls, polls, *_ = api

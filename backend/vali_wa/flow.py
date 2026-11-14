@@ -10,7 +10,7 @@ import inspect
 
 from .parse import parse_command
 from .render import (render_ack, render_error, render_execution_update, render_help,
-                     render_link_failed, render_linked, render_result)
+                     render_link_failed, render_link_paused, render_linked, render_result)
 
 
 async def _call(callback, *args, **kwargs):
@@ -50,6 +50,8 @@ class WhatsAppFlow:
         command = parse_command(text)
         if command.kind == "link":
             user = await _call(self.link_number, command.code, msg.from_number)
+            if user == "paused":  # too many wrong codes from all numbers
+                return render_link_paused()
             return render_linked() if user else render_link_failed()
         user = await _call(self.find_user_by_number, msg.from_number)
         if not user:

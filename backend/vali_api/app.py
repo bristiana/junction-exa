@@ -25,8 +25,8 @@ from .companion import CompanionBody, companion_tip, make_cache
 from .config import Config
 from .exa import ExaClient, ExaError, TTLCache
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
-from .guard import (RateLimited, SlidingWindow, authenticate, check_code_tries, check_origin, check_task_budget, client_ip,
-                    public_start_url, resolve_host)
+from .guard import (CODE_LOCKOUT, CODE_TRIES, PAIR_BUDGET, PAIR_BUDGET_SECONDS, RateLimited, SlidingWindow, authenticate,
+                    check_code_tries, check_origin, check_task_budget, client_ip, public_start_url, resolve_host)
 from .research import ANSWER_FIRST, FIND_RULES, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .llm import make_fast_json
@@ -778,15 +778,19 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         return await asyncio.to_thread(create_task_for_user, TaskBody(task=text), user, source)
 
     def link_number(code, number):
-        """A WhatsApp pairing code; five wrong ones from a number lock it out for 15 minutes."""
-        limiter = application.state.limiter
-        try:
-            check_code_tries(limiter, 'pair-fail:' + number)
-        except RateLimited:
+        """A WhatsApp pairing code. Wrong ones are counted in the store, so every replica agrees: five from a number
+        lock it out for 15 minutes, and too many from all numbers pause linking for everyone for an hour."""
+        store = application.state.store
+        mine = 'pair:' + number
+        if not store.count_code_try(mine, CODE_TRIES, CODE_LOCKOUT):
             return False
-        linked = application.state.store.link_number(code, number)
-        if not linked:
-            limiter.failed('pair-fail:' + number)
+        if not store.count_code_try('pair:all', PAIR_BUDGET, PAIR_BUDGET_SECONDS):
+            store.refund_code_try(mine)  # a paused link is not this number's wrong code
+            return 'paused'
+        linked = store.link_number(code, number)
+        if linked:
+            store.refund_code_try(mine)
+            store.refund_code_try('pair:all')
         return linked
 
     application.state.whatsapp_flow = WhatsAppFlow(

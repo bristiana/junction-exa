@@ -193,5 +193,9 @@ def render_link_failed():
     return ["That pairing code is invalid or expired. Get a new 6-digit code from the Vali extension and send *link 123456* (use your own code)."]
 
 
+def render_link_paused():
+    return ["Linking is paused for now after too many wrong codes. Please try again in an hour."]
+
+
 def render_error(message):
     return split_messages("Vali: " + _text(message))

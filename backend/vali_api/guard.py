@@ -46,6 +46,7 @@ class SlidingWindow:
 
 
 CODE_TRIES, CODE_LOCKOUT = 5, 900  # wrong link or pairing codes before a 15-minute lockout
+PAIR_BUDGET, PAIR_BUDGET_SECONDS = 200, 3600  # wrong WhatsApp pairing codes from all numbers before linking pauses
 
 
 def check_code_tries(limiter, key):
