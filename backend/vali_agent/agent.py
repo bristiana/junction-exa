@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 from vali_api.config import vali_env
 from .browser import Browser
-from .guard import is_final_submit, is_navigation, without_default_submit
+from .guard import is_final_submit
 from .hooks import AgentHooks
 from .jev import Jev, final_submit_probability, find_element
 from .live import Screencast, dismiss_cookie_banner, mark_private
@@ -404,12 +404,8 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                     step_text = mask(f'Clicked "{label_of(found)}" (found by Jev)', profile)
                                 described = browser.element_text(args['ref'])
                                 info = browser.element_info(args['ref'])
-                                if info['suggestion'] and info['typeless']:
-                                    described = without_default_submit(described)
-                                # Cookie consent is never an irreversible commitment ("Confirm my choices").
-                                final = False if info['consent'] or is_navigation(info['tag'], info['href'], info['inForm'], info['label']) \
-                                    else is_final_submit(described, info['label'])
-                                if not final and not approved and not info['consent'] and not info['toggle']:
+                                final = is_final_submit(described, info['label'])
+                                if not final and not approved and not info['toggle']:
                                     # Jev can only make the guard stricter: a confident "irreversible" blocks the click.
                                     # Menu and dropdown toggles (aria-expanded/haspopup) only open choices; Jev is not asked.
                                     p = final_submit_probability(jev, mask(described, profile), last_snapshot)

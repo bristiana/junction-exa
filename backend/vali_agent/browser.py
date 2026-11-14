@@ -217,22 +217,11 @@ class Browser:
             raise ValueError('That element is gone (the page changed); call read_page') from exc
 
     def element_info(self, ref):
-        """Visible label, whether it only opens a menu (toggle) or picks an autocomplete choice (suggestion, typeless button), and whether it sits in a cookie/consent banner."""
-        return self._element(ref).evaluate('''el => {
-          // An autocomplete or listbox choice, often a <button> with no type (so type=submit by default) in a form.
-          // The list must hold no fields itself, so a form that merely has an "autocomplete" class is not one.
-          const list = el.closest('[role=listbox],typeahead-container,[class*=typeahead i],[class*=autocomplete i],.pac-container');
-          return {
-          label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\\s+/g,' ').trim().slice(0,120),
-          tag: el.localName, href: el.getAttribute('href') || '', inForm: !!el.closest('form'),
-          // Only a plain menu button counts as a toggle: never a submit button or anything inside a form.
-          toggle: (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-haspopup')) && el.type !== 'submit' && !el.closest('form'),
-          suggestion: !!el.closest('[role=option]') || (!!list && !list.querySelector('input:not([type=hidden]),select,textarea')),
-          typeless: el.localName === 'button' && !el.hasAttribute('type'),
-          consent: !!el.closest('[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[data-testid*=cookie i],[data-testid*=consent i],[id*=usercentrics i],[id*=onetrust i],#CybotCookiebotDialog,[aria-label*=cookie i],[aria-label*=eväst i]')
-            || /cookie|eväste|kakor|consent/i.test((el.closest('dialog,[role=dialog],[aria-modal=true]')?.innerText || '').slice(0, 3000))
-            || (el.getRootNode() instanceof ShadowRoot && /usercentrics|cookie|consent/i.test(el.getRootNode().host.id + ' ' + el.getRootNode().host.className))
-        }; }''', timeout=2500)
+        """Visible label and whether the element only opens a menu."""
+        return self._element(ref).evaluate(r'''el => ({
+          label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\s+/g,' ').trim().slice(0,120),
+          toggle: (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-haspopup')) && el.type !== 'submit' && !el.closest('form')
+        })''', timeout=2500)
 
     def _fallback_click(self, el, exc):
         """Visually hidden radios/checkboxes are clicked through their label; covered or off-screen elements by a DOM click."""
@@ -249,6 +238,7 @@ class Browser:
     @staticmethod
     def _guard_click(el, approved=False):
         description, label = el.evaluate("""el => [el.outerHTML + ' ' +
+            [...(el.labels || [])].map(label => label.innerText).join(' ') + ' ' +
             (el.localName === 'button' ? 'button type=' + el.type : ''),
             el.getAttribute('aria-label') || el.innerText || el.value || '']""")
         final = is_final_submit(description, label)
@@ -359,6 +349,7 @@ class Browser:
 
     def check(self, ref, checked):
         el = self._element(ref)
+        self._guard_click(el)
         # A native <input type=checkbox role=switch> keeps its state in .checked, not aria-checked.
         native = el.evaluate("el => el.localName === 'input'")
         if el.get_attribute('role') in ('checkbox','switch') and not native:
@@ -382,8 +373,8 @@ class Browser:
         self._settle()
 
     def press(self, key):
-        # Forms can submit implicitly even with focus in a text field.
-        if re.search(r'enter|return|space|\s', key, re.I) and any(frame.evaluate("""() => { let el=document.activeElement; while(el?.shadowRoot?.activeElement) el=el.shadowRoot.activeElement; return !!el?.closest('form,button,[role=button],a'); }""") for frame in self.page.frames):
+        # Activation keys can commit through custom widgets even outside a form.
+        if re.search(r'enter|return|space|\s', key, re.I):
             raise ValueError('Call request_approval first; use click for final submission')
         self.page.keyboard.press(key)
         self._settle()
