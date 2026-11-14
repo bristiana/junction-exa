@@ -364,7 +364,7 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
     def ask_user(question):
         store.patch_execution(task_id, {'question': {'text': question, 'at': now()}})
         push_task(application, task_id, render_execution_update)
-        deadline = time.monotonic() + 300
+        deadline = time.monotonic() + 600
         try:
             while time.monotonic() < deadline and not should_stop():
                 inbox, read = unread()
@@ -372,6 +372,10 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
                     store.patch_execution(task_id, {'inbox_read': len(inbox)})
                     return ' / '.join(m.get('text', '') for m in inbox[read:])
                 time.sleep(1.5)
+            if not should_stop():
+                # No answer: stop here instead of going on with empty fields; Continue picks it up with the answer.
+                store.patch_execution(task_id, {'approval_decision': 'stopped',
+                                                'result': 'Paused: no answer yet. Reply, then tap Continue.'})
             return None
         finally:
             store.patch_execution(task_id, {'question': None})
@@ -746,9 +750,18 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         steps = [text for text in steps if text][-25:]
         question = (previous.get('question') or {}).get('text') if isinstance(previous.get('question'), dict) else None
         asked = next((text[len('Asked you: '):] for text in reversed(steps) if text.startswith('Asked you: ')), None)
+        # Everything the person already told the earlier runs (chat answers, details), so nothing is asked twice.
+        earlier = goal.get('resume') if isinstance(goal.get('resume'), dict) else {}
+        said = [str(text) for text in earlier.get('user_said') or []]
+        said += [str(m.get('text') or '') for m in previous.get('inbox') or [] if isinstance(m, dict)]
+        if earlier.get('answer'):
+            said.append(str(earlier['answer']))
+        said = [text for text in dict.fromkeys(t.strip() for t in said) if text][-10:]
         goal['resume'] = {
             'note': 'Continue from where the earlier run stopped: redo the earlier steps quickly, then go on. '
-                    'Never submit without approval.',
+                    'The user already told you what is in user_said and answer: use those values and do not ask '
+                    'for them again. Never submit without approval.',
+            'user_said': said,
             'earlier_steps': steps,
             'stopped': previous['status'] + (f": {previous['error']}" if previous.get('error') else ''),
             'question': question or asked,

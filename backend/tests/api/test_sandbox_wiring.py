@@ -109,7 +109,9 @@ def test_ask_user_times_out(api, monkeypatch):
     monkeypatch.setattr(module.time, 'sleep', lambda s: None)
     monkeypatch.setattr(module.time, 'monotonic', lambda: next(clock))
     module.run_browser_session(tid, 'goal', 'https://example.com/book', {}, application)
-    assert store.get_task(tid)['execution']['status'] == 'failed'
+    execution = store.get_task(tid)['execution']
+    assert execution['approval_decision'] == 'stopped'  # paused for Continue, not carried on with empty fields
+    assert execution['status'] in ('stopped', 'failed')
 
 
 COOKIES = [{'name': 'cart', 'value': 'CART-SECRET', 'domain': '.gilda.fi', 'path': '/', 'expires': -1,
