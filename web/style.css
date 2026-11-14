@@ -222,6 +222,52 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .touched { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
 .touched a { font-weight: 600; overflow-wrap: anywhere; }
 
+/* ---------- first weeks (student hub) ---------- */
+.hub { max-width: 760px; margin: 0 auto; }
+.hub-title { font-size: clamp(26px, 4vw, 38px); line-height: 1.15; letter-spacing: -.03em; margin: 0 0 8px; font-weight: 800; }
+.hub .sub { margin: 0 0 18px; text-align: left; }
+.hub-loading { text-align: center; padding: 40px 0; }
+.about { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.segs { display: inline-flex; padding: 3px; background: var(--fill-2); border: 1px solid var(--line); border-radius: 999px; }
+.seg { border: 0; background: transparent; border-radius: 999px; padding: 7px 14px; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.seg[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(52, 48, 90, .12); }
+.hub-progress { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.hub-progress b { color: var(--ink); }
+.phase { margin-top: 22px; }
+.svc-list { display: grid; gap: 10px; }
+.svc { padding: 14px 16px; }
+.svc.done { opacity: .62; }
+.svc.done .svc-name { text-decoration: line-through; text-decoration-color: #b9a8dc; }
+.svc.open { opacity: 1; border-color: #d9c9ea; }
+.svc-head { display: flex; gap: 12px; align-items: flex-start; }
+.tick { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin-top: 1px; cursor: pointer; }
+.tick input { width: 20px; height: 20px; accent-color: var(--ink); cursor: pointer; }
+.svc-open { flex: 1; min-width: 0; display: grid; gap: 1px; text-align: left; border: 0; background: none; padding: 0; cursor: pointer; }
+.svc-name { font-weight: 700; }
+.svc-org { font-size: 13px; color: var(--muted); }
+.svc-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 40px; }
+.tag.help { background: var(--fill); color: var(--accent); }
+.svc-detail { margin: 14px 0 0 40px; display: grid; gap: 14px; }
+.quotes { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; }
+.offices-head { display: flex; justify-content: space-between; align-items: baseline; }
+.offices { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.office { background: var(--fill-2); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.office p { margin: 0; }
+.office-name { font-weight: 700; }
+.office-hours { color: var(--good); font-weight: 600; }
+.office-hours.holiday { color: var(--warn); }
+.fine { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.landlord { padding: 18px; margin-top: 28px; }
+.landlord .muted { margin: 0 0 12px; font-size: 14px; }
+.verdict { font-weight: 700; margin: 14px 0 6px; }
+.verdict.good { color: var(--good); }
+.verdict.bad { color: var(--bad); }
+.verdict.none, .verdict.unknown { color: var(--warn); }
+.matches { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
+.hub-chip { background: var(--ink); color: #fff; border-color: var(--ink); text-decoration: none; font-weight: 700; }
+.hub-chip:hover { background: #45407a; border-color: #45407a; }
+a.link-btn { text-decoration: none; }
+
 @keyframes pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
@@ -230,6 +276,10 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 }
 
 @media (max-width: 640px) {
+  .top { flex-wrap: wrap; row-gap: 4px; }
+  .top-right { gap: 10px; flex-wrap: wrap; }
+  .link-btn, .by-exa { font-size: 13px; }
+  .svc-tags, .svc-detail { margin-left: 0; }
   .counters { width: 100%; justify-content: space-between; }
   .counters div { text-align: left; }
   .errand-when { display: none; }

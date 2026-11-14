@@ -9,6 +9,7 @@ import { startMic } from './mic.js';
 import { renderDashboard } from './dashboard.js';
 import { createMascot, mountPalettePicker } from './mascot.js';
 import { openTrust } from './trust.js';
+import { openHub } from './hub.js';
 
 const POLL_MS = 2000;
 const BUSY_MS = 10000;
@@ -17,7 +18,7 @@ const mascot = window.Butler ? createMascot() : null;
 if (mascot) mountPalettePicker($('palette'), mascot);
 
 function showView(name) {
-  for (const id of ['home', 'working', 'answer']) $(id).hidden = id !== name;
+  for (const id of ['home', 'working', 'answer', 'hub']) $(id).hidden = id !== name;
   window.scrollTo({ top: 0 });
   mascot?.relayout();
 }
@@ -48,7 +49,7 @@ async function ask(text, previousTaskId) {
 }
 
 $('ask').addEventListener('submit', (event) => { event.preventDefault(); ask($('errand').value); });
-for (const chip of document.querySelectorAll('#examples .chip')) chip.addEventListener('click', () => ask(chip.textContent));
+for (const chip of document.querySelectorAll('#examples button.chip')) chip.addEventListener('click', () => ask(chip.textContent));
 startMic($('mic'), { onText: (text) => { $('errand').value = text; $('errand').focus(); }, onError: notice });
 
 // ---------- one errand ----------
@@ -163,6 +164,11 @@ function route() {
   const match = location.hash.match(/^#\/t\/([\w-]+)$/);
   if (match) return follow(match[1]);
   unfollow();
+  if (location.hash === '#/hub') {
+    showView('hub');
+    mascot?.setMood('idle');
+    return openHub({ onAsk: (text) => ask(text) });
+  }
   showView('home');
   mascot?.setMood('idle');
   loadDashboard();
