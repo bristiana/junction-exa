@@ -1,4 +1,4 @@
-"""Run Hoida's browser hand locally."""
+"""Run Vali's browser hand locally."""
 import argparse
 import json
 from . import run_browser_agent
@@ -6,7 +6,7 @@ from .hooks import ConsoleHooks
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Run the Hoida browser agent')
+    parser = argparse.ArgumentParser(description='Run the Vali browser agent')
     parser.add_argument('--goal', required=True)
     parser.add_argument('--url', required=True)
     parser.add_argument('--headful', action='store_true')
