@@ -1,5 +1,6 @@
 // Vali on the page: one Butler (vendor/butler.js, a copy of extension/lib/butler.js) that stands in the open view's
 // slot, walks over to the ask box while you type, wanders along the bottom when idle, and poses for the open errand.
+// On a phone he only stands in a slot and steps away otherwise, so he never covers content.
 import { h } from './dom.js';
 
 const PALETTE_KEY = 'vali.palette';
@@ -7,6 +8,7 @@ const SIZE = 170;          // px, the hero size; elsewhere he is scaled down
 const SPEED = 90;          // px per second when walking
 const IDLE_MS = 20000;     // on home, this long without a click or key and he goes for a walk
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const narrow = matchMedia('(max-width: 600px)');
 
 export function createMascot() {
   const art = h('div', { class: 'buddy-art' });
@@ -15,17 +17,18 @@ export function createMascot() {
   const butler = window.Butler.create(art, { palette: loadPalette(), state: 'idle', reducedMotion: 'auto', trackPointer: true });
   let mood = 'idle', typingUntil = 0, lastInput = Date.now(), at = null, walking = false, wanderTimer = 0, settleTimer = 0;
 
-  // Where he should be now: by the ask box, in the view's slot, or somewhere along the bottom.
+  // Where he should be now: by the ask box, in the view's slot, along the bottom, or away (phone, no slot in view).
   function target() {
     const ask = document.getElementById('ask');
-    if (Date.now() < typingUntil && ask?.offsetParent) {
+    if (Date.now() < typingUntil && ask?.offsetParent && !narrow.matches) {
       const box = ask.getBoundingClientRect(), scale = 0.5;
       return { mode: 'input', x: box.right - SIZE * scale * 0.9, y: box.top - SIZE * scale * 0.82, scale };
     }
     const slot = document.querySelector('.view:not([hidden]) [data-slot]');
     const box = slot?.getBoundingClientRect();
-    const idle = slot?.dataset.slot === 'home' && Date.now() - lastInput > IDLE_MS && !reduceMotion.matches;
+    const idle = slot?.dataset.slot === 'home' && Date.now() - lastInput > IDLE_MS && !reduceMotion.matches && !narrow.matches;
     if (box && box.bottom > 40 && box.top < innerHeight - 40 && !idle) return { mode: 'slot', x: box.left, y: box.top, scale: box.width / SIZE };
+    if (narrow.matches) return { mode: 'away' };
     const scale = innerWidth < 640 ? 0.42 : 0.56, size = SIZE * scale;
     const x = at?.mode === 'wander' ? at.x : reduceMotion.matches ? innerWidth - size - 16 : 16 + Math.random() * Math.max(0, innerWidth - size - 32);
     return { mode: 'wander', x, y: innerHeight - size - 6, scale };
@@ -33,6 +36,9 @@ export function createMascot() {
 
   // Walk there at a steady pace (a jump under Reduce motion, or when only the page scrolled).
   function go(next, instant = false) {
+    wrap.hidden = next.mode === 'away';
+    if (wrap.hidden || at?.mode === 'away') at = null;
+    if (wrap.hidden) return void (at = next);
     const distance = at ? Math.hypot(next.x - at.x, next.y - at.y) : 0;
     const seconds = instant || reduceMotion.matches || !at ? 0 : Math.max(0.35, distance / SPEED);
     wrap.style.transition = seconds ? `transform ${seconds}s linear` : 'none';
@@ -107,11 +113,15 @@ export function mountPalettePicker(button, mascot) {
   const menu = h('div', { class: 'palettes', role: 'menu', hidden: true },
     window.Butler.PALETTES.map((name) => {
       const info = window.Butler.paletteInfo(name);
-      return h('button', {
+      const swatch = h('button', {
         type: 'button', class: 'swatch', role: 'menuitemradio', title: info.label, 'aria-label': info.label,
-        style: `--c1:${info.color};--c2:${info.color2};--c3:${info.color3}`,
         onclick: () => { choose(name); menu.hidden = true; },
       });
+      // Colours go through the CSSOM: the page's CSP allows no inline style attributes.
+      swatch.style.setProperty('--c1', info.color);
+      swatch.style.setProperty('--c2', info.color2);
+      swatch.style.setProperty('--c3', info.color3);
+      return swatch;
     }));
   button.after(menu);
   button.addEventListener('click', (event) => { event.stopPropagation(); menu.hidden = !menu.hidden; });

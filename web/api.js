@@ -1,7 +1,6 @@
-// The Vali API. Same origin by default; ?api=https://… or <meta name="vali-api"> points the page elsewhere.
-// The anonymous account token is stored per API base, so a link with another ?api= never receives this one.
-const base = (new URLSearchParams(location.search).get('api')
-  || document.querySelector('meta[name="vali-api"]')?.content || '').replace(/\/+$/, '');
+// The Vali API. Same origin by default; <meta name="vali-api"> points a build elsewhere (the CSP must allow it).
+// The anonymous account token is stored per API base.
+const base = (document.querySelector('meta[name="vali-api"]')?.content || '').replace(/\/+$/, '');
 const TOKEN_KEY = 'vali.token:' + (base || location.origin);
 let token = load(TOKEN_KEY);
 
