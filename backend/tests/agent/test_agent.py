@@ -198,25 +198,19 @@ def test_image_redaction(local_site, monkeypatch):
         browser.close()
 
 
-def test_final_picture_masks_every_field(local_site, monkeypatch):
-    browser = Browser()
-    try:
-        browser.goto(local_site+'/claim.html')
-        browser.snapshot()
-        browser.type('e3', '+358 40 123 4567')  # the page's own format: no profile value matches it
-        original = browser.page.screenshot
-        seen = []
-        def capture(**kwargs):
-            seen.append(sorted(el.get_attribute('name') or '' for el in browser.page.locator('[data-vali-private]').all()))
-            return original(**kwargs)
-        monkeypatch.setattr(browser.page, 'screenshot', capture)
-        assert browser.screenshot_jpeg(profile=PROFILE, all_fields=True).startswith(b'\xff\xd8')
-        assert seen == [['details', 'email', 'kind', 'name', 'phone']]  # radios and the checkbox stay visible
-        browser.page.set_content('<iframe srcdoc="<input name=x>"></iframe>')
-        browser.page.wait_for_timeout(100)
-        assert browser.screenshot_jpeg(profile=PROFILE, all_fields=True) is None
-    finally:
-        browser.close()
+def test_no_picture_after_a_personal_value_reaches_the_page(local_site):
+    # Masking cannot see shadow roots, iframes, split spans or reformatted echoes, so nothing is captured at all.
+    frames = []
+    run_hooks = AgentHooks(lambda text, jpeg: frames.append(jpeg), lambda summary, filled: True, lambda: False)
+    result = run_browser_agent('Fill the phone', local_site+'/claim.html', PROFILE, run_hooks, ScriptedLLM([
+        ('type_text', {'ref': 'e8', 'text': 'Please process this claim'}),
+        ('type_text', {'ref': 'e3', 'text': '{{phone}}'}),
+        ('look', {}),
+        ('finish', {'result': 'Prepared'})]))
+    assert result.status == 'done' and result.private_view
+    assert frames[0].startswith(b'\xff\xd8')
+    assert frames[1].startswith(b'\xff\xd8')
+    assert frames[2:] == [None, None, None]
 
 
 @pytest.mark.parametrize('markup,expected', [

@@ -35,10 +35,6 @@ def test_capture_stops_before_personal_substitution(monkeypatch, fill_fails):
         def blockers(self): return []
         def personal_field(self, ref, approved=False): pass
         def screenshot_jpeg(self, **kwargs):
-            if kwargs.get('all_fields'):  # the last picture after finish, every field masked
-                assert kwargs['profile'] and events[-1] == 'fill'
-                events.append('masked')
-                return b'masked'
             events.append('screenshot')
             assert 'fill' not in events
             return b'jpeg'
@@ -63,8 +59,10 @@ def test_capture_stops_before_personal_substitution(monkeypatch, fill_fails):
     result = run_browser_agent('Fill email', 'https://example.com', {'email': 'secret@example.com'},
                                hooks, model, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert result.status == 'done'
-    assert events == ['screenshot', 'closed', 'fill', 'masked']
-    assert frames[0] == b'jpeg' and frames[-1] == b'masked' and all(frame is None for frame in frames[1:-1])
+    # Once a personal value reached the page, no picture is taken again, the last one included.
+    assert events == ['screenshot', 'closed', 'fill']
+    assert frames[0] == b'jpeg' and all(frame is None for frame in frames[1:])
+    assert result.private_view
     assert 'Images paused' in str(model.received[-1])
     assert 'secret@example.com' not in str(model.received)
 
@@ -80,3 +78,24 @@ def test_closed_screencast_rejects_late_frames_and_manual_push():
     cast.push(b'private')
     assert cast._latest is None
     assert not cast._wake.is_set()
+
+
+def test_run_without_personal_values_keeps_its_last_picture(monkeypatch):
+    class Browser:
+        current_url = 'https://example.com'
+        page = NS(frames=[])
+        def __init__(self, **kwargs): pass
+        def goto(self, url): pass
+        def snapshot(self): return '[e1] input[text] "City"'
+        def blockers(self): return []
+        def screenshot_jpeg(self, **kwargs): return b'jpeg'
+        def type(self, ref, text): pass
+        def close(self): pass
+    monkeypatch.setattr('vali_agent.agent.Browser', Browser)
+    frames = []
+    hooks = AgentHooks(lambda text, jpeg: frames.append(jpeg), lambda *args: True, lambda: False)
+    result = run_browser_agent('Fill city', 'https://example.com', {'email': 'secret@example.com'}, hooks,
+                               Script([('type_text', {'ref': 'e1', 'text': 'Helsinki'}), ('finish', {'result': 'Prepared'})]),
+                               exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done' and not result.private_view
+    assert frames and all(frame == b'jpeg' for frame in frames)

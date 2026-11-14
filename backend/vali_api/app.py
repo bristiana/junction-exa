@@ -350,7 +350,7 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
         value = result if isinstance(result, dict) else vars(result)
         patch_execution(task_id, {'status': 'stopped' if should_stop() else value['status'],
                                        'result': value.get('result', ''), 'current_url': value.get('final_url'), 'error': value.get('error'),
-                                       **{k: value[k] for k in ('usage', 'sources', 'filled', 'exa') if value.get(k) is not None}})
+                                       **{k: value[k] for k in ('usage', 'sources', 'filled', 'exa', 'private_view') if value.get(k) is not None}})
     except Exception:
         patch_execution(task_id, {'status': 'stopped' if should_stop() else 'failed', 'error': 'Browser session failed.'})
 

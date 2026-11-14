@@ -369,7 +369,7 @@ def test_browser_hooks_offline(api, monkeypatch):
         hooks.on_step('Opened form', b'fake-jpeg')
         assert hooks.wait_for_approval('Review form', [{'label': 'Email', 'value': '{{email}}'}])
         assert store.get_task(tid)['execution']['status'] == 'submitting'
-        return {'status': 'done', 'result': 'Finished', 'final_url': start_url}
+        return {'status': 'done', 'result': 'Finished', 'final_url': start_url, 'private_view': True}
     def approve_on_sleep(seconds):
         assert seconds == 2
         assert client.post(f'/v1/tasks/{tid}/approve').status_code == 200
@@ -377,7 +377,7 @@ def test_browser_hooks_offline(api, monkeypatch):
     monkeypatch.setattr(module.time, 'sleep', approve_on_sleep)
     module.run_browser_session(tid, 'goal', 'https://example.com', {}, application)
     execution = store.get_task(tid)['execution']
-    assert execution['status'] == 'done'
+    assert execution['status'] == 'done' and execution['private_view'] is True
     assert execution['steps'][0]['shot'] == 1
     assert execution['shots'][0]['url'].endswith('/shots/1.jpg')
     assert store.get_shot(tid, 1) == b'fake-jpeg'

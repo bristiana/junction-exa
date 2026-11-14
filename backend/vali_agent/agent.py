@@ -67,6 +67,7 @@ class AgentResult:
     sources: list | None = None
     filled: list | None = None  # what was filled so far (placeholders), for finishing by hand
     exa: list | None = None  # every Exa call made while filling, masked
+    private_view: bool = False  # a personal value reached the page, so no picture was kept after it
 
 
 def _validate(value, schema):
@@ -172,7 +173,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
     def outcome():
         return AgentResult(status, mask(result, profile), final_url, steps, dict(usage) | {'exa_cost_usd': round(exa.cost_usd, 4),
                            'jev_calls': jev.calls}, list(exa.sources), [{'label': k, 'value': v} for k, v in filled_log.items()],
-                           list(exa.calls))
+                           list(exa.calls), personal_visible)
 
     def report_exa():
         if hooks.on_exa:
@@ -200,15 +201,10 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
             except Exception:
                 screencast = None
 
-    def shot(final=False):
+    def shot():
         if personal_visible:
-            # The live view stays paused. A run that ends gets one last picture with every field masked (or none).
-            if not (final and profile):
-                return None
-            try:
-                return browser.screenshot_jpeg(profile=profile, all_fields=True)
-            except Exception:
-                return None
+            # Masking cannot find every echo (shadow roots, iframes, split or reformatted text): no picture at all.
+            return None
         follow_page()
         jpeg = browser.screenshot_jpeg()
         if screencast:
@@ -485,7 +481,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                         if final_url != previous_url:
                             hooks.on_step('Navigated to ' + mask(final_url, profile), None)
                         if name not in ('exa_search', 'exa_read', 'ask_user'):
-                            hooks.on_step(step_text, shot(final=name == 'finish'))
+                            hooks.on_step(step_text, shot())
                     except Exception as exc:
                         approved = False
                         error = True
