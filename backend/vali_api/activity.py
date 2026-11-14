@@ -13,10 +13,9 @@ PERSONAL_PATTERNS = [
 ]
 
 
-def scrub(text, profile=None):
-    """Mask the user's saved details (same masker as the browser agent), then anything shaped like personal data."""
-    from vali_agent.privacy import mask
-    text = mask(str(text or ''), profile or {})
+def scrub(text):
+    """Mask anything shaped like personal data; the user's saved details never reach the server."""
+    text = str(text or '')
     for pattern, placeholder in PERSONAL_PATTERNS:
         text = pattern.sub(placeholder, text)
     return text
@@ -36,10 +35,10 @@ def seconds_since(started, at=None):
     return max(0.0, round((at - _parse(started)).total_seconds(), 1))
 
 
-def entry(started, kind, text, url=None, at=None, profile=None):
-    item = {'t': seconds_since(started, at), 'kind': kind, 'text': scrub(text, profile)[:200]}
+def entry(started, kind, text, url=None, at=None):
+    item = {'t': seconds_since(started, at), 'kind': kind, 'text': scrub(text)[:200]}
     if url:
-        item['url'] = scrub(url, profile)[:500]
+        item['url'] = scrub(url)[:500]
     return item
 
 
@@ -47,7 +46,7 @@ def opening(task):
     return entry(task['created_at'], 'think', f"Planning a {task['mode']} errand", at=task['created_at'])
 
 
-def from_events(task, events, profile=None):
+def from_events(task, events):
     """The opening line plus one entry per Exa agent search and page, deduplicated, in event order."""
     started, trail, seen = task['created_at'], [opening(task)], set()
     for event in events or []:
@@ -56,9 +55,9 @@ def from_events(task, events, profile=None):
         name, data, at = str(event.get('event') or ''), event['data'], event.get('createdAt')
         source = data.get('source') if isinstance(data.get('source'), dict) else {}
         if name.endswith('search_trace') and data.get('text'):
-            item = entry(started, 'search', re.sub(r'^Searching\s+(?:for\s+)?', '', str(data['text'])), at=at, profile=profile)
+            item = entry(started, 'search', re.sub(r'^Searching\s+(?:for\s+)?', '', str(data['text'])), at=at)
         elif name.endswith('source.added') and source.get('url'):
-            item = entry(started, 'read', domain_of(source['url']), source['url'], at=at, profile=profile)
+            item = entry(started, 'read', domain_of(source['url']), source['url'], at=at)
         elif name.endswith('completed'):
             item = entry(started, 'think', 'Research finished, writing up the answer', at=at)
         else:
@@ -70,13 +69,13 @@ def from_events(task, events, profile=None):
     return trail[:MAX_ENTRIES]
 
 
-def from_search(task, query, response, profile=None):
+def from_search(task, query, response):
     """The trail of a single Exa search+answer call: the search, then each page it read."""
     started = task['created_at']
-    trail = [opening(task), entry(started, 'search', query, profile=profile)]
+    trail = [opening(task), entry(started, 'search', query)]
     for result in (response or {}).get('results') or []:
         if result.get('url'):
-            trail.append(entry(started, 'read', domain_of(result['url']), result['url'], profile=profile))
+            trail.append(entry(started, 'read', domain_of(result['url']), result['url']))
     return trail[:MAX_ENTRIES]
 
 

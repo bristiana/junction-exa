@@ -18,12 +18,12 @@ QUESTIONS = {
 }
 
 
-def missing(task, mode, profile=None):
+def missing(task, mode):
     """Names of the details a book or find errand lacks, most important first."""
     if mode not in ('book', 'find'):
         return []
     text, gaps = task.lower(), []
-    if not any(re.search(r'(?<!\w)' + city, text) for city in CITIES) and not (profile or {}).get('city'):
+    if not any(re.search(r'(?<!\w)' + city, text) for city in CITIES):
         gaps.append('city')
     if _GROUP.search(text) and not _COUNT.search(text):
         gaps.append('group')
@@ -32,8 +32,8 @@ def missing(task, mode, profile=None):
     return gaps
 
 
-def early_question(task, mode, profile=None):
-    gaps = missing(task, mode, profile)
+def early_question(task, mode):
+    gaps = missing(task, mode)
     if not gaps:
         return None
     text, options = QUESTIONS[gaps[0]]

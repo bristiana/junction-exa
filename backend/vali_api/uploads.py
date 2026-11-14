@@ -4,7 +4,7 @@ from io import BytesIO
 from fastapi import HTTPException
 
 MAX_UPLOAD = 10 * 1024 * 1024
-# Whole multipart request (file plus form fields and boundaries), checked from Content-Length.
+# Whole multipart request (file plus form fields and boundaries): Content-Length, then the streamed bytes.
 MAX_REQUEST = 11 * 1024 * 1024
 UPLOAD_PATHS = {'/v1/voice', '/v1/letters'}
 AUDIO_TYPES = {'audio/webm', 'audio/ogg', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/wav', 'audio/x-wav',
@@ -20,6 +20,11 @@ VISION_MAX_SIDE = 4096
 JPEG_QUALITY = 85
 
 
+async def too_large(scope, receive, send):
+    from fastapi.responses import JSONResponse
+    await JSONResponse({'detail': 'Upload exceeds 10 MB'}, status_code=413)(scope, receive, send)
+
+
 class UploadLimit:
     """ASGI guard that counts the streamed body of an upload, so a chunked request without Content-Length cannot
     exceed the limit either; the body is replayed to the app once it fits."""
@@ -29,6 +34,9 @@ class UploadLimit:
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http' or scope['path'] not in UPLOAD_PATHS:
             return await self.app(scope, receive, send)
+        declared = dict(scope.get('headers') or []).get(b'content-length', b'')
+        if declared.isdigit() and int(declared) > MAX_REQUEST:  # refused before reading a byte
+            return await too_large(scope, receive, send)
         body, more = b'', True
         while more:
             message = await receive()
@@ -37,8 +45,7 @@ class UploadLimit:
             body += message.get('body', b'')
             more = message.get('more_body', False)
             if len(body) > MAX_REQUEST:
-                from fastapi.responses import JSONResponse
-                return await JSONResponse({'detail': 'Upload exceeds 10 MB'}, status_code=413)(scope, receive, send)
+                return await too_large(scope, receive, send)
         replayed = False
 
         async def replay():
@@ -48,16 +55,6 @@ class UploadLimit:
             replayed = True
             return {'type': 'http.request', 'body': body, 'more_body': False}
         await self.app(scope, replay, send)
-
-
-def oversized_request(path, content_length):
-    """True for an upload whose declared size is over the limit, before the body is parsed."""
-    if path not in UPLOAD_PATHS or not content_length:
-        return False
-    try:
-        return int(content_length) > MAX_REQUEST
-    except ValueError:
-        return False
 
 
 def upload_mime(upload):

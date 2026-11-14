@@ -37,7 +37,7 @@ Devices link with a 6-digit code (`POST /v1/link/code`, `POST /v1/link`), so the
 - Personal details (name, email, phone, address) stay on your device, in the extension or the Mac app settings.
 - The models (Exa and Claude) only see placeholders such as `{{name}}` and `{{email}}`. The sandbox types the real value at the last moment and masks it back to the placeholder in every page snapshot the model reads. Fields showing a real value are blurred in the live view and screenshots.
 - Page text is redacted in the browser before it leaves: emails, phone numbers, Finnish personal identity codes, IBANs, card numbers, address lines.
-- Syncing details to the server, so errands without a device profile can fill forms, is opt-in (`PUT /v1/profile`).
+- Personal details are never stored on the server. They travel only inside the execute call for that one sandbox run and are dropped when it ends (`PUT /v1/profile` is accepted for old clients and stores nothing).
 - Page text is treated as data, never as instructions. A page that tries to steer the agent ends the run as "suspicious page".
 
 ## Partners and where they are used

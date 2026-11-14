@@ -206,15 +206,16 @@ def test_device_expiry_replacement_auth_and_limits(api):
     assert client.post('/v1/link', json={'code': code}).status_code == 404
     del client.headers['Authorization']
     assert client.post('/v1/link/code').status_code == 401
-    for _ in range(3):  # two wrong codes above, five in all, then a 15-minute lockout
+    for _ in range(5):  # five wrong codes with one prefix from one address, then a 15-minute lockout for that prefix
         assert client.post('/v1/link', json={'code': '000000'}).status_code == 404
     locked = client.post('/v1/link', json={'code': '000000'})
     assert locked.status_code == 429 and 'wrong codes' in locked.json()['detail'] and int(locked.headers['retry-after']) > 800
+    assert client.post('/v1/link', json={'code': '999999'}).status_code == 404  # another prefix is not locked
 
 
 def test_device_issuance_limit(api):
     client, *_ = api
-    for _ in range(10):
+    for _ in range(30):  # judges share a venue address and an account during a demo
         assert client.post('/v1/link/code').status_code == 200
     assert client.post('/v1/link/code').status_code == 429
 
