@@ -4,11 +4,30 @@ Contract: https://exa.ai/docs/monitors/quickstart
 """
 import hashlib
 import hmac
+import re
 import time
 from urllib.parse import quote, urlsplit
 
 from .exa import ExaError
 from .store import now
+
+
+_WATCH_VERB = re.compile(r'^\s*(?:please\s+)?(?:keep\s+)?(?:watch(?:ing)?(?:\s+for)?|tell me when|notify me(?:\s+when|\s+about)?|'
+                         r'remind me(?:\s+when|\s+about)?|let me know when|alert me(?:\s+when)?|ilmoita)\s+', re.I)
+
+
+def watch_criteria(task):
+    """What the watch looks for, echoed back to the user: the errand without its 'watch for' verb."""
+    criteria = _WATCH_VERB.sub('', task.strip(), count=1).strip()
+    return criteria or task.strip()
+
+
+def with_watch(output, criteria, message):
+    """The current answer first; the watch confirmation and its criteria after it (indices of cited fields kept)."""
+    structured = output['structured']
+    structured['key_facts'].append({'label': 'Watching for', 'value': criteria})
+    structured['steps'].append({'title': 'Watch active', 'detail': message})
+    return output
 
 
 def create_monitor(config, query, *, exa, watch_id, cadence='1d'):

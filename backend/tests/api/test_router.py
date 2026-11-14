@@ -82,3 +82,12 @@ def test_information_questions_route_to_check(text, expected):
 def test_information_questions_keep_find_and_watch():
     for mode in ('find', 'watch'):
         assert route('What are the best saunas open on Saturday?', classify=lambda t, p: (mode, 0.9, 0.5))[0] == mode
+
+
+def test_a_fact_question_is_checked_even_when_classified_as_watch():
+    watch = lambda t, p: ('watch', 0.9, 0.5)
+    assert route('remind me when the Vero tax return deadline is', classify=watch) == ('check', 'agent')
+    assert route('when is the Kela application deadline', classify=watch) == ('check', 'agent')
+    for text in ('watch for new flats under 900 eur in Espoo', 'tell me when the ferry is cheaper',
+                 'notify me when a new Kela deadline appears'):
+        assert route(text, classify=watch) == ('watch', 'monitor'), text

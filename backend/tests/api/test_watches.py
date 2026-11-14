@@ -41,6 +41,11 @@ def watched():
     store.close()
 
 
+def monitor_calls(calls):
+    """Calls to the paid monitor API; a watch errand also runs one search for today's answer."""
+    return [c for c in calls if c.url.path.startswith('/monitors')]
+
+
 def create(client):
     response = client.post('/v1/tasks', json={'task': 'watch for flats in Helsinki'})
     assert response.status_code == 200, response.text
@@ -135,7 +140,7 @@ def test_cap_delete_failure_and_user_isolation(watched, monkeypatch):
     for _ in range(3):
         create(client)
     assert client.post('/v1/tasks', json={'task': 'watch for flights'}).status_code == 409
-    assert len(calls) == 3
+    assert len(monitor_calls(calls)) == 3
     watch = client.get('/v1/watches').json()['watches'][0]
     other = client.post('/v1/users').json()
     token = client.headers['Authorization']
@@ -174,7 +179,7 @@ def test_ambiguous_create_reserves_paid_slot(watched):
     for _ in range(3):
         task = create(client)
         assert 'reserved' in task['research']['output']['text']
-    assert len(calls) == 3  # Never replay a paid create after ambiguous failure.
+    assert len(monitor_calls(calls)) == 3  # Never replay a paid create after ambiguous failure.
     watch = client.get('/v1/watches').json()['watches'][0]
     assert client.delete('/v1/watches/' + watch['id']).status_code == 409
     assert len(store.sql('SELECT * FROM watch_slots')) == 3
@@ -304,7 +309,7 @@ def test_release_unconfirmed_watch(watched, release):
     assert client.delete(url).status_code == 200
     assert store.get_watch(watch['id']) is None
     assert store.sql('SELECT * FROM watch_slots') == []
-    assert len(calls) == 1
+    assert len(monitor_calls(calls)) == 1
 
 
 def test_oversized_delivery_rejected_without_reading_body(watched, monkeypatch):

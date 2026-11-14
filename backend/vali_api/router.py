@@ -11,6 +11,9 @@ def route(task, page=None, classify=None):
     # A how-to or price question is answered, not acted on, unless the user asks Vali to do it.
     if mode in ('book', 'claim', 'write') and _is_info_question(task):
         mode = 'check'
+    # "Remind me when the deadline is" asks for a fact; a watch is for something new or changed.
+    if mode == 'watch' and _FACT_QUESTION.search(task) and not _NEWS.search(task):
+        mode = 'check'
     return mode, KINDS[mode]
 
 
@@ -26,6 +29,8 @@ def _pick_mode(task, page, classify):
     return keyword_mode or 'check'
 
 
+_FACT_QUESTION = re.compile(r"\bwhen\b.*\b(?:is|are)\b|\bdeadlines?\b|\bdue date\b", re.I | re.S)
+_NEWS = re.compile(r"\b(?:new|changes?|changed|appears?|available|drops?|under|below|cheaper|opens? up|back in stock)\b", re.I)
 _INFO_QUESTION = re.compile(r"^\W*(?:how (?:do|can) i|how to|what is|what are|how much)\b.*\?\W*$", re.S)
 _DIRECT_ASK = re.compile(
     r"\b(?:(?:book|reserve|register|sign)\w*\s+(?:it\s+)?(?:for\s+me|me)|please\s+(?:book|reserve)"

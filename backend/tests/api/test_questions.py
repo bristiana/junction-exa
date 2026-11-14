@@ -56,7 +56,7 @@ def api():
                                          'output': output if state['status'] == 'completed' else None})
     store, exa = SQLiteStore(':memory:'), ExaClient('k', transport=httpx.MockTransport(respond))
     def spawn_poller(tid):
-        if store.get_task(tid)['research']['kind'] == 'search':
+        if store.get_task(tid)['research']['kind'] != 'agent':
             poll_research_once(tid, application)
         else:
             polls.append(tid)
@@ -139,3 +139,18 @@ def test_answer_first_rules_reach_agent_and_find_requests(api):
     assert build_run_request('x')['systemPrompt'].startswith(SYSTEM_PROMPT) and 'Answer first' in build_run_request('x')['systemPrompt']
     client.post('/v1/tasks', json={'task': 'find a cheap gym in Oulu'})
     assert 'Answer first' in [c[2] for c in calls if c[1] == '/search'][0]['systemPrompt']
+
+
+def test_a_watch_answers_today_first_and_echoes_its_criteria(api):
+    from vali_api.monitors import watch_criteria
+    assert watch_criteria('watch for new flats under 900 eur in Espoo') == 'new flats under 900 eur in Espoo'
+    assert watch_criteria('Tell me when Kela opens applications') == 'Kela opens applications'
+    client, application, calls, *_ = api
+    task = client.post('/v1/tasks', json={'task': 'watch for new flats under 900 eur in Espoo'}).json()
+    assert task['mode'] == 'watch'
+    structured = task['research']['output']['structured']
+    assert structured['answer'] == 'Sauna A.'  # today's answer from the search, not just "Watch active"
+    assert structured['key_facts'][-1] == {'label': 'Watching for', 'value': 'new flats under 900 eur in Espoo'}
+    assert structured['steps'][-1]['title'] == 'Watch active' and task['research']['watch_id']
+    assert [c[2]['query'] for c in calls if c[1] == '/search'][0].startswith('Errand: new flats under 900 eur in Espoo')
+    assert task['research']['status'] == 'completed'  # the fake poller ran the quote check
