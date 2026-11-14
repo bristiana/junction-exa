@@ -23,7 +23,7 @@
         "*://*.op.fi/*", "*://*.nordea.fi/*", "*://*.danskebank.fi/*", "*://*.s-pankki.fi/*", "*://*.aktia.fi/*",
         "*://*.saastopankki.fi/*", "*://*.omasp.fi/*", "*://*.handelsbanken.fi/*"
       ],
-      "js": ["content/presence.js"],
+      "js": ["lib/butler.js", "content/presence.js"],
       "run_at": "document_idle"
     }
   ],
