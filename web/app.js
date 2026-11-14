@@ -1,4 +1,4 @@
-// The page controller: routes (#/ home, #/t/<id> one errand), the ask box, and polling the open errand.
+// The page controller: routes (#/ home, #/t/<id> one errand, #/dashboard), the ask box, and polling the open errand.
 import { api } from './api.js';
 import { $, h } from './dom.js';
 import { TERMINAL, isActive, moodOf } from './model.js';
@@ -14,6 +14,8 @@ import { openWhatsapp } from './whatsapp.js';
 import { loadProfile } from './profile.js';
 import { openHub } from './hub.js';
 import { EXA_USES } from './exa-uses.js';
+import { closeBoard, openBoard, resumeBoard } from './board.js';
+import { createAskDock } from './ask-dock.js';
 
 const POLL_MS = 2000;
 const BUSY_MS = 10000;
@@ -23,7 +25,11 @@ if (mascot) mountPalettePicker($('palette'), mascot);
 $('exa-uses').replaceChildren(...EXA_USES.map(([label, detail]) => h('div', {}, h('dt', {}, label), h('dd', {}, detail))));
 
 function showView(name) {
-  for (const id of ['home', 'working', 'answer', 'hub']) $(id).hidden = id !== name;
+  for (const id of ['home', 'working', 'answer', 'hub', 'dashboard']) $(id).hidden = id !== name;
+  for (const link of document.querySelectorAll('.top [data-view]')) {
+    if (link.dataset.view === name) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
   window.scrollTo({ top: 0 });
   mascot?.relayout();
 }
@@ -37,13 +43,18 @@ function notice(text, quiet = false) {
 }
 
 // ---------- asking ----------
+// The one way an errand starts on this page: the home ask box, follow-ups and the corner bubble all call it.
+function startErrand(errand, previousTaskId) {
+  return api.createTask(errand, previousTaskId, Object.keys(loadProfile()));
+}
+
 async function ask(text, previousTaskId) {
   const errand = text.trim();
   if (!errand) return;
   notice('');
   $('ask').classList.add('busy');
   try {
-    const task = await api.createTask(errand, previousTaskId, Object.keys(loadProfile()));
+    const task = await startErrand(errand, previousTaskId);
     $('errand').value = '';
     location.hash = '#/t/' + task.id;
   } catch (error) {
@@ -56,6 +67,7 @@ async function ask(text, previousTaskId) {
 $('ask').addEventListener('submit', (event) => { event.preventDefault(); ask($('errand').value); });
 for (const chip of document.querySelectorAll('#examples button.chip')) chip.addEventListener('click', () => ask(chip.textContent));
 startMic($('mic'), { onText: (text) => { $('errand').value = text; $('errand').focus(); }, onError: notice });
+createAskDock({ start: (text) => startErrand(text), mascot });
 
 // ---------- one errand ----------
 // Only the open errand is polled: every 2 s while it runs, never while the tab is hidden, and after a 429 it waits
@@ -175,9 +187,15 @@ function route() {
   if ($('whatsapp').open) $('whatsapp').close();
   notice(leaving);
   leaving = '';
+  if (location.hash !== '#/dashboard') closeBoard();
   const match = location.hash.match(/^#\/t\/([\w-]+)$/);
   if (match) return follow(match[1]);
   unfollow();
+  if (location.hash === '#/dashboard') {
+    showView('dashboard');
+    mascot?.setMood('idle');
+    return openBoard();
+  }
   if (location.hash === '#/hub') {
     showView('hub');
     mascot?.setMood('idle');
@@ -193,5 +211,6 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) return clearTimeout(followed?.timer);
   if (followed) poll();
   else if (!$('home').hidden) loadDashboard();
+  else if (!$('dashboard').hidden) resumeBoard();
 });
 route();

@@ -67,6 +67,7 @@ export const api = {
   tasks: () => call('GET', '/v1/tasks?limit=50'),
   pair: () => call('POST', '/v1/pair'),
   stats: () => call('GET', '/v1/stats'),
+  watches: () => call('GET', '/v1/watches'),
   services: () => call('GET', '/v1/services'),
   service: (id) => call('GET', `/v1/services/${encodeURIComponent(id)}`),
   places: (q) => call('GET', `/v1/places?q=${encodeURIComponent(q)}&city=helsinki`),
