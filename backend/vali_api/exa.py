@@ -132,7 +132,9 @@ class ExaClient:
         return self.cached_post('/search', body, 'search')
 
     def contents(self, urls):
-        return self.cached_post('/contents', {'urls': urls, 'text': {'maxCharacters': 30000}}, 'contents')
+        # The quote check reads the page as it is today: at most a day old, else fetched live (10 s budget).
+        return self.cached_post('/contents', {'urls': urls, 'text': {'maxCharacters': 30000},
+                                              'maxAgeHours': 24, 'livecrawlTimeout': 10000}, 'contents')
 
     def close(self):
         self.client.close()

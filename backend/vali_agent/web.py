@@ -65,7 +65,7 @@ class ExaTools:
         return self._logged(entry, lambda: self._search(query, include_domains))
 
     def _search(self, query, include_domains):
-        body = {'query': query[:500], 'type': 'auto', 'numResults': 5, 'userLocation': 'FI',
+        body = {'query': query[:500], 'type': 'auto', 'numResults': 5, 'userLocation': 'FI', 'moderation': True,
                 'contents': {'highlights': {'query': query[:500], 'maxCharacters': 700}}}
         if include_domains:
             body['includeDomains'] = [d for d in include_domains if isinstance(d, str)][:10]
@@ -88,7 +88,7 @@ class ExaTools:
         if not url.startswith(('https://', 'http://')):
             raise ValueError('Only http and https URLs are supported')
         body = {'urls': [url], 'text': {'maxCharacters': 5000, 'verbosity': 'compact'},
-                'maxAgeHours': self.max_age_hours, 'livecrawlTimeout': 10000}
+                'maxAgeHours': self.max_age_hours, 'livecrawlTimeout': 10000, 'extras': {'links': 5}}
         if question:
             body['highlights'] = {'query': question[:500], 'maxCharacters': 1500}
         data = self._post('/contents', body)
@@ -100,7 +100,10 @@ class ExaTools:
         self._remember(r)
         date = f"Published: {r['publishedDate'][:10]}\n" if r.get('publishedDate') else ''
         focus = ('Most relevant: ' + ' … '.join(r.get('highlights') or []) + '\n\n') if r.get('highlights') else ''
-        text = f"{_UNTRUSTED}{r.get('title') or ''}\n{r.get('url')}\n{date}{focus}{(r.get('text') or '')[:5000]}"
+        # Links on the page (where an application or booking really starts), still untrusted page data.
+        links = [u for u in ((r.get('extras') or {}).get('links') or []) if isinstance(u, str) and u.startswith('http')][:5]
+        more = ('\n\nLinks on the page:\n' + '\n'.join(u[:300] for u in links)) if links else ''
+        text = f"{_UNTRUSTED}{r.get('title') or ''}\n{r.get('url')}\n{date}{focus}{(r.get('text') or '')[:5000]}{more}"
         return text, [r]
 
     def close(self):

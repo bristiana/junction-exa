@@ -88,7 +88,7 @@ def companion_tip(state, body):
     hit = cache.get(key)
     if hit is not None:
         return {'tip': hit['tip'], 'cached': True}
-    response = state.exa.search(dict(query=build_query(body, url), type='fast', numResults=3, userLocation='FI',
+    response = state.exa.search(dict(query=build_query(body, url), type='fast', numResults=3, userLocation='FI', moderation=True,
                                      contents={'highlights': {'maxCharacters': 300}}, outputSchema=SCHEMA, systemPrompt=SYSTEM))
     tip = make_tip(response)
     cache.put(key, {'tip': tip})

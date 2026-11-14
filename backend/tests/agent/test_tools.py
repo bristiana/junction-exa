@@ -79,6 +79,7 @@ def test_exa_tools_sources_usage_and_messages(local_site):
     assert [p for p, _ in seen] == ['/search', '/contents']
     assert seen[0][1]['type'] == 'auto' and seen[0][1]['contents']['highlights']
     assert seen[1][1]['maxAgeHours'] == 6 and 'livecrawl' not in seen[1][1]
+    assert seen[0][1]['moderation'] is True and seen[1][1]['extras'] == {'links': 5}
     assert approvals[0][0]['source'].startswith('https://eur-lex')
     assert result.filled == []  # this run filled nothing on the page
     assert {s['url'] for s in result.sources} == {'https://eur-lex.europa.eu/eli/reg/2004/261', 'https://example.com/claim'}
@@ -617,3 +618,11 @@ def test_chat_users_without_saved_details_are_asked_once(local_site):
     run_browser_agent('Book a sauna', local_site + '/claim.html', PROFILE, plain_hooks(ask_user=lambda q: None), llm,
                       exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert 'never ask for it' in llm.received[0][0]
+
+
+def test_a_read_lists_the_links_on_the_page():
+    exa = ExaTools(api_key='key')
+    exa._post = lambda path, body: {'results': [{'url': 'https://kela.fi/students', 'title': 'Students', 'text': 'Apply online.',
+                                                 'extras': {'links': ['https://kela.fi/apply', 'javascript:void(0)']}}]}
+    text, _ = exa._read('https://kela.fi/students', None)
+    assert 'Links on the page:\nhttps://kela.fi/apply' in text and 'javascript' not in text
