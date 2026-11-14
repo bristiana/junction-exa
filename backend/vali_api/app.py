@@ -922,10 +922,21 @@ def mount_web(application):
     """Serve web/ at / after every API route, so the page never shadows /v1 or /webhooks."""
     from pathlib import Path
     from fastapi.staticfiles import StaticFiles
+
+    class FreshFiles(StaticFiles):
+        # Modal ships files with mtime 0, so the ETag only tracks size: a same-size edit would stay cached.
+        def is_not_modified(self, response_headers, request_headers):
+            return False
+
+        def file_response(self, *args, **kwargs):
+            response = super().file_response(*args, **kwargs)
+            response.headers['Cache-Control'] = 'no-store'
+            return response
+
     here = Path(__file__).resolve().parent
     for web in (here.parent / 'web', here.parent.parent / 'web'):  # the Modal image, then a repo checkout
         if web.is_dir():
-            application.mount('/', StaticFiles(directory=web, html=True), name='web')
+            application.mount('/', FreshFiles(directory=web, html=True), name='web')
             return
 
 
