@@ -40,7 +40,7 @@ function item(t, s, primary, live) {
   const approving = !asking && v?.phase === 'approval' && !t.execution.approval_decision;
   const running = !asking && !approving && (v?.live || t.status === 'queued' || t.status === 'running');
   const detail = asking ? v.question.text : approving ? v.summary : v?.blocker?.reason
-    || (s.active ? v?.step || lastProgress(t) : s.tone === 'done' ? v?.result || t.output?.structured?.answer : '');
+    || (s.active ? v?.step || lastProgress(t) : s.tone === 'done' || s.needsYou ? v?.result || t.output?.structured?.answer : '');
   const main = el('div', { class: 'main' },
     el('button', { class: 'task', type: 'button', text: t.task.split('\n')[0], title: 'Open in chat', onclick: () => open(t) }),
     el('p', { class: 'status' }, el('b', { text: s.label }), detail ? ` · ${clip(detail)}` : ''));

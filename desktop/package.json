@@ -16,7 +16,8 @@
     "live-check": "npm run prepare && node scripts/live-check.mjs",
     "pack": "npm run prepare && electron-builder --mac dir",
     "dist": "npm run prepare && npm run icon && electron-builder --mac dmg",
-    "talk-check": "npm run prepare && electron . --talk-check"
+    "talk-check": "npm run prepare && electron . --talk-check",
+    "live-app": "npm run prepare && electron . --live-app"
   },
   "devDependencies": {
     "@elevenlabs/client": "1.32.1",
