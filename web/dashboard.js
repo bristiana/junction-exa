@@ -2,7 +2,7 @@
 import { h, show } from './dom.js';
 import { channelOf, countersOf, errandStatus, timeAgo } from './model.js';
 
-const CHANNELS = {
+export const CHANNELS = {
   web: ['Web', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.9 9h-3.9a15 15 0 0 0-2-6.6A8 8 0 0 1 19.9 11ZM12 4.3A13 13 0 0 1 14 11h-4a13 13 0 0 1 2-6.7ZM4.1 13h3.9a15 15 0 0 0 2 6.6A8 8 0 0 1 4.1 13Zm3.9-2H4.1A8 8 0 0 1 10 4.4 15 15 0 0 0 8 11Zm4 8.7A13 13 0 0 1 10 13h4a13 13 0 0 1-2 6.7Zm2 0a15 15 0 0 0 2-6.7h3.9a8 8 0 0 1-5.9 6.7Z'],
   extension: ['Browser extension', 'M20.5 11H19V7a2 2 0 0 0-2-2h-4V3.5a2.5 2.5 0 0 0-5 0V5H4a2 2 0 0 0-2 2v3.8h1.5a2.7 2.7 0 0 1 0 5.4H2V20a2 2 0 0 0 2 2h3.8v-1.5a2.7 2.7 0 0 1 5.4 0V22H17a2 2 0 0 0 2-2v-4h1.5a2.5 2.5 0 0 0 0-5Z'],
   mac: ['Mac app', 'M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10H4V5Zm-2 12h20v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1Z'],
@@ -43,7 +43,7 @@ function row(task) {
       h('span', { class: 'errand-when' }, timeAgo(task.created_at))));
 }
 
-function icon(path) {
+export function icon(path) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
