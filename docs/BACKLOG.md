@@ -1,5 +1,13 @@
 # Overnight backlog (14-15 Nov)
 
+Five tracks until 10:00, presented to mentors in the morning:
+1. Call: talk to Vali by voice (ElevenLabs agent), phone later (V1, V2, P1).
+2. Valet: the mascot lives on screen, moves, reacts and follows what you do (S1-S3).
+3. Polish: one design system shared by the Mac app and the extension (D3-D5, U1-U3).
+4. Mac app: the main surface, easy input, all errands at a glance (M1-M5).
+5. Backend: fast, reliable, golden always green (K1-K5).
+Code rules: lean and simple, small named functions, no frameworks, one file per concern, easy for agents to read. Every change ships as its own PR, is reviewed by a Claude reviewer, and is merged once CI is green.
+
 Goal for the morning: a stable base on every front. WhatsApp works end to end, errands go to the sandbox correctly, and Vali sits on the desktop.
 
 Rules for the loop: every item is verified live, not only with tests. Commits as Bogdan-ca, pushed as PRs to main, merged with rebase when CI is green. Deploy straight to the `vali` app. The sandbox gets a redeploy after any change in `vali_agent/`. Never mention the old extension in commits.
@@ -43,11 +51,44 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - [ ] M4 Profile on the Mac: name, address, ID numbers kept locally and filled into placeholders only at execute time, same as the extension.
 - [ ] M5 `npm run dist` builds an unsigned .dmg with the mascot icon; README updated.
 
+## X. Any site, any errand, Exa visible (Bogdan, 05:45)
+- [ ] X1 scripts/evals/errands.json: 20 real errands across all six modes and many site types (city services, Kela, Migri, Vero, HSL, VR, Finnair, housing, banks, shops, restaurants, sports venues, universities, forms with wizards, PDFs). scripts/evals/run.py runs them live against the API (find/check/claim/write/watch to an answer, book/claim with execute until approval, never past it) and writes a scorecard (pass, time, cost, Exa calls, failure reason).
+- [ ] X2 Fix the top failures in the agent (backend/vali_agent) and research (backend/vali_api/research.py), rerun, repeat. Target: 16/20.
+- [ ] X3 Show Exa at work in the UI: each errand lists what Exa did (search, contents, agent research, monitor) with sources, so the demo shows how Exa powers Vali.
+- [ ] X4 Real watch mode with Exa Monitors (currently stubbed): create, webhook to /webhooks/exa with a secret, notify in the app.
+
+## S. Valet on screen
+- [ ] S1 The mascot walks and idles on screen: gentle idle motion, walks to a corner when you type, peeks in when something needs you, sleeps when nothing runs. Draggable, remembers its spot, never covers the active text cursor (move away on hover).
+- [ ] S2 Reacts to errands: working (carries a tray), needs approval (rings a bell), done (bow), error (shrug); speech bubble with the one-line status.
+- [ ] S3 Context aware: knows the frontmost app and tab title (no content) and offers one relevant suggestion in the bubble ("Rent letter open? I can explain it").
+
+## D. Design system
+- [ ] D3 shared/ design tokens (colors, type scale, spacing, radius, shadows, motion) as one CSS file plus a tiny component set (button, input, card, badge, list row, live view) used by both the Mac app and the extension. Light and dark.
+- [ ] D4 Apply it to the Mac app and the extension panel; remove one-off styles.
+- [ ] D5 Visual review: screenshots of every state in both surfaces, fix spacing, contrast and copy.
+
+## K. Backend (more)
+- [ ] K4 Speed: find under 5 s, claim research under 30 s; cache Exa answers per normalized question for 10 min; stream task status.
+- [ ] K5 Reliability: retries with backoff for Exa/Claude/Jev, clear error messages in tasks, a /v1/status page with recent failures, no silent excepts.
+
+## U. Simple UI (Bogdan, 05:25)
+- [ ] U1 One glance, everything at once: the mascot shows a small badge with the number of active errands and a colored ring for "needs you". Hover or click opens a compact list of ALL errands (running, waiting for you, done today) with one-line status, and Approve / Stop / Answer right in the list, without opening the full chat.
+- [ ] U2 Strip the UI to the minimum: one input ("What should I take care of?"), the list, and the active errand's live view. No settings or jargon on the main screen; settings behind one gear. Big touch targets, plain words ("Waiting for your OK", "Done", "Needs login").
+- [ ] U3 Same simplification in the extension panel, so both look and behave the same.
+- [ ] P1 Phone: Bogdan has an Orange number. ElevenLabs phone calls need Twilio or a SIP trunk, not a mobile SIM. Options for tomorrow: port/forward to a Twilio number, or try the Orange number as a real WhatsApp Business number (the forum tip for 131031).
+
+## H. Voice and iMessage
+- [ ] V1 Talk to Vali: an ElevenLabs agent (created through the ElevenLabs API by a script in backend/scripts/, id stored as VALI_ELEVENLABS_AGENT_ID) with server tools that call our API: create errand, task status, read approval, approve, stop. POST /v1/voice/session returns a signed conversation URL for the authed user. The Mac app's mascot opens a live voice conversation (WebSocket/WebRTC from the ElevenLabs JS client). Verify with a real spoken round trip.
+- [ ] V2 Phone (only if Bogdan buys a Twilio number): import it into ElevenLabs, inbound calls reach the same agent, and Vali calls you when an approval is waiting (POST /v1/convai/twilio/outbound-call).
+- [ ] I1 Spec: docs/IMESSAGE.md. No official iMessage API for bots (Apple Messages for Business needs an approved provider). Workable path: a Mac signed in to a dedicated Vali Apple ID runs a bridge in the Mac app that reads ~/Library/Messages/chat.db (Full Disk Access) and replies through AppleScript to Messages. Allowed senders only, linked to a Vali account with a code. Works while that Mac is on.
+- [ ] I2 Build the bridge in desktop/ (imessage.mjs in the main process, a Settings toggle, allowed handles, link code flow), reusing the WhatsApp flow logic: errand in, result out, "da"/"stop" for approvals. Test with a fixture chat.db; live test needs the dedicated Apple ID.
+
 ## Needs Bogdan
-- PR merges: the auto mode classifier blocks `gh pr merge`. Merge PR #1 yourself, or allow it in settings.
 - WhatsApp (parked): Meta rejects every outbound message with 131031 "Business Account locked". In WhatsApp Manager, check why the account is locked and request a review. Until then Vali receives messages but cannot reply (A1, plus a live check of A3-A5).
 
 ## Log
 - 04:40 Merged the sandbox. Golden 3/3 live. WhatsApp hardening (305 tests) and extension live view, approval and blockers (42 tests) committed. CI added, PR #1 open. Desktop app in progress.
 - 04:55 Desktop app (Electron) built: mascot window, tray, Alt+Space quick task, shared panel, notifications. 6 tests, smoke screenshots checked.
 - 05:10 Rename to vali deployed (apps vali, vali-sandbox); golden 3/3 on the new URL. Docs written. WhatsApp parked after research: unverified portfolios cannot send. Focus moves to backend + Mac app.
+- 05:20 PR #1 merged. Bogdan allowed merging any PR and deploying. New items: voice (V1, V2) and iMessage (I1, I2).
+- 05:30 Plan widened to five tracks until 10:00: call, valet on screen, design system polish, Mac app, backend. One PR per item with a Claude review.
