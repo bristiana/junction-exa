@@ -63,15 +63,17 @@ export function companionPayload(raw) {
 
 const httpUrl = (u) => { try { return /^https?:$/.test(new URL(u).protocol) ? new URL(u).href : ""; } catch (_) { return ""; } };
 
-// The server's tip, checked: text, up to 3 web sources (with the quote that backs it), an optional errand to start.
+// The server's tip, checked: text, up to 3 sources on different sites (with the quote that backs it), an optional
+// errand to start.
 export function cleanTip(tip) {
   const text = clip(tip?.text, 400);
   if (!text) return null;
   const sources = (Array.isArray(tip.sources) ? tip.sources : [])
     .map((s) => ({ url: httpUrl(s?.url), title: clip(s?.title, 120), quote: clip(s?.quote, 300) }))
     .filter((s) => s.url)
-    .slice(0, 3)
-    .map((s) => ({ ...s, domain: siteOf(new URL(s.url).hostname) }));
+    .map((s) => ({ ...s, domain: siteOf(new URL(s.url).hostname) }))
+    .filter((s, i, all) => all.findIndex((x) => x.domain === s.domain) === i) // one link per site
+    .slice(0, 3);
   const task = clip(tip.action?.task, 2000);
   const action = task ? { label: clip(tip.action.label, 40) || "Do it", task } : null;
   return { text, sources, action };

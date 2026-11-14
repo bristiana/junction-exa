@@ -58,12 +58,12 @@ test("tips from the server are checked before they reach the page", () => {
     sources: [
       { url: "javascript:alert(1)", title: "x" },
       { url: "https://www.kela.fi/housing", title: "Housing" },
-      { url: "https://kela.fi/a" }, { url: "https://kela.fi/b" }, { url: "https://kela.fi/c" },
+      { url: "https://kela.fi/a" }, { url: "https://migri.fi/b" }, { url: "https://vero.fi/c" }, { url: "https://dvv.fi/d" },
     ],
     action: { label: "", task: "Apply for the Kela housing supplement" },
   });
   assert.equal(tip.text, "You can apply for the housing supplement online.");
-  assert.deepEqual(tip.sources.map((s) => s.domain), ["kela.fi", "kela.fi", "kela.fi"]);
+  assert.deepEqual(tip.sources.map((s) => s.domain), ["kela.fi", "migri.fi", "vero.fi"]);
   assert.deepEqual(tip.action, { label: "Do it", task: "Apply for the Kela housing supplement" });
   assert.equal(cleanTip({ text: "Hi", sources: [] }).action, null);
   for (const t of [null, undefined, {}, { text: "  " }]) assert.equal(cleanTip(t), null);
