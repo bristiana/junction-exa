@@ -177,6 +177,7 @@ class Store:
         for key in ('page', 'research', 'execution'):
             raw = row.pop(key + '_json')
             row[key] = json.loads(raw) if raw is not None else None
+        row['channel'] = row['source']
         return row
 
     def create_task(self, uid, task, page, mode, research, source='extension'):
