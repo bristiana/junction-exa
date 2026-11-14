@@ -85,5 +85,6 @@ def checking(task, output):
 
 def done(task, output):
     claims, sources = (output or {}).get('claims') or [], (output or {}).get('sources') or []
+    claims = [c for c in claims if not c.get('own')]  # "I prepared a draft" is Vali's own line, not a claim to quote
     backed = sum(1 for c in claims if c.get('supported'))
     return entry(task['created_at'], 'done', f'Answer ready: {backed} of {len(claims)} sentences quoted from {len(sources)} sources')

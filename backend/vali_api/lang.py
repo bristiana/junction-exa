@@ -3,21 +3,22 @@ import re
 
 NAMES = {'en': 'English', 'fi': 'Finnish', 'sv': 'Swedish', 'et': 'Estonian', 'ro': 'Romanian', 'uk': 'Ukrainian',
          'ru': 'Russian', 'de': 'German', 'fr': 'French', 'es': 'Spanish', 'pt': 'Portuguese', 'it': 'Italian',
-         'pl': 'Polish', 'nl': 'Dutch', 'tr': 'Turkish', 'ar': 'Arabic', 'fa': 'Persian', 'he': 'Hebrew',
+         'pl': 'Polish', 'nl': 'Dutch', 'da': 'Danish', 'no': 'Norwegian', 'tr': 'Turkish', 'ar': 'Arabic', 'fa': 'Persian', 'he': 'Hebrew',
          'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean', 'hi': 'Hindi', 'th': 'Thai', 'vi': 'Vietnamese'}
 _SCRIPTS = [('ja', r'[぀-ヿ]'), ('ko', r'[가-힯]'), ('zh', r'[一-鿿]'), ('he', r'[֐-׿]'),
             ('fa', r'[پچژگ]'), ('ar', r'[؀-ۿ]'), ('hi', r'[ऀ-ॿ]'), ('th', r'[฀-๿]'),
             ('uk', r'[іїєґІЇЄҐ]'), ('ru', r'[Ѐ-ӿ]')]
-_LETTERS = {'ro': 'ăâîșşțţ', 'sv': 'å', 'et': 'õ', 'de': 'ß', 'es': 'ñ¿¡', 'pt': 'ãõç', 'fr': 'èêçœ', 'pl': 'ąęłńśźż',
+_LETTERS = {'ro': 'ăâîșşțţ', 'sv': 'å', 'da': 'æø', 'no': 'æø', 'et': 'õ', 'de': 'ß', 'es': 'ñ¿¡', 'pt': 'ãõç', 'fr': 'èêçœ', 'pl': 'ąęłńśźż',
             'tr': 'ğış', 'vi': 'ơưđạả'}
 _WORDS = {
     'en': 'the how what where when which is are a an for my me do does can could to of in with and or i\'m need want '
-          'find book claim write check help get much'.split(),
+          'find book claim write check help get much who owns long take deadline form price cost tax card job cheap '
+          'cheapest buy second hand apply permit renew documents rent appointment register new patients'.split(),
     'fi': 'mitä miten kuinka paljon missä milloin mikä onko voinko saako on ei ja tai minun minä mä mun pitää '
           'tarvitsen haluan voin saan maksaa kanssa varaa hae etsi ajanvaraus terveysasema vuokra asunto opintotuki '
           'kuukausilippu verokortti muuttoilmoitus hakemus lääkäri hammaslääkäri opiskelijalle paljonko mistä mihin '
           'halvin halvempi edullisin paras lähin vertailu hinta hinnat sähkö sähkösopimus sopimus juna junalippu lippu '
-          'vero verot tulot tuki tulorajat kunta muutto ilmoittautuminen jos kun voi'.split(),
+          'verot tulot tuki tulorajat kunta muutto ilmoittautuminen jos kun voi'.split(),
     'sv': 'och jag är att det en ett hur vad var när kan min mitt för med på av behöver vill akut tandläkare '
           'hyra bostad'.split(),
     'et': 'kuidas mis kus millal kas on ei ja mina ma saan vaja tahan'.split(),
@@ -32,11 +33,15 @@ _WORDS = {
     'pl': 'jak gdzie co kiedy czy jest nie dla mogę potrzebuję chcę mój moja'.split(),
     'nl': 'hoe wat waar wanneer ik me mij het een voor met niet is mijn kan nodig moet wil na van de op bij naar '
           'zijn hoeveel welke waarom schrijf inschrijven verhuizing verhuisd gemeente aanvragen goedkoopste kost in'.split(),
+    'da': 'jeg mit min mine hvad hvordan hvor hvornår gør kan skal vil har ikke og er det til på med mistet '
+          'behøver brug kort sygesikringskort læge tandlæge bolig et får'.split(),
+    'no': 'jeg mitt min mine hva hvordan hvor når gjør kan skal vil har ikke og er det til på med mistet trenger '
+          'kort lege tannlege bolig et får finner'.split(),
     'tr': 'nasıl nerede ne zaman bir için ve ben benim lazım istiyorum'.split(),
 }
 _SHARED = {}
-for _vocabulary in _WORDS.values():
-    for _word in set(_vocabulary):
+for _code, _vocabulary in _WORDS.items():
+    for _word in set(_vocabulary) - (set(_WORDS['da']) if _code == 'no' else set()):  # Danish and Norwegian share as one
         _SHARED[_word] = _SHARED.get(_word, 0) + 1
 _UKRAINIAN = set('як що чи мені мій моя можна скільки потрібно отримати де'.split())  # not Russian words
 _URL = re.compile(r'https?://\S+')
@@ -58,5 +63,7 @@ def detect(text):
     scores['fi'] += 0.5 * any(ch in lowered for ch in 'äö')  # weak: a Finnish compound has no common word to match
     ranked = sorted(scores.values(), reverse=True)
     best = max(scores, key=scores.get)
+    if ranked[0] == ranked[1] and ranked[0] > 0 and scores['da'] == scores['no'] == ranked[0]:
+        return 'da'  # written Danish and Norwegian read alike; either beats Swedish or German
     return best if ranked[0] > ranked[1] else None  # a tie is no evidence
 
