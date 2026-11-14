@@ -242,7 +242,7 @@ def add_voice_routes(application, **operations):
     def voice_session(connection: Literal['webrtc', 'websocket'] = Query('webrtc'), user=Depends(authenticate)):
         from vali_media import voice
         require_agent()
-        application.state.limiter.check('voice-session:' + user['id'], 10)
+        application.state.limiter.check('voice-session:' + user['id'], 10, 600)
         try:
             credentials = voice.conversation_credentials(
                 config.elevenlabs_agent_id, api_key=config.elevenlabs_api_key, connection=connection)

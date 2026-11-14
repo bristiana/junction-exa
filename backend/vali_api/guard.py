@@ -27,7 +27,7 @@ class SlidingWindow:
         self.events = defaultdict(deque)
         self.lock = threading.Lock()
 
-    def check(self, key, limit, seconds=None, what='requests'):
+    def check(self, key, limit, seconds=None, what='requests', count=True):
         seconds = seconds or self.seconds
         with self.lock:
             current = time.monotonic()
@@ -36,7 +36,47 @@ class SlidingWindow:
                 queue.popleft()
             if len(queue) >= limit:
                 raise RateLimited(queue[0] + seconds - current if queue else seconds, what)
-            queue.append(current)
+            if count:
+                queue.append(current)
+
+    def failed(self, key):
+        """Record one wrong attempt; check(key, ..., count=False) locks out after too many."""
+        with self.lock:
+            self.events[key].append(time.monotonic())
+
+
+CODE_TRIES, CODE_LOCKOUT = 5, 900  # wrong link or pairing codes before a 15-minute lockout
+
+
+def check_code_tries(limiter, key):
+    limiter.check(key, CODE_TRIES, CODE_LOCKOUT, what='wrong codes', count=False)
+
+
+def public_start_url(url, resolve):
+    """http(s) to a public host only: no localhost, private, link-local (cloud metadata) or reserved address."""
+    import ipaddress
+    from urllib.parse import urlsplit
+    parts = urlsplit(url or '')
+    host = (parts.hostname or '').lower()
+    if parts.scheme not in ('http', 'https') or not host or host == 'localhost' or host.endswith(
+            ('.localhost', '.local', '.internal', '.lan', '.home.arpa')):
+        return False
+    try:
+        addresses = {str(ipaddress.ip_address(host))}  # a literal address is checked as written
+    except ValueError:
+        try:
+            addresses = resolve(host)
+        except OSError:
+            return False
+    try:
+        return bool(addresses) and all(ipaddress.ip_address(a.split('%')[0]).is_global for a in addresses)
+    except ValueError:
+        return False
+
+
+def resolve_host(host):
+    import socket
+    return {info[4][0] for info in socket.getaddrinfo(host, None)}
 
 
 def client_ip(request):
