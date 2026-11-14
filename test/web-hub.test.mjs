@@ -23,6 +23,7 @@ test("today's hours come from service-map text, or stay unknown", () => {
     opening_hours: [{ en: "open Mon-Fri 09-16" }], is_public_holiday: true, public_holiday: "Christmas Day" }, wednesday);
   assert.equal(office.address, "Salomonkatu 17, 00100");
   assert.equal(office.hours, "Christmas Day: offices are generally closed");
+  assert.equal(office.tone, "holiday");
 });
 
 test("the register verdict prefers an exact, active name and never claims more than the register says", () => {

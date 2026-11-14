@@ -94,7 +94,7 @@ export function officeLine(place, date = new Date()) {
     name: pick(place.name),
     address: [pick(place.street_address), place.address_zip].filter(Boolean).join(', '),
     hours: place.is_public_holiday ? `${place.public_holiday}: offices are generally closed` : today || hours[0] || 'Opening hours not listed',
-    holiday: !!place.is_public_holiday,
+    tone: place.is_public_holiday ? 'holiday' : today?.startsWith('Open') ? 'open' : 'closed',
     coords: Array.isArray(place.location?.coordinates) ? place.location.coordinates : null,
   };
 }

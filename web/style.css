@@ -254,7 +254,8 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .office { background: var(--fill-2); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
 .office p { margin: 0; }
 .office-name { font-weight: 700; }
-.office-hours { color: var(--good); font-weight: 600; }
+.office-hours { color: var(--muted); font-weight: 600; }
+.office-hours.open { color: var(--good); }
 .office-hours.holiday { color: var(--warn); }
 .fine { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
 .landlord { padding: 18px; margin-top: 28px; }
@@ -277,7 +278,7 @@ a.link-btn { text-decoration: none; }
 
 @media (max-width: 640px) {
   .top { flex-wrap: wrap; row-gap: 4px; }
-  .top-right { gap: 10px; flex-wrap: wrap; }
+  .top-right { width: 100%; justify-content: space-between; gap: 6px; }
   .link-btn, .by-exa { font-size: 13px; }
   .svc-tags, .svc-detail { margin-left: 0; }
   .counters { width: 100%; justify-content: space-between; }
