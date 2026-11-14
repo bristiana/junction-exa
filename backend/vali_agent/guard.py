@@ -13,6 +13,12 @@ _NON_FINAL = re.compile(
     r"((ma|ti|ke|to|pe|la|su|mon|tue|wed|thu|fri|sat|sun)[a-zä]*\.?,?\s*)?\d{1,2}\.?\s*(\d{1,2}\.?|[a-zä]+)?\s*(\d{4})?)\s*$", re.I)
 
 
+def without_default_submit(element_description: str) -> str:
+    """An autocomplete choice drawn as a <button> with no type is type=submit only by HTML default: drop that alone.
+    Its own words still count, so a "Place order" option still needs approval."""
+    return re.sub(r'\bbutton type=submit\b', 'button', element_description)
+
+
 def is_final_submit(element_description: str, label: str | None = None) -> bool:
     if label is not None:
         if _FINAL.search(label):

@@ -233,7 +233,7 @@ def test_forms_that_only_mention_identification_or_recaptcha_are_not_blocked(loc
 
 
 import pytest
-from vali_agent.guard import is_final_submit
+from vali_agent.guard import is_final_submit, without_default_submit
 
 
 @pytest.mark.parametrize('label,final', [
@@ -410,3 +410,65 @@ def test_toggles_that_order_or_submit_are_still_gated(local_site):
     result = run_browser_agent('x', local_site + '/dropdown_toggle.html', {}, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=jev)
     assert result.status == 'done'
     assert is_final_submit('<button aria-haspopup="true">Place my order</button>', 'Place my order')
+
+
+def test_autocomplete_suggestions_skip_only_the_default_submit_type(local_site):
+    # palautteet.hel.fi: the address suggestions are typeless buttons in the form and were refused as final.
+    jev = Jev(api_key='fake', transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={'answers': {'q': {'noul': 0.1}}})))
+    ref = lambda messages, text: next(line.split(']')[0][1:] for line in messages[0]['content'].splitlines()
+                                      if line.startswith('[') and line.split(' ', 2)[2].startswith(f'"{text}'))
+    def click(text, previous_refused=False):
+        def step(messages):
+            if len(messages) > 1:
+                outcome = messages[-1]['content'][0]
+                assert outcome['is_error'] == previous_refused and ('Call request_approval first' in outcome['content']) == previous_refused
+            return 'click', {'ref': ref(messages, text), 'target': text}
+        return step
+    def approval(messages):
+        assert 'Call request_approval first' in messages[-1]['content'][0]['content']  # "Submit order" as an option
+        return 'request_approval', {'summary': 'Order', 'filled': []}
+    def done(messages):
+        assert not messages[-1]['content'][0]['is_error']
+        return 'finish', {'result': 'ok'}
+    steps = []
+    llm = Scripted([click('Mannerheimintie 5'), click('Katajanokanlaituri 2a'), click('Aleksanterinkatu 1'), click('Lähetä'), click('Submit order', True),
+                    approval, click('Submit order'), done])
+    result = run_browser_agent('x', local_site + '/typeahead_form.html', {}, plain_hooks(steps=steps), llm,
+                               exa=ExaTools(api_key=''), jev=jev)
+    assert result.status == 'done' and jev.calls == 3  # the suggestions still get the Jev check
+    assert [s for s in steps if s.startswith(('Clicked', 'Action refused'))] == [
+        'Clicked "Mannerheimintie 5"', 'Clicked "Katajanokanlaituri 2a"', 'Clicked "Aleksanterinkatu 1, Helsinki"', 'Action refused: Call request_approval first',
+        'Action refused: Call request_approval first', 'Clicked "Submit order"']
+    typeless = '<button class="dropdown-item">Katajanokanlaituri 2a</button> button type=submit Katajanokanlaituri 2a'
+    assert is_final_submit(typeless, 'Katajanokanlaituri 2a') and not is_final_submit(without_default_submit(typeless), 'Katajanokanlaituri 2a')
+    assert is_final_submit(without_default_submit('<button role="option">Place order</button> button type=submit'), 'Place order')
+    assert is_final_submit(without_default_submit('<button type="submit">Aamutie 2</button> button type=submit'), 'Aamutie 2')
+
+
+def test_maintenance_page_is_a_hand_off_with_the_outage(local_site):
+    page = local_site + '/maintenance.html'
+    def fail(messages):
+        assert 'BLOCKER: needs unavailable:' in messages[0]['content']
+        return 'fail', {'reason': 'The service is down for maintenance until Sat 14.11.2026 16:00. Try again after that.'}
+    result = run_browser_agent('x', page, {}, plain_hooks(), Scripted([fail]), exa=ExaTools(api_key=''))
+    assert result.status == 'failed'
+    assert result.result == ('needs unavailable: The service is down for maintenance until Sat 14.11.2026 16:00. '
+                             f'Try again after that; finish by hand later at {page}')
+    # Any page action on it ends the run with the same kind of hand-off.
+    result = run_browser_agent('x', page, {}, plain_hooks(), Scripted([('scroll', {'direction': 'down'})]), exa=ExaTools(api_key=''))
+    assert result.result == f'needs unavailable: the site is down right now; finish by hand later at {page}'
+
+
+def test_server_errors_are_unavailable_but_a_form_announcing_a_break_is_not(local_site):
+    browser = Browser()
+    try:
+        browser.goto(local_site + '/maintenance_notice.html')
+        assert browser.blockers() == []
+        browser.page.route('**/down', lambda route: route.fulfill(status=503, body='<h1>Oops</h1>', content_type='text/html'))
+        browser.goto(local_site + '/down')
+        assert browser.blockers() == ['unavailable']
+        browser.page.set_content('<p>Please solve the CAPTCHA</p>')  # a bot challenge served as a 503 stays a captcha
+        assert browser.blockers() == ['captcha']
+    finally:
+        browser.close()

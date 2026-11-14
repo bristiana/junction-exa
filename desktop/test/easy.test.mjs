@@ -80,6 +80,8 @@ test('glance: plain words, what needs you first, finished today only; badge coun
   assert.equal(plainStatus(question).label, 'Needs your answer');
   assert.equal(plainStatus(research).label, 'Working');
   assert.equal(plainStatus(blocked).label, 'Needs login');
+  const down = { ...blocked, execution: { status: 'failed', result: 'needs unavailable: down for maintenance; finish by hand later at https://x.fi' } };
+  assert.deepEqual([plainStatus(down).label, plainStatus(down).needsYou], ['Needs you', true]);
   assert.equal(plainStatus({ ...research, status: 'failed' }).label, 'Couldn’t finish');
   assert.equal(plainStatus({ ...blocked, seen: true }).needsYou, false);
   assert.equal(plainStatus({ ...approval, execution: { ...approval.execution, approval_decision: 'approved' } }).needsYou, false);

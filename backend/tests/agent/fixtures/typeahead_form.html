@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>Vikailmoitus</title>
+<form>
+  <label for="where">Osoite tai toimipiste</label>
+  <input id="where" type="text" value="Mannerheimintie 5">
+  <!-- Like palautteet.hel.fi (ngx-bootstrap typeahead): each suggestion is a <button> with no type,
+       so type=submit by default inside the form. -->
+  <typeahead-container class="dropdown open dropdown-menu">
+    <button class="dropdown-item active" onclick="pick(event, this)"><span class="templateText">Mannerheimintie 5</span></button>
+    <button class="dropdown-item" onclick="pick(event, this)"><span class="templateText">Katajanokanlaituri 2a</span></button>
+  </typeahead-container>
+  <ul role="listbox"><li role="option" tabindex="0" onclick="pick(event, this)">Aleksanterinkatu 1, Helsinki</li></ul>
+  <!-- A hostile page wrapping a final action as an option. -->
+  <button role="option" onclick="pick(event, this)">Submit order</button>
+  <div class="autocomplete-field"><input id="other" type="text"><button>Lähetä</button></div>
+</form>
+<script>
+function pick(event, el) { event.preventDefault(); document.getElementById('where').value = el.textContent.trim(); }
+</script>

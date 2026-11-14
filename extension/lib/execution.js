@@ -18,12 +18,13 @@ const host = (u) => {
   try { return new URL(u).hostname.replace(/^www\./, ""); } catch (_) { return ""; }
 };
 
-// The agent ends a blocked run with failed and a result like "needs login/captcha: finish by hand at <url>"
-// or "suspicious page: <one line>" (backend/vali_agent/agent.py). Returns null when the failure is not a blocker.
+// The agent ends a blocked run with failed and a result like "needs login/captcha: finish by hand at <url>",
+// "needs unavailable: <outage>; finish by hand later at <url>" or "suspicious page: <one line>"
+// (backend/vali_agent/agent.py). Any other "needs <kind>:" is still a hand-off. Returns null when the failure is not a blocker.
 export function blockerOf(x) {
   if (!x || x.status !== "failed") return null;
   const text = String(x.result || x.error || "").trim();
-  const url = http(x.current_url) || http((text.match(/finish by hand at (\S+)/i) || [])[1]?.replace(/[.,;)]+$/, "")) || http(x.start_url);
+  const url = http(x.current_url) || http((text.match(/finish by hand (?:later )?at (\S+)/i) || [])[1]?.replace(/[.,;)]+$/, "")) || http(x.start_url);
   const needs = text.match(/^needs ([a-z/ ]+?)\s*(?::|$)/i);
   const sus = text.match(/suspicious page\s*:?\s*(.*)$/i);
   let kind = null;
@@ -40,6 +41,12 @@ export function blockerOf(x) {
     } else if (what.includes("payment")) {
       kind = "payment";
       reason = "Payment is next. Pay in your own tab.";
+    } else if (what.includes("unavailable")) {
+      kind = "unavailable";
+      reason = outageReason(text);
+    } else {
+      kind = what[0];
+      reason = "Vali needs you for this step. Finish it in your own tab.";
     }
   } else if (sus) {
     kind = "suspicious";
@@ -48,6 +55,12 @@ export function blockerOf(x) {
   }
   if (!kind) return null;
   return { kind, reason, url };
+}
+
+// "needs unavailable: down for maintenance until Sat 16:00; finish by hand later at <url>" -> one plain line.
+function outageReason(text) {
+  const said = text.replace(/^needs unavailable\s*:?\s*/i, "").split(/finish by hand/i)[0].replace(/\s+/g, " ").replace(/[\s.;,]+$/, "").trim().slice(0, 200);
+  return (said ? said[0].toUpperCase() + said.slice(1) : "The site is down right now") + ". Finish by hand later.";
 }
 
 const rows = (list, profile) =>
