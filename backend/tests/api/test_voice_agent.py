@@ -1,4 +1,5 @@
 """Talk to Vali: session credentials and agent server tools, with ElevenLabs mocked."""
+import re
 import importlib.util
 import json
 from pathlib import Path
@@ -7,7 +8,7 @@ import httpx
 import pytest
 
 from test_api import api  # noqa: F401  (fixture)
-from vali_api.voice_agent import SESSION_TTL, session_token, session_user_id
+from vali_api.voice_agent import SESSION_TTL, session_token, session_user_id, spoken
 from vali_media import voice
 
 SECRET = 'tool-secret-for-tests'
@@ -255,3 +256,17 @@ def test_agent_script_needs_env():
 def test_spoken_text_drops_citation_markers():
     from vali_api.voice_agent import spoken
     assert spoken('Try Löyly [1][2] or Allas [5].') == 'Try Löyly or Allas.'
+
+
+def test_every_tool_result_is_plain_speakable_text(agent):
+    (client, app, store, *_, user), _ = agent
+    marked = ('**Not confirmed by the sources:** the fee is [29 €](https://loyly.fi) [1] | <b>2 h</b> `code` # done '
+              '{{name}} [see page]')
+    assert spoken(marked) == 'Not confirmed by the sources: the fee is 29 €, 2 h code done your name see page'
+    task = client.post('/v1/tasks', json={'task': 'find cheapest café'}).json()
+    awaiting(store, task['id'])
+    store.patch_execution(task['id'], {'approval': {'summary': '**Submit** [the form](https://x.fi) [2]',
+                                                     'filled': [{'label': 'Name | first', 'value': '{{name}}'}]}})
+    for name, body in [('approval_summary', {'id': task['id']}), ('errand_status', {'id': task['id']}), ('list_errands', {})]:
+        text = say(tool(client, name, user['user_id'], body))
+        assert not re.search(r'[*#`\[\]{}<>|]', text), (name, text)
