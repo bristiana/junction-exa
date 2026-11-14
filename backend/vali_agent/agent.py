@@ -12,7 +12,7 @@ from .jev import Jev, final_submit_probability, find_element
 from .live import Screencast, dismiss_cookie_banner
 from .llm import ClaudeLLM, LLM
 from .privacy import mask, substitute, private_values
-from .scope import permitted_profile, reject_placeholders, with_name_parts
+from .scope import _NAME_KEYS, permitted_profile, reject_placeholders, with_name_parts
 from .untrusted import untrusted
 from .web import ExaTools
 
@@ -128,20 +128,24 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
     declined = set()
 
     def ask_consent(text):
-        # A saved detail the request did not name is used only after the user says yes, once per run.
-        wanted = [k for k in dict.fromkeys(re.findall(r'\{\{([^{}]+)\}\}', text))
-                  if k not in allowed_profile and profile.get(k) and k not in declined]
+        # Saved details the request did not name are used only after the user's yes: one question per run
+        # covers every such detail (the name in all its forms counts once); a no keeps them all refused.
+        wanted = [k for k in dict.fromkeys(re.findall(r'\{\{([^{}]+)\}\}', text)) if k not in allowed_profile and profile.get(k)]
         if not wanted or hooks.ask_user is None:
             return
+        if declined:
+            raise ValueError('The user did not allow their saved details; leave the field or ask the user what to do')
+        rest = {k: v for k, v in profile.items() if v and k not in allowed_profile}
+        labels = list(dict.fromkeys('name' if k in _NAME_KEYS else k.replace('_', ' ') for k in rest))
+        names = ', '.join(labels[:-1]) + ' and ' + labels[-1] if len(labels) > 1 else labels[0]
         site_name = (urlsplit(browser.page.url).hostname or 'this site') if browser else 'this site'
-        names = ' and '.join(k.replace('_', ' ') for k in wanted)
         hooks.on_step(f'Asked you: may I use your {names} on {site_name}?', None)
         answer = hooks.ask_user(f'May I use your saved {names} on {site_name} for this? Reply yes or no.') or ''
         if re.match(r'\s*(yes|y|ok|okay|sure|go|kyllä|joo|ja|da|sí|si|oui)\b', answer, re.I):
-            allowed_profile.update({k: profile[k] for k in wanted})
+            allowed_profile.update(rest)
         else:
-            declined.update(wanted)
-            raise ValueError(f'The user did not allow their {names}; leave the field or ask the user what to do')
+            declined.add(True)
+            raise ValueError('The user did not allow their saved details; leave the field or ask the user what to do')
     browser = None
     screencast = None
     personal_visible = False
