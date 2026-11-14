@@ -8,7 +8,7 @@ from .browser import Browser
 from .guard import is_final_submit
 from .hooks import AgentHooks
 from .jev import Jev, final_submit_probability, find_element
-from .live import Screencast, dismiss_cookie_banner, mark_private
+from .live import Screencast, dismiss_cookie_banner
 from .llm import ClaudeLLM, LLM
 from .privacy import mask, substitute
 from .scope import permitted_profile, reject_placeholders
@@ -123,6 +123,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
     allowed_profile = permitted_profile(goal, profile)
     browser = None
     screencast = None
+    personal_visible = False
     exa = exa if exa is not None else ExaTools()
     exa.masker = lambda text: mask(text, profile)
     jev = jev if jev is not None else Jev()
@@ -176,8 +177,18 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
             except Exception:
                 pass
 
+    def pause_capture():
+        nonlocal screencast, personal_visible
+        # Stop and drain raw CDP frames BEFORE any substituted value reaches page code.
+        personal_visible = True
+        if screencast is not None:
+            screencast.close()
+            screencast = None
+
     def follow_page():
         nonlocal screencast
+        if personal_visible:
+            return
         if screencast is not None and screencast.page is not browser.page:
             screencast.close()
             try:
@@ -186,8 +197,9 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                 screencast = None
 
     def shot():
+        if personal_visible:
+            return None
         follow_page()
-        mark_private(browser.page, profile)
         jpeg = browser.screenshot_jpeg()
         if screencast:
             screencast.push(jpeg)
@@ -389,6 +401,8 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                             else:
                                 content = ('The user answered: ' + mask(answer, profile)[:2000]) if answer else \
                                     'No answer in time. Choose the safest option that matches the goal, or fail with the question.'
+                        elif name == 'look' and personal_visible:
+                            content = 'Images paused while personal values may be visible.\n' + snapshot()
                         elif name == 'look':
                             jpeg = browser.screenshot_jpeg(profile=profile)
                             content = [{'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/jpeg',
@@ -424,13 +438,19 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                 text = mask(args['text'], profile)
                                 if '{{' in text:
                                     browser.personal_field(args['ref'])
-                                browser.type(args['ref'], substitute(text, allowed_profile))
+                                resolved = substitute(text, allowed_profile)
+                                if resolved != text:
+                                    pause_capture()
+                                browser.type(args['ref'], resolved)
                                 filled_log[label_of(args['ref'])] = mask(args['text'], profile)
                             elif name == 'select_option':
                                 option = mask(args['option'], profile)
                                 if '{{' in option:
                                     browser.personal_field(args['ref'])
-                                browser.select(args['ref'], substitute(option, allowed_profile), approved=approved)
+                                resolved = substitute(option, allowed_profile)
+                                if resolved != option:
+                                    pause_capture()
+                                browser.select(args['ref'], resolved, approved=approved)
                                 approved = False
                                 filled_log[label_of(args['ref'])] = mask(args['option'], profile)
                             elif name == 'set_checkbox':
