@@ -3,11 +3,12 @@
 import { glanceItems } from '../logic.mjs';
 import { executionView, LIVE } from '../vendor/lib/execution.js';
 import { showWelcome } from './welcome.js';
+import { glanceKeyAction } from '../glancekeys.mjs';
 window.__desktopErrors = [];
 window.addEventListener('error', e => window.__desktopErrors.push(e.message));
 window.addEventListener('unhandledrejection', e => window.__desktopErrors.push(String(e.reason)));
 const $ = id => document.getElementById(id);
-let tasks = [], shortcut = 'Alt+Space', pending = false;
+let tasks = [], shortcut = 'Alt+Space', pending = false, focusId = null;
 const drafts = new Map(), answered = new Map();
 
 function el(tag, attrs = {}, ...kids) {
@@ -45,7 +46,7 @@ function item(t, s, primary, live) {
     el('button', { class: 'task', type: 'button', text: t.task.split('\n')[0], title: 'Open in chat', onclick: () => open(t) }),
     el('p', { class: 'status' }, el('b', { text: s.label }), detail ? ` · ${clip(detail)}` : ''));
   const row = el('div', { class: 'row' }, el('i', { class: 'dot' }), main);
-  const li = el('li', { class: `item tone-${s.tone}${s.needsYou ? ' you' : ''}` }, row, t === live ? liveBox : null);
+  const li = el('li', { class: `item tone-${s.tone}${s.needsYou ? ' you' : ''}${t.id === focusId ? ' focus' : ''}`, 'data-id': t.id }, row, t === live ? liveBox : null);
   const actionClass = primary ? 'btn' : 'btn soft';
   if (asking) {
     const input = el('input', { type: 'text', placeholder: 'Your answer', 'aria-label': `Your answer: ${v.question.text}` });
@@ -58,10 +59,10 @@ function item(t, s, primary, live) {
     input.onkeydown = e => { if (e.key === 'Enter') go(); };
     li.append(el('div', { class: 'answer' }, input, el('button', { class: actionClass, type: 'button', text: 'Send', onclick: go })));
   } else if (approving) {
-    li.append(el('div', { class: 'btns' }, button('Stop', 'quiet', { type: 'stop', taskId: t.id }, 'Stopped. Nothing was sent.'),
+    li.append(el('div', { class: 'btns' }, button('Stop', 'quiet stop', { type: 'stop', taskId: t.id }, 'Stopped. Nothing was sent.'),
       button('Approve', actionClass + ' approve', { type: 'approve', taskId: t.id }, 'Approved. Vali sends it once.')));
   } else if (running) {
-    row.append(button('Stop', 'quiet', { type: v?.live ? 'stop' : 'cancel', taskId: t.id }, 'Stopped.'));
+    row.append(button('Stop', 'quiet stop', { type: v?.live ? 'stop' : 'cancel', taskId: t.id }, 'Stopped.'));
   } else if (s.needsYou) {
     const url = v?.blocker?.url;
     li.append(el('div', { class: 'btns' }, url
@@ -83,8 +84,29 @@ function render() {
   $('summary').textContent = [you && `${you} need${you === 1 ? 's' : ''} you`, busy && `${busy} working`, done && `${done} done today`].filter(Boolean).join(' · ');
   $('empty').hidden = list.length > 0;
   $('emptyText').textContent = `Press ${shortcut.replace('Alt', '⌥').replace('+', '')} or drop a letter on Vali.`;
+  if (document.hasFocus() && !items().some(li => li.dataset.id === focusId)) setFocus(0);
   refreshLive();
 }
+// Keyboard: a ring on one errand; Enter, A and S act on that errand only, through its own buttons.
+const items = () => [...$('list').children];
+function setFocus(i) {
+  focusId = items()[i]?.dataset.id || null;
+  items().forEach(li => li.classList.toggle('focus', li.dataset.id === focusId));
+  $('list').querySelector('.focus')?.scrollIntoView({ block: 'nearest' });
+}
+function runKey(e) {
+  const list = items(), index = list.findIndex(li => li.dataset.id === focusId), li = list[index];
+  const ctx = { index, count: list.length, hasApprove: !!li?.querySelector('button.approve'), hasStop: !!li?.querySelector('button.stop'),
+    field: e.target.tagName === 'INPUT', onButton: e.target.tagName === 'BUTTON' };
+  const act = e.altKey || e.ctrlKey || e.metaKey ? null : glanceKeyAction(e.key, ctx);
+  if (!act) return;
+  e.preventDefault();
+  if (act.type === 'close') window.vali.call('glance', 'hide');
+  else if (act.type === 'move') setFocus(act.index);
+  else if (act.type === 'open') open(tasks.find(t => t.id === focusId));
+  else li.querySelector(act.type === 'approve' ? 'button.approve' : 'button.stop').click();
+}
+window.addEventListener('focus', () => { if (!items().some(li => li.dataset.id === focusId)) setFocus(0); });
 // The live view follows the newest run in the browser.
 let liveId = null, loading = false;
 async function refreshLive() {
@@ -110,5 +132,5 @@ $('new').onclick = () => window.vali.call('newErrand');
 $('chat').onclick = () => window.vali.call('chat');
 document.body.onmouseenter = () => window.vali.call('glance', 'hover');
 document.body.onmouseleave = () => window.vali.call('glance', 'leave');
-window.addEventListener('keydown', e => { if (e.key === 'Escape') window.vali.call('glance', 'hide'); });
+window.addEventListener('keydown', runKey);
 new ResizeObserver(() => window.vali.call('glanceSize', $('box').offsetHeight + 20)).observe($('box'));
