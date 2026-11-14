@@ -94,7 +94,8 @@ class WhatsAppFlow:
                 command.kind not in {"stop", "status"} or (
                     execution.get("question") and text.strip().casefold() in {"no", "nu", "ei"})):
             await _call(self.message, task["id"], text)
-            return render_error("Message passed to your running errand.")
+            self.reaction = "✍️"  # the running errand has it; a reaction says so without a message
+            return []
         if command.kind == "help":
             return render_help()
         if command.kind == "check" and self.check:
@@ -130,7 +131,8 @@ class WhatsAppFlow:
             return render_help()
         if self.message and task and execution.get("status") in {"starting", "running", "awaiting_approval", "submitting"}:
             await _call(self.message, task["id"], command.text)
-            return render_error("Message passed to your running errand.")
+            self.reaction = "✍️"  # the running errand has it; a reaction says so without a message
+            return []
         task = await _call(self.create_task, user, command.text, source="whatsapp")
         self.reaction = "👀"
         return render_ack(task)
