@@ -85,7 +85,7 @@ test('glance: plain words, what needs you first, finished today only; badge coun
   assert.equal(plainStatus({ ...approval, execution: { ...approval.execution, approval_decision: 'approved' } }).needsYou, false);
   const ids = glanceItems([old, doneToday, research, approval, question, blocked], now).map(x => x.t.id);
   assert.deepEqual(ids, ['a', 'q', 'b', 'r', 'd']);
-  assert.deepEqual(badgeOf([old, doneToday, research, approval, question]), { count: 3, needsYou: true });
+  assert.deepEqual(badgeOf([old, doneToday, research, approval, question]), { count: 3, needsYou: true, attention: 'approval' });
   assert.deepEqual(badgeOf([doneToday]), { count: 0, needsYou: false });
 });
 

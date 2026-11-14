@@ -97,6 +97,7 @@ const imessageBox = el('section', '', 'desktop-link desktop-imessage');
 const imessageLabel = el('label', 'Errands over iMessage', 'check toggle');
 const imessageToggle = el('input'); imessageToggle.type = 'checkbox';
 imessageLabel.prepend(imessageToggle);
+const imessagePolicy = el('fieldset', '', 'desktop-imessage-policy'); imessagePolicy.disabled = true;
 const imessageMode = el('select', '', 'v-input'); imessageMode.setAttribute('aria-label', 'iMessage sender policy');
 for (const [value, text] of [['open', 'Anyone can link'], ['allowlist', 'Allowed senders only']]) {
   const option = el('option', text); option.value = value; imessageMode.append(option);
@@ -112,6 +113,7 @@ const imessageCode = button('Link iMessage: show code', 'v-btn v-btn--quiet', as
 });
 function renderImessage(value) {
   imessageToggle.checked = value.enabled; imessageMode.value = value.mode;
+  imessagePolicy.disabled = !value.enabled;
   if (document.activeElement !== imessageAllowed) imessageAllowed.value = value.allowed.join('\n');
   imessageStatus.textContent = value.message || (value.enabled ? value.status === 'running' ? 'iMessage bridge is running.' : 'iMessage bridge needs attention. Check permissions and restart Vali.' : 'Off. Use a dedicated macOS user and Apple ID for Vali.');
   imessagePermissions.hidden = !['needs_fda', 'needs_automation'].includes(value.status);
@@ -126,13 +128,14 @@ async function saveImessage() {
 imessageToggle.onchange = async () => {
   imessageToggle.disabled = true;
   try { await saveImessage(); renderImessage(await window.vali.imessageToggle(imessageToggle.checked)); }
-  catch (e) { imessageStatus.textContent = e.message; imessageToggle.checked = false; }
+  catch (e) { imessageStatus.textContent = e.message; imessageToggle.checked = false; imessagePolicy.disabled = true; }
   finally { imessageToggle.disabled = false; }
 };
 const imessageSave = button('Save allowed senders', 'v-btn v-btn--quiet', async () => {
   try { renderImessage(await saveImessage()); } catch (e) { imessageStatus.textContent = e.message; }
 });
-imessageBox.append(el('h3', 'iMessage'), imessageLabel, imessageMode, imessageAllowed, imessageSave, imessageCode, imessageStatus, imessagePermissions, imessageLinks);
+imessagePolicy.append(imessageMode, imessageAllowed, imessageSave);
+imessageBox.append(el('h3', 'iMessage'), imessageLabel, imessagePolicy, imessageCode, imessageStatus, imessagePermissions, imessageLinks);
 advanced.before(imessageBox);
 window.vali.onImessage(renderImessage);
 window.vali.imessageStatus().then(renderImessage).catch(e => { imessageStatus.textContent = e.message; });

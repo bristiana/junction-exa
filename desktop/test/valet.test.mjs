@@ -78,3 +78,32 @@ test('Vali only steps off a side with no monitor next to it, else stays put', ()
   assert.equal(nearestEdge(box(1210, 580), area, ['left', 'bottom']), 'bottom', 'right is taken: next closest');
   assert.equal(nearestEdge(box(1210, 580), area, []), null);
 });
+
+import { badgeOf } from '../logic.mjs';
+const attentionTask = execution => ({ status: 'completed', execution });
+const lineFor = tasks => bubbleLine({ badge: badgeOf(tasks) });
+test('bubble distinguishes approval, question and research requests', () => {
+  const approval = attentionTask({ status: 'awaiting_approval' });
+  const question = attentionTask({ status: 'running', question: { text: 'When?' } });
+  assert.equal(lineFor([approval]), 'I need your OK on an errand.');
+  assert.equal(lineFor([question]), 'I have a question about an errand.');
+  assert.equal(lineFor([{ ...approval, execution: { ...approval.execution, question: { text: 'When?' } } }]), 'I have a question about an errand.');
+  for (const [status, line] of [['ready_to_approve', 'I need your OK on an errand.'], ['needs_info', 'I have a question about an errand.']]) {
+    assert.equal(lineFor([{ status: 'completed', output: { structured: { status } } }]), line);
+  }
+  assert.equal(lineFor([question, approval]), 'I have a question about an errand.');
+  assert.equal(lineFor([approval, question]), 'I need your OK on an errand.');
+});
+test('bubble asks for a step on login, captcha and payment hand-offs', () => {
+  for (const kind of ['login', 'captcha', 'payment']) {
+    const blocked = attentionTask({ status: 'failed', result: `needs ${kind}: finish by hand at https://example.com` });
+    assert.equal(lineFor([blocked]), 'I need you to finish a step.');
+    assert.equal(lineFor([{ ...blocked, seen: true }]), 'At your service.');
+  }
+});
+test('stale questions and accepted approvals do not ask for attention', () => {
+  for (const status of ['done', 'failed', 'stopped']) {
+    assert.equal(badgeOf([attentionTask({ status, question: { text: 'When?' } })]).needsYou, false);
+  }
+  assert.equal(badgeOf([attentionTask({ status: 'awaiting_approval', approval_decision: 'approved' })]).needsYou, false);
+});

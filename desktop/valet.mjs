@@ -70,7 +70,11 @@ export function asleep({ busy, lastBusyAt, now = Date.now() }) {
 export function bubbleLine({ pose = 'idle', paused = false, sleeping = false, badge = {} } = {}) {
   const { count = 0, needsYou = false } = badge;
   if (paused) return 'I’m paused. Errands in the cloud keep going.';
-  if (needsYou) return 'I need your OK on an errand.';
+  if (needsYou) {
+    if (badge.attention === 'question') return 'I have a question about an errand.';
+    if (badge.attention === 'handoff') return 'I need you to finish a step.';
+    return 'I need your OK on an errand.';
+  }
   if (sleeping) return 'Resting. Hover to wake me.';
   if (pose === 'working' || pose === 'thinking') return count > 1 ? `I’m on ${count} errands.` : 'I’m on it.';
   if (pose === 'success') return 'All done. Have a look.';
