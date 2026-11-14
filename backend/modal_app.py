@@ -38,6 +38,8 @@ def spawn_browser_session(tid, goal, url, profile):
 @modal.concurrent(max_inputs=20)
 @modal.asgi_app()
 def web():
+    import logging
+    logging.basicConfig(level=logging.INFO, force=True)
     return worker_app()
 
 

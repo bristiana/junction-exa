@@ -64,8 +64,15 @@ class GraphAPIClient:
             payload["context"] = {"message_id": reply_to}
         return await self._send(payload)
 
-    async def send_image(self, to, link, caption=None):
-        image = {"link": link}
+    async def upload_media(self, data, mime_type='image/jpeg'):
+        response = await self._request(
+            "POST", f"{self.BASE_URL}/{self.phone_number_id}/media",
+            data={"messaging_product": "whatsapp", "type": mime_type},
+            files={"file": ("screenshot.jpg", data, mime_type)})
+        return response.json()["id"]
+
+    async def send_image(self, to, link=None, caption=None, *, media_id=None):
+        image = {"id": media_id} if media_id else {"link": link}
         if caption is not None:
             image["caption"] = caption
         return await self._send({"messaging_product": "whatsapp", "to": to,

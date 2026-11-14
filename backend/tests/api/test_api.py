@@ -575,3 +575,326 @@ def test_atomic_approval_rejects_stale_state(tmp_path):
     finally:
         first.close()
         second.close()
+
+
+@pytest.mark.parametrize('answer', ['use 19:30', 'yes', '2', 'hello'])
+def test_whatsapp_running_messages_use_shared_inbox(wa, answer):
+    api, graph, deliver = wa
+    client, application, store, *_, user = api
+    pair_whatsapp(api, deliver)
+    deliver('book a sauna', mid='new')
+    tid = store.list_tasks(user['user_id'])[0]['id']
+    poll_research_once(tid, application)
+    deliver('1', mid='execute')
+    store.patch_execution(tid, {'status': 'running', 'question': {'text': 'Which slot?'}})
+    deliver(answer, mid='answer')
+    tasks = store.list_tasks(user['user_id'])
+    assert len(tasks) == 1
+    assert tasks[0]['execution']['inbox'] == [
+        {'at': tasks[0]['execution']['inbox'][0]['at'], 'text': answer, 'source': 'whatsapp'}]
+    client.post(f'/v1/tasks/{tid}/messages', json={'text': 'extension answer'})
+    assert store.get_task(tid)['execution']['inbox'][-1]['source'] == 'extension'
+
+
+@pytest.mark.parametrize('reply,decision', [('da', 'approved'), ('approve', 'approved'), ('nu', 'stopped')])
+def test_whatsapp_approval_aliases(wa, reply, decision):
+    api, graph, deliver = wa
+    client, application, store, *_, user = api
+    pair_whatsapp(api, deliver)
+    deliver('book a sauna', mid='new')
+    tid = store.list_tasks(user['user_id'])[0]['id']
+    poll_research_once(tid, application)
+    deliver('1', mid='execute')
+    store.patch_execution(tid, {'status': 'awaiting_approval'})
+    deliver(reply, mid='decision')
+    assert store.get_task(tid)['execution']['approval_decision'] == decision
+
+
+def test_whatsapp_question_once_and_live_approval(wa):
+    from hoida_api.wa_channel import push_task
+    from hoida_wa.render import render_execution_update
+    api, graph, deliver = wa
+    client, application, store, *_, user = api
+    pair_whatsapp(api, deliver)
+    deliver('book a sauna', mid='new')
+    tid = store.list_tasks(user['user_id'])[0]['id']
+    poll_research_once(tid, application)
+    deliver('1', mid='execute')
+    store.patch_execution(tid, {'status': 'running', 'question': {'text': 'Which slot?', 'at': 'now'}})
+    push_task(application, tid, render_execution_update)
+    push_task(application, tid, render_execution_update)
+    assert [body for _, body, _ in graph.sent].count('Which slot?') == 1
+    calls = []
+    async def upload(data, mime):
+        calls.append(('upload', data, mime))
+        return 'uploaded'
+    async def image(to, *, media_id, caption):
+        calls.append(('image', media_id, caption))
+    async def buttons(to, body, buttons):
+        calls.append(('buttons', buttons))
+    graph.upload_media, graph.send_image, graph.send_buttons = upload, image, buttons
+    store.put_live_frame(tid, b'live jpeg')
+    store.patch_execution(tid, {'question': None, 'status': 'awaiting_approval', 'approval': {'summary': 'Book sauna'}})
+    push_task(application, tid, render_execution_update)
+    assert calls[0] == ('upload', b'live jpeg', 'image/jpeg')
+    assert calls[1][0:2] == ('image', 'uploaded')
+    assert 'Book sauna' in calls[1][2]
+    assert calls[2] == ('buttons', [(f'approve:{tid}', 'Approve'), (f'stop:{tid}', 'Stop')])
+    deliver(mid='stale', type='interactive', interactive={'button_reply': {'id': 'approve:old', 'title': 'Approve'}})
+    assert store.get_task(tid)['execution']['status'] == 'awaiting_approval'
+    deliver(mid='button', type='interactive', interactive={'button_reply': {'id': f'approve:{tid}', 'title': 'Approve'}})
+    assert store.get_task(tid)['execution']['approval_decision'] == 'approved'
+
+
+def test_whatsapp_failures_logged_without_private_data(wa, caplog):
+    from hoida_wa.api import GraphAPIError
+    api, graph, deliver = wa
+    pair_whatsapp(api, deliver)
+    async def broken(*args, **kwargs):
+        raise GraphAPIError(429, 42)
+    graph.send_text = broken
+    with caplog.at_level('WARNING', logger='vali.whatsapp'):
+        assert deliver('private errand', mid='failed-message').status_code == 200
+    logs = '\n'.join(r.message for r in caplog.records if r.name == 'vali.whatsapp')
+    assert 'failed-message' in logs and 'status_code=429 code=42' in logs
+    assert 'private errand' not in logs and '358401234567' not in logs
+
+
+def test_whatsapp_existing_elevenlabs_voice_wiring(wa, monkeypatch):
+    import hoida_media.voice as voice
+    api, graph, deliver = wa
+    client, application, store, *_, user = api
+    pair_whatsapp(api, deliver)
+    monkeypatch.setenv('ELEVENLABS_API_KEY', 'test-stt-key')
+    def provider(request):
+        assert request.url.path == '/v1/speech-to-text'
+        assert request.headers['xi-api-key'] == 'test-stt-key'
+        assert b'fake audio' in request.content and b'scribe_v' in request.content
+        return httpx.Response(200, json={'text': 'find a sauna'})
+    original = voice.transcribe
+    def transcribe(data, mime):
+        return original(data, mime, transport=httpx.MockTransport(provider))
+    monkeypatch.setattr(voice, 'transcribe', transcribe)
+    # Recreate to exercise the real app adapter, rather than a fake transcript callback.
+    application.state.config.elevenlabs_api_key = 'test-stt-key'
+    adapter = create_app(application.state.config, store, application.state.exa,
+                         lambda tid: None, lambda *args: None, whatsapp_api=graph)
+    application.state.whatsapp_flow.transcribe = adapter.state.whatsapp_flow.transcribe
+    deliver(mid='voice-provider', type='audio', audio={'id': 'audio', 'mime_type': 'audio/ogg'})
+    assert graph.media == ['audio']
+    assert store.list_tasks(user['user_id'])[0]['task'] == 'find a sauna'
+
+
+def test_whatsapp_agent_question_is_pushed_and_answered(wa, monkeypatch):
+    import sys
+    import types
+    from hoida_agent.hooks import AgentHooks
+    from hoida_api.app import run_browser_session
+    api, graph, deliver = wa
+    client, application, store, *_, user = api
+    pair_whatsapp(api, deliver)
+    deliver('book a sauna', mid='new')
+    tid = store.list_tasks(user['user_id'])[0]['id']
+    poll_research_once(tid, application)
+    deliver('1', mid='execute')
+    send = graph.send_text
+    async def answer_when_sent(to, body, reply_to=None):
+        await send(to, body, reply_to)
+        if body == 'Which slot?':
+            deliver('19:30', mid='question-answer')
+    graph.send_text = answer_when_sent
+    def agent(**kwargs):
+        assert kwargs['hooks'].ask_user('Which slot?') == '19:30'
+        assert kwargs['hooks'].pending_messages() == []
+        return {'status': 'done', 'result': 'Done'}
+    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(run_browser_agent=agent, AgentHooks=AgentHooks))
+    run_browser_session(tid, 'goal', 'https://example.com', {}, application)
+    assert store.get_task(tid)['execution']['question'] is None
+    assert [body for _, body, _ in graph.sent].count('Which slot?') == 1
+
+
+def test_whatsapp_image_failure_falls_back_to_text_and_buttons(wa, caplog):
+    from hoida_api.wa_channel import push_task
+    from hoida_wa.api import GraphAPIError
+    from hoida_wa.render import render_execution_update
+    api, graph, deliver = wa
+    client, application, store, *_, user = api
+    pair_whatsapp(api, deliver)
+    deliver('book a sauna', mid='new')
+    tid = store.list_tasks(user['user_id'])[0]['id']
+    poll_research_once(tid, application)
+    deliver('1', mid='execute')
+    store.patch_execution(tid, {'status': 'awaiting_approval'})
+    store.put_live_frame(tid, b'jpeg')
+    async def fail(*args, **kwargs):
+        raise GraphAPIError(500, 7)
+    graph.upload_media = graph.send_image = graph.send_buttons = fail
+    with caplog.at_level('WARNING', logger='vali.whatsapp'):
+        push_task(application, tid, render_execution_update)
+    assert 'Reply *yes*' in graph.sent[-1][1]
+    assert 'approval image failed' in caplog.text and 'approval buttons failed' in caplog.text
+    assert f'task_id={tid}' in caplog.text and 'status_code=500 code=7' in caplog.text
+    graph.send_text = fail
+    with caplog.at_level('WARNING', logger='vali.whatsapp'):
+        push_task(application, tid, render_execution_update)
+    assert 'task notification failed' in caplog.text
+
+
+def test_whatsapp_delivery_status_logging(wa, caplog):
+    api, graph, _ = wa
+    payload = {'entry': [{'changes': [{'value': {'statuses': [
+        {'id': 'outgoing-failed', 'status': 'failed', 'recipient_id': '358401234567',
+         'errors': [{'code': 131047, 'title': 'Re-engagement message',
+                     'error_data': {'details': 'private-details'}, 'href': 'private-url'}]},
+        {'id': 'outgoing-read', 'status': 'read', 'recipient_id': '358401234567'}]}}]}]}
+    with caplog.at_level('INFO', logger='vali.whatsapp'):
+        assert api[0].post('/webhooks/whatsapp', json=payload).status_code == 200
+    assert 'status=failed message_id=outgoing-failed' in caplog.text
+    assert '131047' in caplog.text and 'Re-engagement message' in caplog.text
+    assert 'status=read message_id=outgoing-read' in caplog.text
+    assert all(secret not in caplog.text for secret in ['358401234567', 'private-details', 'private-url'])
+    assert not graph.sent and not graph.read
+
+
+@pytest.mark.parametrize('answer', ['use 19:30', 'yes', 'ok', 'da', '1'])
+@pytest.mark.parametrize('question', [None, {'text': 'Which time?', 'at': 'now'}])
+def test_whatsapp_running_answers_share_messages_inbox(wa, answer, question):
+    api, graph, deliver = wa
+    client, application, store, *_ = api
+    pair_whatsapp(api, deliver)
+    deliver('find café')
+    task = client.get('/v1/tasks').json()['tasks'][0]
+    tid = task['id']
+    deliver('1', mid='execute')
+    store.patch_execution(tid, {'status': 'running', 'question': question})
+    before = len(client.get('/v1/tasks').json()['tasks'])
+    deliver(answer, mid='answer')
+    assert len(client.get('/v1/tasks').json()['tasks']) == before
+    inbox = store.get_task(tid)['execution']['inbox']
+    assert inbox[-1]['text'] == answer and inbox[-1]['source'] == 'whatsapp'
+    assert client.post(f'/v1/tasks/{tid}/messages', json={'text': 'extension reply'}).status_code == 200
+    inbox = store.get_task(tid)['execution']['inbox']
+    assert inbox[-1]['text'] == 'extension reply' and inbox[-1]['source'] == 'extension'
+
+
+@pytest.mark.parametrize('action', ['approve', 'stop'])
+def test_whatsapp_task_scoped_buttons_and_stale_rejection(wa, action):
+    api, graph, deliver = wa
+    client, application, store, *_ = api
+    pair_whatsapp(api, deliver)
+    deliver('find café')
+    tid = client.get('/v1/tasks').json()['tasks'][0]['id']
+    deliver('1', mid='execute')
+    store.patch_execution(tid, {'status': 'awaiting_approval'})
+    deliver(mid='stale', type='interactive', interactive={
+        'type': 'button_reply', 'button_reply': {'id': f'{action}:different-task', 'title': action}})
+    assert store.get_task(tid)['execution']['status'] == 'awaiting_approval'
+    assert 'no longer active' in graph.sent[-1][1]
+    deliver(mid='button', type='interactive', interactive={
+        'type': 'button_reply', 'button_reply': {'id': f'{action}:{tid}', 'title': action}})
+    assert store.get_task(tid)['execution']['approval_decision'] == ('approved' if action == 'approve' else 'stopped')
+
+
+@pytest.mark.parametrize('reply', ['da', 'yes', 'ok', 'approve', 'stop', 'nu', 'no', 'cancel'])
+def test_whatsapp_approval_text_fallback(wa, reply):
+    api, graph, deliver = wa
+    client, application, store, *_ = api
+    pair_whatsapp(api, deliver)
+    deliver('find café')
+    tid = client.get('/v1/tasks').json()['tasks'][0]['id']
+    deliver('1', mid='execute')
+    store.patch_execution(tid, {'status': 'awaiting_approval'})
+    deliver(reply, mid='decision')
+    assert store.get_task(tid)['execution']['approval_decision'] == (
+        'approved' if reply in {'da', 'yes', 'ok', 'approve'} else 'stopped')
+
+
+def test_whatsapp_processing_failures_are_private_and_do_not_abort_batch(wa, caplog):
+    from hoida_wa.api import GraphAPIError
+    api, graph, deliver = wa
+    client, application, *_ = api
+    seen = []
+    async def handle(message):
+        seen.append(message.message_id)
+        if message.message_id == 'bad-message':
+            raise GraphAPIError(403, 190)
+    async def fail_reply(*args, **kwargs):
+        raise RuntimeError('private-message private-token 358401234567')
+    application.state.whatsapp_flow.handle = handle
+    graph.send_text = fail_reply
+    messages = [{'id': mid, 'from': '358401234567', 'type': 'text',
+                 'text': {'body': 'private-message'}} for mid in ['bad-message', 'next-message']]
+    with caplog.at_level('WARNING', logger='vali.whatsapp'):
+        assert client.post('/webhooks/whatsapp', json={
+            'entry': [{'changes': [{'value': {'messages': messages}}]}]}).status_code == 200
+    assert seen == ['bad-message', 'next-message']
+    assert 'message_id=bad-message' in caplog.text
+    assert 'status_code=403 code=190' in caplog.text and 'error reply failed' in caplog.text
+    assert all(secret not in caplog.text for secret in ['private-message', 'private-token', '358401234567'])
+
+
+def test_whatsapp_voice_graph_to_elevenlabs_to_task(wa, monkeypatch):
+    from hoida_media import voice
+    api, graph, deliver = wa
+    client, application, *_ = api
+    # The existing media helper reads the same environment key as Config.
+    monkeypatch.setenv('ELEVENLABS_API_KEY', 'fake-elevenlabs')
+    application.state.config.elevenlabs_api_key = 'fake-elevenlabs'
+    requests = []
+    def respond(request):
+        requests.append(request)
+        if request.url.path == '/v21.0/audio-id':
+            return httpx.Response(200, json={'url': 'https://media.example/voice'})
+        if request.url.host == 'media.example':
+            return httpx.Response(200, content=b'original-ogg-bytes')
+        if request.url.host == 'api.elevenlabs.io':
+            assert request.url.path == '/v1/speech-to-text'
+            assert request.headers['xi-api-key'] == application.state.config.elevenlabs_api_key
+            assert b'original-ogg-bytes' in request.content and b'scribe_' in request.content
+            assert b'audio/ogg; codecs=opus' in request.content
+            return httpx.Response(200, json={'text': 'find café from voice'})
+        return httpx.Response(200, json={'messages': [{'id': 'out'}]})
+    real_client = httpx.Client
+    monkeypatch.setattr(voice.httpx, 'Client', lambda **kwargs: real_client(
+        **{**kwargs, 'transport': httpx.MockTransport(respond)}))
+    pair_whatsapp(api, deliver)
+    async def send_voice():
+        async with GraphAPIClient('phone-test', 'fake-graph', transport=httpx.MockTransport(respond)) as graph_api:
+            voice_app = create_app(Config(elevenlabs_api_key='fake-elevenlabs'), api[2],
+                                   application.state.exa, lambda tid: None, lambda *args: None,
+                                   whatsapp_api=graph_api)
+            with TestClient(voice_app) as voice_client:
+                response = voice_client.post('/webhooks/whatsapp', json={'entry': [{'changes': [{'value': {
+                    'messages': [{'from': '358401234567', 'id': 'voice-e2e', 'type': 'audio',
+                                  'audio': {'id': 'audio-id', 'mime_type': 'audio/ogg; codecs=opus'}}]}}]}]})
+                assert response.status_code == 200
+    asyncio.run(send_voice())
+    task = client.get('/v1/tasks').json()['tasks'][0]
+    assert task['task'] == 'find café from voice' and task['source'] == 'whatsapp'
+    assert len([r for r in requests if r.method == 'GET']) == 2
+
+
+def test_whatsapp_agent_question_is_delivered_and_answered(wa, monkeypatch):
+    import sys
+    import types
+    from hoida_api import app as module
+    api, graph, deliver = wa
+    client, application, store, *_ = api
+    pair_whatsapp(api, deliver)
+    deliver('find café')
+    tid = client.get('/v1/tasks').json()['tasks'][0]['id']
+    deliver('1', mid='execute')
+    def fake_agent(goal, start_url, profile, hooks):
+        assert hooks.ask_user('Is the later time OK?') == 'no'
+        assert hooks.pending_messages() == []
+        return {'status': 'done', 'result': 'Answer received', 'final_url': start_url}
+    def answer(seconds):
+        assert any(body == 'Is the later time OK?' for _, body, _ in graph.sent)
+        deliver('no', mid='question-answer')
+    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(
+        run_browser_agent=fake_agent, AgentHooks=lambda **kwargs: types.SimpleNamespace(**kwargs)))
+    monkeypatch.setattr(module.time, 'sleep', answer)
+    module.run_browser_session(tid, 'goal', 'https://example.com/form', {}, application)
+    execution = store.get_task(tid)['execution']
+    assert execution['status'] == 'done' and execution['question'] is None
+    assert sum(body == 'Is the later time OK?' for _, body, _ in graph.sent) == 1

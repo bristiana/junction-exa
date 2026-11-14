@@ -20,7 +20,7 @@ async def _call(callback, *args, **kwargs):
 
 class WhatsAppFlow:
     def __init__(self, *, api, find_user_by_number, link_number, create_task,
-                 get_active_task, execute, approve, stop, transcribe=None, read_letter=None):
+                 get_active_task, execute, approve, stop, transcribe=None, read_letter=None, message=None):
         self.api = api
         self.find_user_by_number = find_user_by_number
         self.link_number = link_number
@@ -31,6 +31,7 @@ class WhatsAppFlow:
         self.stop = stop
         self.transcribe = transcribe
         self.read_letter = read_letter
+        self.message = message
 
     async def handle(self, msg):
         # Read receipts also apply to unknown senders and unsupported media.
@@ -71,10 +72,23 @@ class WhatsAppFlow:
             return render_ack(task)
         if msg.kind not in {"text", "interactive"}:
             return render_error("Please send your errand as text, a voice note, or a photo of a letter.")
+        task = await _call(self.get_active_task, user)
+        execution = (task or {}).get("execution") or {}
+        if msg.kind == "interactive" and msg.reply_id and ":" in msg.reply_id:
+            action, tid = msg.reply_id.split(":", 1)
+            if not task or tid != task["id"] or action not in {"approve", "stop"}:
+                return render_error("That button is no longer active. Reply *status* for the current errand.")
+            command = parse_command(action)
+        # Short answers (yes, a number, etc.) belong to an outstanding question.
+        if self.message and task and msg.kind == "text" and text.strip() and (
+                execution.get("status") in {"starting", "running"} or execution.get("question")) and (
+                command.kind not in {"stop", "status"} or (
+                    execution.get("question") and text.strip().casefold() in {"no", "nu", "ei"})):
+            await _call(self.message, task["id"], text)
+            return render_error("Message passed to your running errand.")
         if command.kind == "help":
             return render_help()
         if command.kind in {"choose", "approve", "stop", "status"}:
-            task = await _call(self.get_active_task, user)
             if not task:
                 return render_error("No active errand. Send me an errand to get started.")
             execution = task.get("execution") or {}
@@ -101,5 +115,8 @@ class WhatsAppFlow:
                                  "stop": "Stop requested."}[command.kind])
         if not text.strip():
             return render_help()
+        if self.message and task and execution.get("status") in {"starting", "running", "awaiting_approval", "submitting"}:
+            await _call(self.message, task["id"], command.text)
+            return render_error("Message passed to your running errand.")
         task = await _call(self.create_task, user, command.text, source="whatsapp")
         return render_ack(task)

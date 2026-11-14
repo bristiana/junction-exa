@@ -242,3 +242,32 @@ def test_mutations_render_returned_task(task):
     updated = {**task, "execution": {"status": "stopped"}}
     bodies, _, _ = flow_scenario(task, msg("stop"), mutation_result=updated)
     assert bodies == ["Stopped. Vali will not submit this errand."]
+
+
+def test_upload_and_send_image_by_id():
+    requests = []
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={'id': 'media-upload'} if request.url.path.endswith('/media') else {'messages': []})
+    async def scenario():
+        async with GraphAPIClient('phone', 'test-token', transport=httpx.MockTransport(handler)) as api:
+            mid = await api.upload_media(b'jpeg-bytes')
+            await api.send_image(NUMBER, media_id=mid, caption='Ready')
+    run(scenario())
+    assert requests[0].url.path == '/v21.0/phone/media'
+    assert requests[0].headers['content-type'].startswith('multipart/form-data')
+    assert b'jpeg-bytes' in requests[0].content
+    assert json.loads(requests[1].content)['image'] == {'id': 'media-upload', 'caption': 'Ready'}
+
+
+def test_channel_receipt_failure_logs_safely(caplog):
+    from hoida_api.wa_channel import ChannelAPI
+    from hoida_api.config import Config
+    api = ChannelAPI(Config(whatsapp_token='test', whatsapp_phone_number_id='phone'))
+    async def fail(*args, **kwargs):
+        raise GraphAPIError(400, 99)
+    api._call = fail
+    with caplog.at_level('WARNING', logger='vali.whatsapp'):
+        assert run(api.mark_read('receipt-id')) is None
+    assert 'message_id=receipt-id' in caplog.text
+    assert 'status_code=400 code=99' in caplog.text
