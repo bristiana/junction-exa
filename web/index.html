@@ -3,12 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; connect-src 'self'">
 <meta name="vali-api" content="">
 <title>Vali</title>
 <meta name="description" content="Vali reads the official Finnish pages for you, shows where every fact comes from, and fills the forms. You approve the last step.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 <script src="vendor/butler.js"></script>
 <script type="module" src="app.js"></script>
@@ -27,6 +25,7 @@
 </header>
 
 <p id="notice" class="notice" role="status" hidden></p>
+<p id="announce" class="sr-only" aria-live="polite"></p>
 
 <main>
   <section id="home" class="view home">
@@ -36,7 +35,7 @@
     <form id="ask" class="ask">
       <label class="sr-only" for="errand">Your errand</label>
       <input id="errand" type="text" maxlength="2000" autocomplete="off" enterkeyhint="send"
-             placeholder="What do you need done in Finland?">
+             placeholder="What do you need done?">
       <button type="button" id="mic" class="mic" aria-label="Speak your errand">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1a7 7 0 0 0 6-6.9h-2Z"/></svg>
       </button>
@@ -50,11 +49,9 @@
       <button type="button" class="chip">Book a group sauna</button>
       <button type="button" class="chip">Bank account without a Finnish ID</button>
     </div>
-    <p class="privacy">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2Zm-8 0V7a3 3 0 0 1 6 0v2H9Z"/></svg>
-      Your name and ID stay in this browser. Vali only sends placeholders.
-    </p>
-    <section id="errands" class="errands" aria-live="polite"></section>
+    <p class="privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2Zm-8 0V7a3 3 0 0 1 6 0v2H9Z"/></svg>
+      The AI only sees placeholders like {{name}}. If you approve a form, your details go to Vali’s cloud browser for that one form and are not stored.</p>
+    <section id="errands" class="errands"></section>
   </section>
 
   <section id="working" class="view working" hidden></section>
@@ -63,7 +60,7 @@
 
 <dialog id="trust" class="sheet" aria-labelledby="trust-title">
   <form method="dialog" class="sheet-head">
-    <h2 id="trust-title">What Vali keeps private</h2>
+    <h2 id="trust-title">How Vali handles your details</h2>
     <button class="link-btn" aria-label="Close">Close</button>
   </form>
   <div id="trust-body"></div>

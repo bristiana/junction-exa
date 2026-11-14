@@ -1,4 +1,4 @@
-// "What Vali keeps private": the promises, and every page Vali touched for the errand that is open.
+// "How Vali handles your details": the promises, and every page Vali touched for the errand that is open.
 import { h, show } from './dom.js';
 import { pagesTouched } from './model.js';
 
@@ -7,7 +7,7 @@ export function openTrust(task) {
   const pages = task ? pagesTouched(task) : [];
   show('trust-body',
     h('ul', { class: 'promises' },
-      promise('Your details stay in this browser.', 'The research only sees placeholders like {{name}}, never your real name, address or ID number. This page does not upload them.'),
+      promise('The AI sees placeholders, not you.', 'The AI only sees placeholders like {{name}}. If you approve a form, your details go to Vali’s cloud browser for that one form and are not stored.'),
       promise('Nothing goes out without your OK.', 'Vali prepares forms, emails and bookings, then stops. It never submits, pays or sends anything until you press Approve.'),
       promise('Every fact shows its page.', 'Each claim carries the number of the official page it came from, with the quote when Vali found one.')),
     h('h3', { class: 'section-title' }, task ? 'Pages Vali touched for this errand' : 'Pages Vali touched'),
