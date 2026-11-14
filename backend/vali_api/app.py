@@ -812,6 +812,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         create=lambda text, user: create_task_for_user(TaskBody(task=text), user, 'voice'),
         stop=lambda tid, user: stop_for_user(tid, user),
         message=lambda tid, text, user: message_for_user(tid, MessageBody(text=text), user, 'voice'))
+    from .company_check import router as company_check_router; application.include_router(company_check_router)
     mount_web(application)
     return application
 
