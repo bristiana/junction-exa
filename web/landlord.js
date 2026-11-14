@@ -4,7 +4,7 @@ import { h } from './dom.js';
 import { companyVerdict, registerUrl } from './hub-model.js';
 
 export function landlordBox() {
-  const input = h('input', { type: 'text', class: 'reply-input', maxlength: '200', placeholder: 'Company name, e.g. YIT Oyj', 'aria-label': 'Company name' });
+  const input = h('input', { type: 'text', class: 'reply-input', maxlength: '200', placeholder: 'Company name', 'aria-label': 'Company name' });
   const button = h('button', { type: 'submit', class: 'btn' }, 'Check');
   const out = h('div', { class: 'verdict-out', 'aria-live': 'polite' });
   const check = async (event) => {
@@ -24,6 +24,7 @@ export function landlordBox() {
   return h('section', { class: 'landlord card' },
     h('h2', { class: 'section-title' }, 'Check a landlord or company'),
     h('p', { class: 'muted' }, 'Renting from a company? See if it is in the Finnish trade register before you pay a deposit.'),
+    h('p', { class: 'fine' }, 'The name goes to the official company register (PRH) through Vali. Private landlords are not listed there.'),
     h('form', { class: 'reply', onsubmit: check }, input, button),
     out);
 }
@@ -31,8 +32,9 @@ export function landlordBox() {
 function result(verdict) {
   return h('div', {},
     h('p', { class: `verdict ${verdict.tone}` }, verdict.line),
+    ['listed', 'ceased'].includes(verdict.tone) ? h('p', { class: 'caveat' }, 'A register entry is not proof a landlord is trustworthy.') : null,
     verdict.matches.length ? h('ul', { class: 'matches' }, verdict.matches.map((m) => h('li', {},
       h('a', { href: registerUrl(m.id), target: '_blank', rel: 'noopener noreferrer' }, `${m.name} · ${m.id}`),
       h('span', { class: 'muted' }, m.ceased ? ` · ceased ${m.ceased}` : ' · registered')))) : null,
-    h('p', { class: 'fine' }, 'Source: PRH / Finnish Business Information System (YTJ). A match does not prove someone owns the flat, and no match is not proof of fraud.'));
+    h('p', { class: 'fine' }, 'Source: PRH / Finnish Business Information System (YTJ). A match does not prove someone owns the flat; no match is not proof of fraud.'));
 }

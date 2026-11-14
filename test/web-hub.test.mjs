@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clipQuote, companyVerdict, errandFor, factSources, officeLine, timeline, todayHours } from "../web/hub-model.js";
+import { canFill, clipQuote, companyVerdict, errandFor, factSources, officeLine, timeline, todayHours } from "../web/hub-model.js";
 
 const catalog = { groups: [
   { id: "before_arrival", services: [{ id: "residence-permit", name: "Residence permit", applies_to: { citizenship: ["non_eu"], study: ["degree", "exchange"] } }] },
@@ -30,9 +30,10 @@ test("the register verdict prefers an exact, active name and never claims more t
   const company = (name, id, endDate = null) => ({ businessId: { value: id, registrationDate: "1990-01-01" }, names: [{ name }], endDate,
     companyForms: [{ descriptions: [{ languageCode: "3", description: "Limited company" }] }] });
   const result = { available: true, companies: [company("Example Homes Oy", "1-1", "2010-01-01"), company("Example Oy", "2-2")] };
-  assert.equal(companyVerdict(result, "Example").tone, "good");
-  assert.match(companyVerdict(result, "Example").line, /Example Oy \(2-2\) is a registered limited company since 1990-01-01/);
-  assert.equal(companyVerdict({ available: true, companies: [company("Example", "3-3", "2020-05-05")] }, "example").tone, "bad");
+  assert.equal(companyVerdict(result, "Example").tone, "listed");
+  assert.equal(companyVerdict(result, "Example").line, "Found in the register: Example Oy (2-2), limited company, registered 1990-01-01.");
+  assert.equal(companyVerdict({ available: true, companies: [company("Example", "3-3", "2020-05-05")] }, "example").tone, "ceased");
+  assert.equal(companyVerdict({ available: true, companies: [company("Oy", "4-4")] }, "Oy!").tone, "none");
   assert.equal(companyVerdict({ available: true, companies: [] }, "Nobody").tone, "none");
   assert.equal(companyVerdict({ available: false }, "x").tone, "unknown");
 });
@@ -57,4 +58,17 @@ test("long markdown highlights become a short plain quote", () => {
   assert.ok(quote.length <= 241);
   assert.match(quote, /^You can register at a DVV service point if you live in Finland\./);
   assert.doesNotMatch(quote, /[#*\]]/);
+});
+
+test("catalog links must be plain http(s); the bank-ID badge reads the login text", () => {
+  const unsafe = { groups: [{ id: "first_week", services: [
+    { id: "a", name: "A", organisation: "X", official_url: "javascript:alert(1)", vali_help: "fill in the cloud browser", login_needed: "Finnish bank ID or mobile ID" },
+    { id: "b", name: "B", organisation: "Y", official_url: "https://kela.fi/b", login_needed: "none" }] }] };
+  const [a, b] = timeline(unsafe, {})[0].services;
+  assert.equal(a.official_url, null);
+  assert.equal(a.needsBankId, true);
+  assert.equal(b.needsBankId, false);
+  assert.equal(canFill(a), false);
+  assert.doesNotMatch(errandFor(a, {}), /javascript/);
+  assert.deepEqual(factSources([{ url: "https://hoas.fi/x", quote: "A long enough statement about student housing in Helsinki." }]).sources[0].official, false);
 });

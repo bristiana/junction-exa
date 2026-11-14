@@ -9,6 +9,7 @@ export function openTrust(task) {
     h('ul', { class: 'promises' },
       promise('The AI sees placeholders, not you.', 'The AI only sees placeholders like {{name}}. If you approve a form, your details go to Vali’s cloud browser for that one form and are not stored.'),
       promise('Nothing goes out without your OK.', 'Vali prepares forms, emails and bookings, then stops. It never submits, pays or sends anything until you press Approve.'),
+      promise('Your first-weeks choices stay here.', 'EU/non-EU, degree/exchange and your ticks are saved in this browser only. When you press Ask Vali on a step, those two choices are written into the errand text.'),
       promise('Every fact shows its page.', 'Each claim carries the number of the official page it came from, with the quote when Vali found one.')),
     h('h3', { class: 'section-title' }, task ? 'Pages Vali touched for this errand' : 'Pages Vali touched'),
     !task ? h('p', { class: 'muted' }, 'Open an errand to see every page Vali read or opened for it.')
