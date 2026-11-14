@@ -898,3 +898,13 @@ def test_whatsapp_agent_question_is_delivered_and_answered(wa, monkeypatch):
     execution = store.get_task(tid)['execution']
     assert execution['status'] == 'done' and execution['question'] is None
     assert sum(body == 'Is the later time OK?' for _, body, _ in graph.sent) == 1
+
+
+def test_privacy_and_terms_pages_are_public():
+    from fastapi.testclient import TestClient
+    from vali_api.app import create_app
+    from vali_api.config import Config
+    client = TestClient(create_app(config=Config(sqlite_path=':memory:')))
+    for path in ('/privacy', '/terms'):
+        response = client.get(path)
+        assert response.status_code == 200 and 'Vali' in response.text

@@ -12,7 +12,7 @@ from typing import Literal
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from .config import Config
@@ -221,6 +221,20 @@ def spawn_thread(target, *args):
     threading.Thread(target=target, args=args, daemon=True).start()
 
 
+PAGE = ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+        '<title>Vali {title}</title><body style="font:16px/1.5 system-ui;max-width:640px;margin:40px auto;padding:0 16px">'
+        '<h1>Vali {title}</h1>{body}</body>')
+PRIVACY_HTML = PAGE.format(title='privacy', body=(
+    '<p>Vali is a student hackathon project that runs errands for people in Finland.</p>'
+    '<p>Your personal details (name, address, ID numbers) stay in your browser extension or desktop app. '
+    'The AI models only see placeholders such as {{name}}; real values are typed into a form at the last step.</p>'
+    '<p>We store your errands, their results and screenshots so you can follow them. WhatsApp messages you send to Vali '
+    'are processed to run the errand you asked for. We do not sell or share data, and we do not use it for ads.</p>'
+    '<p>To delete your data, send "delete" to Vali on WhatsApp or remove the extension; errands are removed on request.</p>'))
+TERMS_HTML = PAGE.format(title='terms', body=(
+    '<p>Vali is a demo built for a hackathon. It prepares forms and bookings and always stops before the final '
+    'button until you approve. You stay responsible for what you approve. No warranty.</p>'))
+
 def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None, whatsapp_api=None):
     config = config or Config()
 
@@ -273,6 +287,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     @application.get('/health')
     def health():
         return config.services()
+
+    @application.get('/privacy', response_class=HTMLResponse)
+    def privacy():
+        return PRIVACY_HTML
+
+    @application.get('/terms', response_class=HTMLResponse)
+    def terms():
+        return TERMS_HTML
 
     @application.post('/v1/users')
     def users():
