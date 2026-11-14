@@ -1,5 +1,5 @@
 // The dashboard's numbers and lists, read from GET /v1/tasks, /v1/stats and /v1/watches. Pure, no DOM.
-import { TERMINAL, activityOf, channelOf, domainOf, errandStatus, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
+import { TERMINAL, activityOf, channelOf, domainOf, errandStatus, friendlyStep, webWork, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
 import { exaUses } from './exa-uses.js';
 
 const list = (value) => (Array.isArray(value) ? value : []);
@@ -63,7 +63,7 @@ export function feedOf(tasks) {
     return {
       id: task.id, text: String(task.task || ''), channel: channelOf(task), at: task.created_at,
       mode: MODES[task.mode] || MODES[task?.research?.kind] || 'Errand', status: status.word, tone: status.tone,
-      exa: exaUses(task).map((use) => `${use.label} ${use.detail}`).join(' · '),
+      exa: webWork(task),
       domains: topDomains(task),
     };
   });
@@ -138,10 +138,7 @@ export function shortAnswer(task, n = 2) {
 // The browser steps worth reading, newest last: quiet steps dropped, "Opened <url>" shortened to its domain.
 export function runSteps(task, n = 4) {
   const steps = list(task?.execution?.steps).map((s) => String(s?.text || '').trim()).filter((t) => t && !QUIET_STEP.test(t))
-    .map((t) => {
-      const opened = /^Opened\s+(\S+)/.exec(t);
-      return plainPlaceholders(opened && domainOf(opened[1]) ? `Opened ${domainOf(opened[1])}` : t);
-    });
+    .map((t) => plainPlaceholders(friendlyStep(t))).filter(Boolean);
   return { steps: steps.slice(-n), more: Math.max(0, steps.length - n) };
 }
 
@@ -178,7 +175,7 @@ export function threadOf(task) {
   const status = errandStatus(task);
   const bubbles = [{ who: 'me', text: String(task?.task || ''), at: task?.created_at || null }];
   const question = research.question;
-  if (question?.text) {
+  if (question?.text && (question.answer != null || !TERMINAL.has(research.status))) {
     const answered = question.answer != null;
     bubbles.push({ who: 'vali', text: String(question.text), tone: answered ? null : 'you',
       options: answered ? [] : list(question.options).map(String).filter(Boolean).slice(0, 6) });
@@ -207,7 +204,7 @@ function runBubbles(task) {
   const state = runStatus(task);
   const { steps, more } = runSteps(task);
   const where = domainOf(run.current_url || run.start_url);
-  const out = [{ who: 'vali', label: 'Browser', text: `${RUN_WORD[state] || 'Working'}${where ? ` · ${where}` : ''}`, steps, more,
+  const out = [{ who: 'vali', label: where ? `On ${where}` : 'On the site', text: RUN_WORD[state] || 'Working', steps, more,
     tone: ['starting', 'running', 'submitting'].includes(state) ? 'working' : null }];
   const talk = [];
   if (run.question?.text) talk.push({ who: 'vali', text: String(run.question.text), at: String(run.question.at || ''), tone: 'you' });
@@ -216,13 +213,13 @@ function runBubbles(task) {
   const approval = run.approval;
   if (approval?.summary || state === 'awaiting_approval') {
     const fields = list(approval?.filled).map((f) => f?.label).filter(Boolean).map(String);
-    out.push({ who: 'vali', label: 'Approval', text: plainPlaceholders(approval?.summary || 'The form is filled.'),
+    out.push({ who: 'vali', label: 'Ready for your OK', text: plainPlaceholders(approval?.summary || 'The form is filled.'),
       steps: fields.length ? [`Filled: ${fields.join(', ')}`] : [], tone: state === 'awaiting_approval' ? 'you' : null });
   }
   if (run.approval_decision === 'approved') out.push({ who: 'me', text: 'Approve' });
   if (run.approval_decision === 'stopped') out.push({ who: 'me', text: 'Stop' });
   if (run.error) out.push({ who: 'vali', text: plainPlaceholders(run.error), tone: 'failed' });
-  else if (state === 'stopped') out.push({ who: 'vali', text: 'Stopped. Nothing was sent.', tone: 'failed' });
+  else if (state === 'stopped') { /* the state block under the chat says where it stopped */ }
   else if (run.result) out.push({ who: 'vali', text: plainPlaceholders(run.result), tone: 'done' });
   return out;
 }

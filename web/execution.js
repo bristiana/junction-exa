@@ -1,7 +1,7 @@
 // The browser run behind "Fill it for me": the live frame, its steps, and Approve / Stop when it waits for you.
 import { api } from './api.js';
 import { h } from './dom.js';
-import { domainOf, runStatus } from './model.js';
+import { domainOf, friendlyStep, runStatus } from './model.js';
 import { questionBlock } from './working.js';
 import { fillPlaceholders, loadProfile } from './profile.js';
 
@@ -23,7 +23,7 @@ export function renderExecution(task, { onApprove, onStop, onReply, quiet = fals
   const status = runStatus(task);
   const live = LIVE.has(status);
   const waiting = status === 'awaiting_approval';
-  const steps = Array.isArray(run.steps) ? run.steps.slice(-6) : [];
+  const steps = (Array.isArray(run.steps) ? run.steps : []).map((step) => ({ ...step, text: friendlyStep(step.text) })).filter((step) => step.text).slice(-6);
   const profile = loadProfile(); // placeholders show your own values, on this page only
   return h('section', { class: quiet ? 'run quiet-run' : `run card ${waiting ? 'waiting' : ''}` },
     h('div', { class: 'run-head' },
