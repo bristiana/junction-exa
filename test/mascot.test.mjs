@@ -70,7 +70,7 @@ test("every pose exists in the mascot library and every card pose has a still", 
   }
 });
 
-test("the mock's demo errands show a browser run on hold and a failed errand", async (t) => {
+test("the mock's demo errands cover every browser run state and a failed errand", async (t) => {
   const server = createMockServer({ researchMs: 0, execMs: 0 });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => { server.close(); server.closeAllConnections(); });
@@ -80,5 +80,6 @@ test("the mock's demo errands show a browser run on hold and a failed errand", a
   assert.equal((await fetch(baseUrl + "/mock/demo", { method: "POST" })).status, 200);
   const { tasks } = await createClient({ baseUrl, token: user.token }).listTasks();
   const poses = tasks.map((x) => taskMascot(toLocalTask(x))).sort();
-  assert.deepEqual(poses, ["error", "needs_approval", "success"]);
+  // failed research + login blocker, approval + question, finished run + the seeded WhatsApp answer
+  assert.deepEqual(poses, ["error", "error", "needs_approval", "needs_approval", "success", "success"]);
 });

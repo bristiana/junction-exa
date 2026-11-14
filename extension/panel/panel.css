@@ -144,3 +144,31 @@ h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spac
 .sources .host { color: var(--muted); }
 .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; }
 .toast { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 7px 12px; border-radius: 8px; font-size: 13px; z-index: 5; }
+
+/* the cloud browser run */
+.exec { padding: 10px 0 12px; }
+.exec:not(:last-child) { border-bottom: 1px solid var(--line); }
+.exec .live { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--accent-soft); aspect-ratio: 16 / 10; }
+.exec .live.done { margin-top: 10px; aspect-ratio: auto; max-height: 220px; }
+.exec .live:not(.has-frame)::after { content: "Waiting for the first picture…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 12px; }
+.live-shot { display: block; width: 100%; height: 100%; object-fit: contain; object-position: top center; background: #fff; }
+.live:not(.has-frame) .live-shot { visibility: hidden; }
+.live-tag { position: absolute; top: 6px; left: 6px; font-size: 10.5px; font-weight: 650; letter-spacing: 0.03em; color: #fff; background: var(--accent); border-radius: 999px; padding: 1px 7px; }
+.exec-approval .live-tag { background: var(--warn); }
+.exec-step { display: flex; gap: 6px; align-items: baseline; margin-top: 6px; font-size: 12.5px; }
+.exec-step span:not(.n) { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exec-step .n { font-size: 11px; flex: none; }
+.exec-question { margin-top: 10px; padding: 10px; border-radius: 10px; background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); font-size: 13px; }
+.exec-question p { margin: 2px 0 6px; font-weight: 550; }
+.exec-question.sent { background: var(--accent-soft); border-color: transparent; }
+.exec-question textarea.edit { min-height: 44px; background: var(--card); }
+.exec-question .btns { margin-top: 6px; }
+.exec-summary { margin: 0 0 6px; font-weight: 550; }
+.exec-values dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; word-break: break-word; }
+.exec-values .src { font-size: 11px; text-decoration: none; background: var(--accent-soft); border-radius: 4px; padding: 0 5px; }
+.exec-values .copy { margin-left: auto; padding: 0 6px; font-size: 11.5px; }
+.exec-btns { margin-top: 10px; }
+.exec-reason { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-weight: 550; font-size: 13px; }
+.exec-failed .exec-reason { background: var(--bad-soft); color: var(--bad); }
+.exec-result { margin: 0; font-weight: 550; }
+.server-presets { margin: -4px 0 10px; }

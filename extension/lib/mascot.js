@@ -6,12 +6,14 @@ export const POSES = ["idle", "listening", "thinking", "working", "needs_approva
 export const STILLS = ["idle", "thinking", "working", "needs_approval", "success", "error"]; // the ones a card can show
 export const FLASH_MS = { success: 4000, error: 6000 };
 const BUSY = new Set(["thinking", "working"]);
+const asks = (t) => !!t?.execution?.question?.text && ["starting", "running", "submitting"].includes(t.execution.status);
 
 // One errand. The browser run (execution) comes after research, so once it exists it decides.
 export function taskMascot(t) {
   const x = t?.execution?.status;
   if (x) {
     if (x === "awaiting_approval") return "needs_approval";
+    if (asks(t)) return "needs_approval"; // the browser waits for an answer
     if (x === "done") return "success";
     if (x === "failed") return "error";
     if (x === "stopped") return "idle";
@@ -36,7 +38,7 @@ export function taskMascot(t) {
 // Does this errand wait for the user right now? A browser run on hold always does; a finished research result
 // with something to approve or answer only until the user has opened it.
 function waits(t) {
-  return taskMascot(t) === "needs_approval" && (t.execution?.status === "awaiting_approval" || !t.seen);
+  return taskMascot(t) === "needs_approval" && (t.execution?.status === "awaiting_approval" || asks(t) || !t.seen);
 }
 
 // The header: typing beats everything, then a short flash after something finished, then whatever needs the user,

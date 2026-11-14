@@ -4,8 +4,9 @@
 import { PROFILE_FIELDS } from "../lib/task.js";
 import { numberSources, citesFor, resolveAction, fillPlaceholders, unfilledPlaceholders } from "../lib/actions.js";
 import { search } from "../lib/exa.js";
-import { connect, me as serverMe, pair, normalizeBaseUrl } from "../lib/backend.js";
+import { connect, me as serverMe, pair, normalizeBaseUrl, ensureConnected, liveUrl, shotUrl, DEFAULT_BASE_URL } from "../lib/backend.js";
 import { taskMascot, headerMascot, finishFlash, FLASH_MS } from "../lib/mascot.js";
+import { executionView, executionPill, LIVE } from "../lib/execution.js";
 
 const $ = (id) => document.getElementById(id);
 const PRESETS = [
@@ -39,12 +40,19 @@ const EXEC_PILL = {
   stopped: ["Stopped", "cancelled"],
 };
 
-const DEFAULTS = { tasks: [], profile: {}, exaKey: "", effort: "low", backendUrl: "", presence: true };
+// backendUrl: the deployed Vali server unless settings point elsewhere; "" means direct mode (Exa from this browser).
+const DEFAULTS = { tasks: [], profile: {}, exaKey: "", effort: "low", backendUrl: DEFAULT_BASE_URL, presence: true };
+const SERVER_PRESETS = [
+  ["Vali cloud", DEFAULT_BASE_URL],
+  ["Local API :8000", "http://127.0.0.1:8000"],
+  ["Mock :8787", "http://127.0.0.1:8787"],
+];
 let state = { ...DEFAULTS };
 let activeTab = null;
 let prefill = null;
 const open = new Set();
-const drafts = new Map(); // edited email bodies, keyed by task+action index
+const drafts = new Map(); // edited email bodies, keyed by task+action index; answers to the browser, keyed "q:"+task
+const answered = new Map(); // task id -> question.at answered from here, until the agent picks the answer up
 
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -118,6 +126,8 @@ function renderSettings() {
   $("presence").checked = state.presence !== false;
   $("backendUrl").value = state.backendUrl;
   $("pairInfo").hidden = true;
+  $("serverPresets").replaceChildren(...SERVER_PRESETS.map(([label, url]) =>
+    h("button", { type: "button", class: "chip", text: label, title: url, onclick: () => { $("backendUrl").value = url; $("connectBtn").click(); } })));
   refreshServerStatus();
   const box = $("profileFields");
   box.replaceChildren(
@@ -151,7 +161,7 @@ $("saveSettings").addEventListener("click", async () => {
 
 // ---------- Vali server and WhatsApp ----------
 async function useDirectMode() {
-  await chrome.storage.local.remove("backendUrl"); // the token stays, so saving the same URL again keeps the WhatsApp link
+  await chrome.storage.local.set({ backendUrl: "" }); // "" = direct mode; the token stays, so saving the same URL again keeps the WhatsApp link
   state.backendUrl = "";
   refreshServerStatus();
 }
@@ -182,6 +192,7 @@ async function refreshServerStatus() {
   st.textContent = "Checking…";
   $("waStatus").textContent = "";
   try {
+    await ensureConnected(); // the default server: get a user on first use
     showServerStatus(await serverMe());
   } catch (e) {
     st.textContent = "Not connected: " + e.message;
@@ -349,6 +360,7 @@ function renderAction(t, a, i, map) {
   if (r.kind === "link" && r.url) {
     const label = a.type === "calendar" ? "Add to calendar" : a.type === "phone_call" ? "Call" : "Open";
     btns.prepend(h("button", { class: "btn small", text: label, onclick: () => chrome.tabs.create({ url: r.url }) }));
+    if (a.type === "open_link") btns.append(doItButton(t, { actionIndex: i }) || "");
   }
   box.append(btns);
   if (r.missing.length) box.append(h("div", { class: "warn-note", text: `Fill in before sending: ${r.missing.join(", ")}. Add them in settings or edit the draft.` }));
@@ -374,7 +386,7 @@ function renderFormFill(t, fills) {
           toast(res.error ? res.error : `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check them, then submit yourself.`);
         } catch (e) { toast(e.message); }
       },
-    }))
+    }), /^https?:/.test(t.page?.url || "") ? doItButton(t, { startUrl: t.page.url, goal: "Fill in the form on this page" }) : null)
   );
   if (missing.length) box.append(h("div", { class: "warn-note", text: `Still empty: ${missing.join(", ")}. Add them in settings.` }));
   return box;
@@ -434,10 +446,165 @@ function renderResult(t) {
   return body;
 }
 
+// ---------- the cloud browser run (task.execution) ----------
+// The live <img> of each run survives re-renders (the node is moved, not rebuilt), so the picture never blinks.
+const liveImgs = new Map(); // task id -> <img>
+const frames = new Map(); // task id -> object URL of the newest frame
+const loadingFrame = new Set();
+
+function liveImg(t) {
+  let img = liveImgs.get(t.id);
+  if (!img) {
+    img = h("img", { class: "live-shot", alt: "What Vali sees in the browser" });
+    liveImgs.set(t.id, img);
+  }
+  const f = frames.get(t.id);
+  if (f && img.src !== f) img.src = f;
+  return img;
+}
+
+async function fetchImage(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    return res.ok ? await res.blob() : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// The newest live frame (GET live.jpg); before the first frame arrives, the last step's screenshot.
+async function refreshFrame(t) {
+  if (loadingFrame.has(t.id)) return;
+  loadingFrame.add(t.id);
+  try {
+    let blob = await fetchImage(await liveUrl(t));
+    if (!blob) {
+      const n = executionView(t)?.lastShot;
+      if (n != null) blob = await fetchImage(await shotUrl(t, n));
+    }
+    if (!blob) return;
+    const old = frames.get(t.id);
+    const obj = URL.createObjectURL(blob);
+    frames.set(t.id, obj);
+    const img = liveImgs.get(t.id);
+    if (img) { img.src = obj; img.closest(".live")?.classList.add("has-frame"); }
+    if (old) URL.revokeObjectURL(old);
+  } finally {
+    loadingFrame.delete(t.id);
+  }
+}
+
+function filledList(rows, { copy = false } = {}) {
+  const dl = h("dl", { class: "fill-preview exec-values" });
+  for (const r of rows) {
+    const dd = h("dd", {}, h("span", { class: "val", text: r.value }));
+    if (r.source) dd.append(" ", h("a", { class: "src", href: r.source, target: "_blank", rel: "noopener", title: r.source, text: r.sourceHost || "source" }));
+    else if (r.sourceText) dd.append(" ", h("span", { class: "src muted", text: r.sourceText }));
+    if (copy) dd.append(h("button", { class: "btn quiet small copy", type: "button", text: "Copy", onclick: () => navigator.clipboard.writeText(r.value).then(() => toast("Copied")) }));
+    dl.append(h("dt", { text: r.label, title: r.label }), dd);
+  }
+  return dl;
+}
+
+function renderQuestion(t, q) {
+  if (q.answered) return h("div", { class: "exec-question sent" }, h("strong", { text: "Vali asked: " }), q.text, h("div", { class: "muted small", text: "Answer sent. Vali reads it at the next step." }));
+  const key = "q:" + t.id;
+  const ta = h("textarea", { class: "edit answer-box", rows: "2", "aria-label": "Your answer", placeholder: "Your answer" });
+  ta.value = drafts.get(key) || "";
+  ta.addEventListener("input", () => drafts.set(key, ta.value));
+  const btn = h("button", { class: "btn small", type: "button", text: "Send answer" });
+  const submit = async () => {
+    const text = ta.value.trim();
+    if (!text) { ta.focus(); return; }
+    btn.disabled = true;
+    try {
+      await send({ type: "message", taskId: t.id, text });
+      answered.set(t.id, q.at);
+      drafts.delete(key);
+      ta.blur();
+      render();
+    } catch (e) {
+      btn.disabled = false;
+      toast(e.message);
+    }
+  };
+  btn.addEventListener("click", submit);
+  ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
+  return h("div", { class: "exec-question" }, h("strong", { text: "Vali asks" }), h("p", { text: q.text }), ta, h("div", { class: "btns row end" }, btn));
+}
+
+function serverButton(text, cls, msg, done) {
+  const b = h("button", { class: cls, type: "button", text });
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      await send(msg);
+      if (done) toast(done);
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      b.disabled = false;
+    }
+  });
+  return b;
+}
+
+function stillShot(t, n) {
+  const img = h("img", { class: "live-shot", alt: "The page where Vali stopped" });
+  shotUrl(t, n).then((u) => { if (u) img.src = u; }).catch(() => {});
+  return h("div", { class: "live has-frame done" }, img);
+}
+
+function renderExecution(t) {
+  const v = executionView(t, { profile: state.profile, answered: answered.get(t.id) ?? null });
+  if (!v) return null;
+  const box = h("section", { class: `exec exec-${v.phase}` });
+  if (v.live) {
+    const frame = h("div", { class: "live" + (frames.has(t.id) ? " has-frame" : "") }, liveImg(t), h("span", { class: "live-tag", text: v.status === "awaiting_approval" ? "Paused" : "Live" }));
+    box.append(frame, h("div", { class: "exec-step" }, v.phase === "live" ? h("i", { class: "dot" }) : null, h("span", { text: v.step || (v.status === "starting" ? "Opening the browser…" : "Working…") }), v.stepCount ? h("span", { class: "muted n", text: `step ${v.stepCount}` }) : null));
+    if (v.question) box.append(renderQuestion(t, v.question));
+  }
+  if (v.phase === "approval") {
+    box.append(h("h4", { text: "Vali will submit" }));
+    if (v.summary) box.append(h("p", { class: "exec-summary", text: v.summary }));
+    if (v.approval.length) box.append(filledList(v.approval));
+    box.append(h("div", { class: "btns row end exec-btns" },
+      serverButton("Stop", "btn ghost small", { type: "stop", taskId: t.id }, "Stopped. Nothing was sent."),
+      serverButton("Approve and submit", "btn small", { type: "approve", taskId: t.id }, "Approved. Vali submits once.")));
+  } else if (v.phase === "live") {
+    box.append(h("div", { class: "foot" }, h("span", { class: "muted", text: "Vali works in a cloud browser and stops before sending anything." }),
+      serverButton("Stop", "btn quiet small", { type: "stop", taskId: t.id })));
+  } else if (v.phase === "blocked" || v.phase === "failed") {
+    const reason = v.blocker?.reason || v.result || v.error || "The browser run failed.";
+    box.append(h("p", { class: "exec-reason", text: reason }));
+    const url = v.blocker?.url || v.url;
+    if (url) box.append(h("div", { class: "btns row" }, h("button", { class: "btn small", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
+    if (v.filled.length) {
+      box.append(h("h4", { text: "Filled so far" }), filledList(v.filled, { copy: true }),
+        h("div", { class: "btns row end" }, h("button", { class: "btn quiet small", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
+    }
+    if (v.lastShot != null) box.append(stillShot(t, v.lastShot));
+  } else if (v.phase === "done") {
+    box.append(h("p", { class: "exec-result", text: v.result || "Submitted." }));
+    if (v.lastShot != null) box.append(stillShot(t, v.lastShot));
+  } else if (v.phase === "stopped") {
+    box.append(h("p", { class: "muted exec-result", text: v.error ? `Stopped: ${v.error}` : "Stopped. Nothing was sent." }));
+  }
+  return box;
+}
+
+// "Let Vali do it": start the cloud browser on a prepared link or on the page the errand came from.
+function doItButton(t, opts) {
+  const x = t.execution?.status;
+  if (!t.backend || t.status !== "completed" || (x && (LIVE.has(x) || x === "done"))) return null;
+  return serverButton(x ? "Let Vali try again" : "Let Vali do it", "btn ghost small", { type: "execute", taskId: t.id, ...opts }, "Vali is opening the page in a cloud browser.");
+}
+
 function renderCard(t) {
   const card = document.getElementById("cardTpl").content.firstElementChild.cloneNode(true);
   const s = t.output?.structured;
-  const [label, cls] = EXEC_PILL[t.execution?.status]
+  const [label, cls] = executionPill(t.execution) || EXEC_PILL[t.execution?.status]
     || (t.status === "completed" && s?.status ? RESULT_PILL[s.status] || STATUS.completed : STATUS[t.status] || [t.status, ""]);
   card.querySelector(".still").src = `../mascot/${taskMascot(t)}.svg`;
   card.querySelector(".pill").textContent = label;
@@ -457,6 +624,8 @@ function renderCard(t) {
     render();
   });
   const body = card.querySelector(".card-body");
+  const exec = renderExecution(t);
+  if (exec) body.append(exec);
   if (t.status === "queued" || t.status === "running") body.append(renderWorking(t));
   else if (t.status === "completed") body.append(...renderResult(t));
   else body.append(h("p", { class: "error", text: t.error || "Cancelled." }));
@@ -469,10 +638,12 @@ function renderCard(t) {
 
 function render() {
   updateMascot();
+  const live = new Set(state.tasks.filter((t) => LIVE.has(t.execution?.status)).map((t) => t.id));
+  for (const [id, url] of frames) if (!live.has(id)) { URL.revokeObjectURL(url); frames.delete(id); liveImgs.delete(id); }
   const list = $("list");
   // keep focus and scroll inside text areas stable while polling re-renders
   const focused = document.activeElement?.closest?.(".card") ? document.activeElement : null;
-  if (focused && focused.tagName === "TEXTAREA") return;
+  if (focused && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT")) return;
   list.replaceChildren(...state.tasks.map(renderCard));
   $("empty").hidden = state.tasks.length > 0;
 }
@@ -525,5 +696,16 @@ setInterval(() => {
     if (busy) render();
   }
 }, 4000);
+
+// The live browser view: a new frame about once a second for each open card whose run is live, and the run's
+// steps from the server every 2 s, only while the panel is visible.
+let liveTicks = 0;
+setInterval(() => {
+  if (document.hidden) return;
+  const live = state.tasks.filter((t) => t.backend && LIVE.has(t.execution?.status));
+  if (!live.length) return;
+  for (const t of live) if (open.has(t.id)) refreshFrame(t);
+  if (++liveTicks % 2 === 0) send({ type: "poll" }).catch(() => {});
+}, 1000);
 
 load();
