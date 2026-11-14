@@ -2,6 +2,7 @@
 import re
 from playwright.sync_api import sync_playwright, expect, TimeoutError as BrowserTimeout
 from .privacy import private_values
+from .guard import is_final_submit
 
 _CAPTURE = r'''({start, limit}) => {
  const visible = el => { const r=el.getBoundingClientRect(), s=getComputedStyle(el);
@@ -245,16 +246,32 @@ class Browser:
         if how not in ('label', 'dom'):
             raise exc
 
-    def click(self, ref):
+    @staticmethod
+    def _guard_click(el, approved=False):
+        description, label = el.evaluate("""el => [el.outerHTML + ' ' +
+            (el.localName === 'button' ? 'button type=' + el.type : ''),
+            el.getAttribute('aria-label') || el.innerText || el.value || '']""")
+        final = is_final_submit(description, label)
+        if final and not approved:
+            raise ValueError('Call request_approval first')
+        return final
+
+    def click(self, ref, approved=False):
         el = self._element(ref)
+        self._guard_click(el, approved)
         try:
             # Wizards often enable "Next" a moment after the last choice.
             expect(el).to_be_enabled(timeout=3000)
         except AssertionError:
             raise ValueError('This button is disabled: fill or choose the required fields first, then read_page')
+        final = self._guard_click(el, approved)
         try:
             el.click(timeout=3000)
         except BrowserTimeout as exc:
+            # A timeout may follow a successful submission; never retry a final action.
+            if final:
+                raise
+            self._guard_click(el)
             self._fallback_click(el, exc)
         self._settle()
 
@@ -299,17 +316,26 @@ class Browser:
         el.dispatch_event('change')
         return True
 
-    def select(self, ref, option):
+    def select(self, ref, option, approved=False):
         el = self._element(ref)
         if el.evaluate("el => el.localName==='select'"):
+            self._guard_click(el, approved)
             options = el.locator('option').evaluate_all('(els)=>els.map(o=>({value:o.value,text:o.text}))')
             match = next((o for o in options if option.casefold() in (o['value'].casefold(),o['text'].casefold())), None)
             if not match:
                 raise ValueError('Option not found')
             el.select_option(value=match['value'])
         else:
-            # Popups may be portalled outside the control, including inside shadow roots.
+            if not el.evaluate(r'''el => {
+              const ids = (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\s+/).filter(Boolean);
+              const listbox = ids.some(id => el.getRootNode().getElementById(id)?.getAttribute('role') === 'listbox');
+              return el.getAttribute('role') === 'combobox' || listbox || el.getAttribute('aria-haspopup') === 'listbox';
+            }'''):
+                raise ValueError('Choose a native select or a validated combobox')
+            # Every internal click uses the same guard, with at most one approved final action.
             frame = self._refs[ref]
+            if self._guard_click(el, approved):
+                approved = False
             el.click()
             popup = el.evaluate("el => (el.getAttribute('aria-controls')||el.getAttribute('aria-owns')||'').split(/\\s+/).filter(Boolean).map(id=>'#'+CSS.escape(id)).join(',')")
             scope = frame.locator(popup) if popup else frame.locator('body')
@@ -327,6 +353,7 @@ class Browser:
             matches = exact or contains
             if not matches:
                 raise ValueError('Option not found')
+            self._guard_click(matches[0], approved)
             matches[0].click()
         self._settle()
 
