@@ -21,6 +21,22 @@ def token_hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def password_hash(password):
+    """scrypt with a random salt, stored as salt$hash in hex."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return salt.hex() + '$' + digest.hex()
+
+
+def password_ok(password, stored):
+    salt, _, digest = stored.partition('$')
+    try:
+        check = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1, dklen=32)
+    except ValueError:
+        return False
+    return secrets.compare_digest(check.hex(), digest)
+
+
 class Store:
     """Serialize operations and keep research and execution writes independent."""
     postgres = False
@@ -44,7 +60,10 @@ class Store:
             f'shots(task_id TEXT NOT NULL, n INTEGER NOT NULL, jpeg {blob} NOT NULL, PRIMARY KEY(task_id,n))',
             f'live_frames(task_id TEXT PRIMARY KEY, jpeg {blob} NOT NULL, updated_at TEXT NOT NULL)',
             # "Continue in my browser": the cloud browser's page and cookies. Secrets: never in execution_json.
-            'handoffs(task_id TEXT PRIMARY KEY, data_json TEXT NOT NULL, expires_at TEXT NOT NULL)']
+            'handoffs(task_id TEXT PRIMARY KEY, data_json TEXT NOT NULL, expires_at TEXT NOT NULL)',
+            # Email and password sign-in: one login per account, any number of signed-in browsers.
+            'credentials(email TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL, pw_hash TEXT NOT NULL, created_at TEXT NOT NULL)',
+            'sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL)']
         for table in tables:
             self.sql('CREATE TABLE IF NOT EXISTS ' + table)
         self._add_column('tasks', 'lang TEXT')
@@ -111,7 +130,34 @@ class Store:
         return {'user_id': uid, 'token': token}
 
     def user_by_token(self, token):
-        return self.sql('SELECT * FROM users WHERE token_hash=?', (token_hash(token),), one=True)
+        user = self.sql('SELECT * FROM users WHERE token_hash=?', (token_hash(token),), one=True)
+        if user:
+            return user
+        session = self.sql('SELECT user_id FROM sessions WHERE token_hash=?', (token_hash(token),), one=True)
+        return self.get_user(session['user_id']) if session else None
+
+    def set_password(self, uid, email, password):
+        """Attach an email and password to this account. False when the email belongs to another account."""
+        email = email.strip().lower()
+        owner = self.sql('SELECT user_id FROM credentials WHERE email=?', (email,), one=True)
+        if owner and owner['user_id'] != uid:
+            return False
+        self.sql('DELETE FROM credentials WHERE user_id=?', (uid,))
+        self.sql('INSERT INTO credentials VALUES(?,?,?,?)', (email, uid, password_hash(password), now()))
+        return True
+
+    def email_of(self, uid):
+        row = self.sql('SELECT email FROM credentials WHERE user_id=?', (uid,), one=True)
+        return row['email'] if row else None
+
+    def login(self, email, password):
+        """A new browser token for the account behind this email and password, or None."""
+        row = self.sql('SELECT user_id, pw_hash FROM credentials WHERE email=?', (email.strip().lower(),), one=True)
+        if not row or not password_ok(password, row['pw_hash']):
+            return None
+        token = secrets.token_urlsafe(32)
+        self.sql('INSERT INTO sessions VALUES(?,?,?)', (token_hash(token), row['user_id'], now()))
+        return {'user_id': row['user_id'], 'token': token}
 
     def get_user(self, uid):
         return self.sql('SELECT * FROM users WHERE id=?', (uid,), one=True)
