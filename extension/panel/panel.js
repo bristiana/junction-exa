@@ -5,6 +5,7 @@ import { PROFILE_FIELDS } from "../lib/task.js";
 import { numberSources, citesFor, resolveAction, fillPlaceholders, unfilledPlaceholders } from "../lib/actions.js";
 import { search } from "../lib/exa.js";
 import { connect, me as serverMe, pair, normalizeBaseUrl } from "../lib/backend.js";
+import { taskMascot, headerMascot, finishFlash, FLASH_MS } from "../lib/mascot.js";
 
 const $ = (id) => document.getElementById(id);
 const PRESETS = [
@@ -26,6 +27,16 @@ const RESULT_PILL = {
   needs_info: ["Needs info", "info"],
   not_possible: ["Not possible", "failed"],
   info_only: ["Answer", "ready"],
+};
+// Once the cloud browser has started on an errand, its status is the one that matters.
+const EXEC_PILL = {
+  starting: ["Starting", ""],
+  running: ["Doing it", ""],
+  awaiting_approval: ["Approve", "info"],
+  submitting: ["Sending", ""],
+  done: ["Done", "ready"],
+  failed: ["Failed", "failed"],
+  stopped: ["Stopped", "cancelled"],
 };
 
 const DEFAULTS = { tasks: [], profile: {}, exaKey: "", effort: "low", backendUrl: "", presence: true };
@@ -60,6 +71,45 @@ function send(msg) {
     return r.data;
   });
 }
+
+// ---------- the mascot ----------
+// One animated Vali in the header follows the errand that matters most (lib/mascot.js); cards and the empty state use stills.
+const SAYS = {
+  idle: "At your service",
+  listening: "Listening",
+  thinking: "Researching",
+  working: "Working in the browser",
+  needs_approval: "Waiting for your OK",
+  success: "Done",
+  error: "Something went wrong",
+};
+const mascot = (() => {
+  const box = $("mascot");
+  try {
+    return globalThis.Butler.create(box, { palette: "lilac", state: "idle", reducedMotion: "auto", trackPointer: true, hoverReact: true });
+  } catch (_) {
+    const img = h("img", { src: "../mascot/idle.svg", alt: "" });
+    box.replaceChildren(img);
+    return { setState: (s) => { img.src = `../mascot/${s === "listening" ? "idle" : s}.svg`; } };
+  }
+})();
+let lastPoses = new Map();
+let flash = null;
+let flashTimer = 0;
+function updateMascot() {
+  const f = finishFlash(lastPoses, state.tasks);
+  lastPoses = new Map(state.tasks.map((t) => [t.id, taskMascot(t)]));
+  if (f) {
+    flash = { state: f, until: Date.now() + FLASH_MS[f] };
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(updateMascot, FLASH_MS[f] + 50);
+  }
+  const pose = headerMascot(state.tasks, { focused: document.hasFocus() && document.activeElement === $("task"), flash });
+  mascot.setState(pose);
+  $("mascotSays").textContent = SAYS[pose] || "";
+}
+$("task").addEventListener("focus", updateMascot);
+$("task").addEventListener("blur", () => setTimeout(updateMascot)); // after the blur, so hasFocus() is current
 
 // ---------- settings ----------
 function renderSettings() {
@@ -387,7 +437,9 @@ function renderResult(t) {
 function renderCard(t) {
   const card = document.getElementById("cardTpl").content.firstElementChild.cloneNode(true);
   const s = t.output?.structured;
-  const [label, cls] = t.status === "completed" && s?.status ? RESULT_PILL[s.status] || STATUS.completed : STATUS[t.status] || [t.status, ""];
+  const [label, cls] = EXEC_PILL[t.execution?.status]
+    || (t.status === "completed" && s?.status ? RESULT_PILL[s.status] || STATUS.completed : STATUS[t.status] || [t.status, ""]);
+  card.querySelector(".still").src = `../mascot/${taskMascot(t)}.svg`;
   card.querySelector(".pill").textContent = label;
   if (cls) card.querySelector(".pill").classList.add(cls);
   card.querySelector(".task-text").textContent = t.parentId ? "↳ " + t.task.split("\n\nMy answers:")[0] : t.task;
@@ -416,6 +468,7 @@ function renderCard(t) {
 }
 
 function render() {
+  updateMascot();
   const list = $("list");
   // keep focus and scroll inside text areas stable while polling re-renders
   const focused = document.activeElement?.closest?.(".card") ? document.activeElement : null;

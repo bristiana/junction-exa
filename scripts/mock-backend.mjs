@@ -6,6 +6,8 @@
 // that "came from WhatsApp". To fake the phone side:
 //   curl -X POST http://127.0.0.1:8787/mock/whatsapp -H 'Content-Type: application/json' -d '{"text":"link 123456"}'
 //   curl -X POST http://127.0.0.1:8787/mock/whatsapp -H 'Content-Type: application/json' -d '{"text":"Find a public sauna in Helsinki"}'
+// To see every state in the panel at once (a browser run waiting for approval, a failed errand):
+//   curl -X POST http://127.0.0.1:8787/mock/demo
 // Endpoints follow docs/ARCHITECTURE.md. Research "runs" for researchMs, a browser run reaches approval after execMs.
 
 import http from "node:http";
@@ -75,6 +77,31 @@ export function createMockServer({ researchMs = 6000, execMs = 4000, log = false
     };
     user.tasks.unshift(t);
     return t;
+  }
+
+  // Canned errands in the states a fresh user never reaches on their own: a browser run on hold, a failed run.
+  function seedDemo(user) {
+    const failed = makeTask(user, "Check whether my HSL season ticket can be refunded");
+    Object.assign(failed.research, { status: "failed", error: { message: "The research run failed (mock)." } });
+    const t = makeTask(user, "Book a public sauna in Helsinki for 8 people this Saturday evening", { done: true });
+    advance(t);
+    const start = "https://www.suomi.fi/";
+    t.execution = {
+      status: "awaiting_approval",
+      goal: "Book the sauna for 8 people on Saturday at 18:00",
+      start_url: start,
+      current_url: start,
+      steps: [
+        { n: 1, at: now(), text: `Opened ${start}`, shot: 1 },
+        { n: 2, at: now(), text: "Filled the booking form, waiting for your approval", shot: 2 },
+      ],
+      shots: [{ n: 1, url: `/v1/tasks/${t.id}/shots/1.jpg` }, { n: 2, url: `/v1/tasks/${t.id}/shots/2.jpg` }],
+      approval: { summary: "Booking filled (mock): Saturday 18:00, 8 people, nothing sent yet", filled: [{ label: "Full name", value: "{{name}}" }, { label: "Email", value: "{{email}}" }] },
+      result: null,
+      error: null,
+      _at: Date.now(),
+    };
+    return [t, failed];
   }
 
   // Advance a task lazily, from the clock, every time it is read.
@@ -170,6 +197,12 @@ export function createMockServer({ researchMs = 6000, execMs = 4000, log = false
       if (!user) return send(res, 404, { detail: "No user has linked WhatsApp yet." });
       if (!text) return send(res, 400, { detail: "text is required." });
       return send(res, 200, view(makeTask(user, text, { source: "whatsapp" })));
+    }
+
+    if (req.method === "POST" && path === "/mock/demo") {
+      if (!users.size) return send(res, 404, { detail: "Connect the extension first." });
+      const added = [...users.values()].flatMap((u) => seedDemo(u).map(view));
+      return send(res, 200, { ok: true, tasks: added });
     }
 
     const shot = path.match(/^\/v1\/tasks\/([^/]+)\/shots\/(\d+)\.jpg$/);
