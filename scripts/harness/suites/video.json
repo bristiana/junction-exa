@@ -1,0 +1,5 @@
+{"persona": "a newcomer to Helsinki", "cases": [
+ {"phrase": "how to register a change of address after moving to Helsinki", "must_mention": ["DVV"]},
+ {"phrase": "book a public sauna in Helsinki for a group", "expected_modes": ["find", "book"]},
+ {"phrase": "AI startups in Helsinki building agents", "expected_modes": ["find", "check"]}
+]}
