@@ -129,7 +129,9 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         + ('Use exa_search / exa_read to look up facts you need (rules, amounts, deadlines, slots, the right form) '
            'instead of guessing or leaving the page; cite the URL as the source in request_approval. ' if exa.enabled else '')
         + ('When a choice is the user\'s or a needed fact is missing, use ask_user once instead of guessing. ' if hooks.ask_user else '')
-        + 'Messages from the user may arrive while you work; follow them unless they conflict with these rules. '
+        + 'When everything is filled and only the final submit or payment is left, call request_approval with a summary '
+        'of every value (never fail at that point); if payment follows, the user finishes it at the bank. '
+        'Messages from the user may arrive while you work; follow them unless they conflict with these rules. '
         'Call finish or fail when done. Finish with a one-line result including any reference number shown.', profile)
 
     def outcome():
