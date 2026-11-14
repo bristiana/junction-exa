@@ -27,19 +27,22 @@ const AUTOCOMPLETE = {
   "street-address": "address", "address-line1": "address", "postal-code": "postal_code", "address-level2": "city",
   country: "country", "country-name": "country", bday: "date_of_birth",
 };
+// Whole words only (Finnish words may take endings), so "company name" or "filename" never look like a name.
+const word = (alts) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, "iu");
 const WORDS = [
-  ["email", /e-?mail|sähköposti/i],
-  ["phone", /phone|\btel\b|telephone|mobile|puhelin|matkapuhelin|\bgsm\b/i],
-  ["postal_code", /post(al)?.?code|\bzip\b|postinumero/i],
-  ["city", /\bcity\b|\btown\b|kaupunki|postitoimipaikka|kotikunta/i],
-  ["country", /country|\bmaa\b|valtio/i],
-  ["date_of_birth", /birth|syntymä/i],
-  ["nationality", /nationality|citizenship|kansalaisuus/i],
-  ["address", /address|street|osoite/i],
-  ["first_name", /first.?name|given.?name|etunimi/i],
-  ["last_name", /last.?name|family.?name|surname|sukunimi/i],
-  ["name", /name|\bnimi\b/i],
+  ["email", word("e-?mail|sähköposti\\p{L}*")],
+  ["phone", word("phone|telephone|tel|mobile|gsm|puhelin\\p{L}*|matkapuhelin\\p{L}*")],
+  ["postal_code", word("postal code|post code|postcode|zip|zip code|postinumero")],
+  ["city", word("city|town|kaupunki|postitoimipaikka|kotikunta")],
+  ["country", word("country|maa|valtio")],
+  ["date_of_birth", word("date of birth|birth date|birthday|syntymäaika|syntymäpäivä")],
+  ["nationality", word("nationality|citizenship|kansalaisuus")],
+  ["address", word("address|street address|home address|street|katuosoite|lähiosoite|osoite")],
+  ["first_name", word("first name|given names?|etunimi|etunimet")],
+  ["last_name", word("last name|family name|surname|sukunimi")],
 ];
+// The full name only for a field that is plainly asking for it.
+const NAME_LABEL = /^(?:(?:full|your|customer|contact|applicant) )?name$|^(?:koko )?nimi$/;
 
 const norm = (s) => String(s || "").toLowerCase().replace(/[*:]/g, " ").replace(/\s+/g, " ").trim();
 
@@ -54,7 +57,8 @@ function profileValue(kind, profile) {
 function detailOf(field) {
   for (const token of norm(field.hint).split(" ")) if (AUTOCOMPLETE[token]) return AUTOCOMPLETE[token];
   const text = `${field.label || ""} ${field.hint || ""}`;
-  return (WORDS.find(([, re]) => re.test(text)) || [])[0] || null;
+  const kind = (WORDS.find(([, re]) => re.test(text)) || [])[0];
+  return kind || (NAME_LABEL.test(norm(field.label)) ? "name" : null);
 }
 
 // The errand's own values with their labels: the prepared form fill and what the cloud browser filled so far.
@@ -69,8 +73,7 @@ export function errandValues(task) {
 function errandValueFor(field, values) {
   const label = norm(field.label);
   if (label.length < 3) return null;
-  const hit = values.find((v) => norm(v.label) === label) ||
-    values.find((v) => { const l = norm(v.label); return l.length >= 4 && (label.includes(l) || l.includes(label)); });
+  const hit = values.find((v) => norm(v.label) === label); // same label only: "address" is not "email address"
   return hit ? String(hit.value) : null;
 }
 

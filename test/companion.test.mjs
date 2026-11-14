@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { cacheKey, helpfulPage, companionPayload, cleanTip, cachedEntry, remember, TIP_TTL_MS, RETRY_MS } from "../extension/lib/companion.js";
+import { cacheKey, sentUrl, helpfulPage, companionPayload, cleanTip, cachedEntry, remember, TIP_TTL_MS, RETRY_MS } from "../extension/lib/companion.js";
 
 const ctx = vm.createContext({});
 vm.runInContext(readFileSync(new URL("../extension/content/presence.js", import.meta.url), "utf8"), ctx);
@@ -17,7 +17,8 @@ test("tips on public services, studying, housing, travel, shops and bookings", (
     "https://www.hoas.fi/en/", "https://www.hsl.fi/en/tickets-and-fares", "https://www.verkkokauppa.com/fi/product/1",
     "https://www.uscis.gov/forms", "https://www.ox.ac.uk/admissions", "https://kurssit.example.fi/ilmoittautuminen",
   ]) assert.equal(qualifies(url), true, url);
-  assert.equal(qualifies("https://example.com/news", "Apply for a parking permit"), true);
+  for (const [url, title] of [["https://example.com/news", "Parking permits in Espoo"], ["https://lentoyhtio.example/korvaushakemus", ""],
+    ["https://example.com/claims/flight-delay-compensation", ""]]) assert.equal(qualifies(url, title), true, url);
 });
 
 test("no tips on search, mail, chat, banks or ordinary pages", () => {
@@ -27,10 +28,14 @@ test("no tips on search, mail, chat, banks or ordinary pages", () => {
     "https://www.op.fi/henkiloasiakkaat", "https://www.nordea.fi/en/personal/", "https://tunnistus.suomi.fi/",
     "https://www.paypal.com/fi/home", "https://example.com/blog/cats", "https://news.ycombinator.com/",
   ]) assert.equal(qualifies(url), false, url);
+  // generic words and words inside other words are not errands
+  for (const [url, title] of [["https://github.com/acme/app/pull/12", "Return values, rent calc and tax delivery tickets: apply patch"],
+    ["https://news.example.com/2026/tax-rates", "Tax rates and rent prices rise"], ["https://blog.example.fi/a", "Asumistukihakemus ja verokortti"],
+    ["https://shop.example.com/returns", "Free delivery and returns"]]) assert.equal(qualifies(url, title), false, url);
   assert.equal(helpfulPage("chrome://settings", "Apply"), false);
 });
 
-test("the server gets only address, title, headings, language and selection, redacted", () => {
+test("the server gets only site and first path segment, title, headings and language, redacted; never the selection", () => {
   const raw = {
     url: "https://www.kela.fi/apply?email=aino%40example.com#form",
     title: "Apply | Kela",
@@ -42,13 +47,14 @@ test("the server gets only address, title, headings, language and selection, red
     text: "page body",
   };
   const out = companionPayload(raw);
-  assert.deepEqual(Object.keys(out).sort(), ["headings", "lang", "selection", "title", "url"]);
+  assert.deepEqual(Object.keys(out).sort(), ["headings", "lang", "title", "url"]);
   assert.equal(out.url, "https://www.kela.fi/apply");
+  assert.equal(sentUrl("https://lentoyhtio.example/claims/123456/edit?x=1"), "https://lentoyhtio.example/claims");
+  assert.equal(sentUrl("https://www.kela.fi/"), "https://www.kela.fi/");
   assert.equal(out.headings.length, 12);
   assert.equal(out.headings[0], "Questions? Mail [email]");
-  assert.equal(out.selection, "Call me on [phone]");
+  assert.equal(JSON.stringify(out).includes("040"), false);
   assert.equal(out.lang, "en");
-  assert.equal("selection" in companionPayload({ ...raw, selection: "" }), false);
   assert.equal(companionPayload({ url: "file:///Users/me/a.pdf" }), null);
 });
 

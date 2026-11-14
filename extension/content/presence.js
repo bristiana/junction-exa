@@ -2,7 +2,8 @@
 // - a tip for this page (POST /v1/companion via the background) with its sources and "Do it", which starts the errand;
 // - or, on pages with a real form and no tip, the offer to fill it in ("Yes" opens the side panel; "Not now" silences
 //   the site for 7 days, and the offer shows at most 3 times per site per day).
-// What leaves the page for a tip: address, title, h1-h3 headings, language and the selected text. Never form values.
+// What leaves the page for a tip: site and first path segment, title, h1-h3 headings and language. Never the selection
+// or form values.
 // Rules: only once the page settled, never while the user types or scrolls, never on search, mail, chat, payment or
 // banking sites, off when settings.presence === false ("Vali tips while you browse").
 // Classic content script: no imports; lib/butler.js runs first and draws Vali. The bubble lives in a closed shadow root
@@ -103,19 +104,13 @@
     const el = node && (node.nodeType === 1 ? node : node.parentElement);
     return !!el?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])");
   }
-  // Selected page text, never text inside a field or an editor (that is what the user typed).
-  function selectedText() {
-    const sel = getSelection();
-    if (!sel || sel.isCollapsed || inEditable(sel.anchorNode) || inEditable(document.activeElement)) return "";
-    return clipText(sel, 1000);
-  }
   function pageContext() {
     const headings = [...document.querySelectorAll("h1, h2, h3")]
-      .filter((h) => !inEditable(h) && !h.closest("form, dialog, [role=dialog], [aria-modal=true]")) // not cookie banners
+      .filter((h) => !inEditable(h) && !h.closest("form, nav, header, dialog, [role=dialog], [aria-modal=true]")) // not menus or cookie banners
       .map((h) => clipText(h.textContent, 120))
       .filter(Boolean)
       .slice(0, 12);
-    return { url: location.href, title: clipText(document.title, 200), headings, lang: document.documentElement.lang || "", selection: selectedText() };
+    return { url: location.href, title: clipText(document.title, 200), headings, lang: document.documentElement.lang || "" };
   }
   function send(msg) {
     return new Promise((resolve) => {

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { samePage, PAGE_CHANGED } from "../extension/lib/fill-here.js";
-import { fillPage } from "../extension/lib/page-scripts.js";
+import { fillPage, isPage } from "../extension/lib/page-scripts.js";
 import { createClient, backendPage } from "../extension/lib/backend.js";
 
 test("a fill goes only to the page the user chose", () => {
@@ -20,6 +20,8 @@ test("fillPage refuses in a document that is not the chosen page, before touchin
   try {
     assert.deepEqual(fillPage([{ field_id: "h1", value: "Aino Virtanen" }], "https://httpbin.org/forms/post"), { filled: 0, skipped: [], error: PAGE_CHANGED });
     assert.equal(fillPage([], undefined).error, PAGE_CHANGED);
+    assert.equal(isPage("https://httpbin.org/forms/post"), false);
+    assert.equal(isPage("https://httpbin.org/post?x=1"), true);
   } finally {
     globalThis.location = saved;
   }

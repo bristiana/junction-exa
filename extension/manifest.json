@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Hand off an errand. Vali researches it with Exa in the background, shows its sources and prepares the next step for you to approve.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "sidePanel", "contextMenus", "notifications", "alarms", "scripting", "activeTab", "tabs"],
+  "permissions": ["storage", "sidePanel", "contextMenus", "notifications", "alarms", "scripting"],
   "host_permissions": ["https://api.exa.ai/*", "https://bogdan-c-2206--vali-web.us-east.modal.run/*", "http://127.0.0.1/*", "http://localhost/*", "<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": {
