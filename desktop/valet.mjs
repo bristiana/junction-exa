@@ -1,6 +1,7 @@
 // Vali on screen, the decisions only (pure, shared by main.mjs, the mascot window and the tests): where he stands,
 // when he steps aside, when he sleeps, and the one line in his speech bubble. stage.mjs moves the window.
 // Rectangles are {x, y, width, height} in screen points; `area` is a display's work area.
+import { WELCOME_LINE } from './welcome.mjs';
 
 export const PEEK = 64;        // what still shows when Vali has stepped aside
 export const PEEK_IN = 120;    // what shows when he peeks back in with the bell
@@ -67,7 +68,7 @@ export function asleep({ busy, lastBusyAt, now = Date.now() }) {
 }
 
 // The speech bubble: one first-person line for what Vali is doing (shared/README.md, rule 8).
-export function bubbleLine({ pose = 'idle', paused = false, sleeping = false, badge = {} } = {}) {
+export function bubbleLine({ pose = 'idle', paused = false, sleeping = false, welcome = false, badge = {} } = {}) {
   const { count = 0, needsYou = false } = badge;
   if (paused) return 'I’m paused. Errands in the cloud keep going.';
   if (needsYou) {
@@ -76,6 +77,7 @@ export function bubbleLine({ pose = 'idle', paused = false, sleeping = false, ba
     return 'I need your OK on an errand.';
   }
   if (sleeping) return 'Resting. Hover to wake me.';
+  if (welcome) return WELCOME_LINE;
   if (pose === 'working' || pose === 'thinking') return count > 1 ? `I’m on ${count} errands.` : 'I’m on it.';
   if (pose === 'success') return 'All done. Have a look.';
   if (pose === 'error') return 'I couldn’t finish one. Have a look.';

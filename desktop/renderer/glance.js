@@ -2,6 +2,7 @@
 // Answer right here, and the live browser view of the run in progress.
 import { glanceItems } from '../logic.mjs';
 import { executionView, LIVE } from '../vendor/lib/execution.js';
+import { showWelcome } from './welcome.js';
 window.__desktopErrors = [];
 window.addEventListener('error', e => window.__desktopErrors.push(e.message));
 window.addEventListener('unhandledrejection', e => window.__desktopErrors.push(String(e.reason)));
@@ -101,8 +102,9 @@ async function refreshLive() {
 setInterval(() => { if (liveId) refreshLive(); }, 1500);
 document.addEventListener('focusout', () => setTimeout(() => { if (pending) render(); }));
 window.vali.onChange((changes, area) => { if (area === 'local' && changes.tasks) { tasks = changes.tasks.newValue || []; render(); } });
-window.vali.onState(s => { shortcut = s.shortcut || shortcut; });
-window.vali.call('state').then(s => { shortcut = s.shortcut || shortcut; });
+const onState = s => { shortcut = s.shortcut || shortcut; showWelcome(s); };
+window.vali.onState(onState);
+window.vali.call('state').then(onState);
 window.vali.call('storage:get', { area: 'local', keys: ['tasks'] }).then(s => { tasks = s.tasks || []; render(); });
 $('new').onclick = () => window.vali.call('newErrand');
 $('chat').onclick = () => window.vali.call('chat');

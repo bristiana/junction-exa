@@ -141,6 +141,7 @@ window.vali.onQuick(({ mode, context = {} }) => {
   if (!rec && !busy) reset();
   if (context.page) ctx.page = context.page;
   if (context.selection) { ctx.selection = context.selection; ctx.via = context.via; }
+  if (context.text) input.value = context.text; // the welcome card's sample errand, ready to send
   render();
   if (mode === 'ask' && context.needsAccess) note(context.selection ? 'Used your clipboard. To grab selected text directly, allow Vali in System Settings > Privacy & Security > Accessibility.' : 'Select some text first. Allow Vali in System Settings > Privacy & Security > Accessibility so it can copy the selection.');
   input.focus();

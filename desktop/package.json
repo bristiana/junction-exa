@@ -38,6 +38,7 @@
       "logic.mjs",
       "stage.mjs",
       "valet.mjs",
+      "welcome.mjs",
       "bridge.cjs",
       "renderer/**/*",
       "vendor/**/*"

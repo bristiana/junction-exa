@@ -15,14 +15,17 @@ function openSettings(target) {
 window.vali.onChange((changes, area) => {
   if (area === 'local' && changes.connectionError) showError(changes.connectionError.newValue ? `${changes.connectionError.newValue} Open Settings to reconnect.` : '');
   if (area === 'session' && changes.newAccount) welcome(changes.newAccount.newValue);
+  if (area === 'session' && changes.openLink?.newValue) openLink();
 });
 window.vali.onState(s => { if (s.paused) showError('Paused. Resume from the menu bar to refresh errands and notifications.'); else if (banner.textContent.startsWith('Paused.')) showError(''); });
 window.vali.call('storage:get', { area: 'local', keys: ['connectionError'] }).then(s => showError(s.connectionError || ''));
 window.vali.call('storage:get', { area: 'session', keys: ['newAccount'] }).then(s => welcome(s.newAccount));
+// Settings > Link with the extension, ready to type the code (also from the welcome card beside the mascot).
+function openLink() { openSettings(document.querySelector('.desktop-link')); document.getElementById('linkInput')?.focus(); }
 // First run: a fresh account was made. Offer linking with the extension instead, once.
 function welcome(isNew) {
   if (!isNew || !banner.hidden) return;
-  banner.replaceChildren('Welcome to Vali. Already use Vali in Chrome? ', button('Link with the extension', 'v-btn v-btn--quiet', () => { showError(''); openSettings(document.querySelector('.desktop-link')); document.getElementById('linkInput')?.focus(); }),
+  banner.replaceChildren('Welcome to Vali. Already use Vali in Chrome? ', button('Link with the extension', 'v-btn v-btn--quiet', () => { showError(''); openLink(); }),
     button('×', 'icon-btn', () => { showError(''); window.vali.call('storage:set', { area: 'session', values: { newAccount: false } }); }));
   banner.lastChild.setAttribute('aria-label', 'Dismiss'); banner.hidden = false;
 }
