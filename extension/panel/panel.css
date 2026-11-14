@@ -170,6 +170,9 @@ h4 { margin: var(--v-s-3) 0 var(--v-s-1); font-size: 11px; text-transform: upper
 .h-meta b[data-tone="warning"] { color: var(--v-warning); }
 .h-meta b[data-tone="success"] { color: var(--v-success); }
 .h-meta b[data-tone="danger"] { color: var(--v-danger); }
+.h-more { display: flex; align-items: center; justify-content: space-between; gap: var(--v-s-2); margin-top: var(--v-s-2); padding: 0 var(--v-s-2); }
+.h-all { font-size: var(--v-fs-sm); color: var(--v-muted); }
+.h-all:hover { color: var(--v-text); }
 .h-empty { color: var(--v-muted); font-size: var(--v-fs-sm); text-align: center; padding: var(--v-s-5) 0; }
 
 /* ---------- the composer, pinned at the bottom ---------- */

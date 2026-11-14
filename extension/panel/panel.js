@@ -898,11 +898,17 @@ function renderThread(convo) {
   for (const n of $("thread").querySelectorAll("[data-key]")) shownKeys.add(n.dataset.key);
 }
 
+// History shows the newest few; "Show more" adds the next batch, and "All errands" opens the web dashboard.
+const HISTORY_STEP = 8;
+let historyShown = HISTORY_STEP;
 function renderHistory(convos, cur) {
   const box = $("history");
   if (box.hidden) return;
+  const shown = convos.slice(0, historyShown);
+  const left = convos.length - shown.length;
+  const web = `${state.backendUrl || DEFAULT_BASE_URL}/#/dashboard`;
   box.replaceChildren(h("h2", { text: `History · ${convos.length}` }), convos.length
-    ? h("ol", {}, ...convos.map((c) => {
+    ? h("ol", {}, ...shown.map((c) => {
       const [label, tone] = errandStatus(c.last);
       return h("li", {}, h("button", { class: "h-row" + (c.id === cur?.id ? " is-current" : ""), type: "button", "data-id": c.id, onclick: () => openConvo(c.last.id) },
         h("img", { src: `../mascot/${taskMascot(c.last)}.svg`, alt: "" }),
@@ -910,7 +916,11 @@ function renderHistory(convos, cur) {
           h("div", { class: "h-meta" }, h("b", { "data-tone": tone, text: label }), h("span", { text: "· " + ago(c.at) }),
             c.tasks.length > 1 ? h("span", { text: `· ${c.tasks.length} errands` }) : null))));
     }))
-    : h("p", { class: "h-empty", text: "No errands yet. Your conversations with Vali show up here." }));
+    : h("p", { class: "h-empty", text: "No errands yet. Your conversations with Vali show up here." }),
+    convos.length ? h("div", { class: "h-more" },
+      left > 0 ? h("button", { class: "v-btn v-btn--quiet", type: "button", text: `Show more (${left})`,
+        onclick: () => { historyShown += HISTORY_STEP; render(); } }) : null,
+      h("a", { class: "h-all", href: web, target: "_blank", rel: "noopener noreferrer", text: "All errands" })) : null);
 }
 
 function renderStats() {
