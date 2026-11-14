@@ -53,18 +53,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
   // Must run synchronously inside the click to count as a user gesture.
-  chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-  const selection = info.selectionText || "";
-  await chrome.storage.session.set({
-    prefill: {
-      at: Date.now(),
-      tabId: tab.id,
-      selection,
-      link: info.linkUrl || "",
-      pageTitle: tab.title || "",
-      ...(selection ? { source: "explain", task: EXPLAIN_QUESTION, usePage: true } : {}),
-    },
-  });
+  const opening = openPanelNow(tab.id);
+  const selection = (info.selectionText || "").slice(0, 4000);
+  const prefill = { at: Date.now(), tabId: tab.id, selection, link: info.linkUrl || "", pageTitle: tab.title || "" };
+  // "Ask Vali about this" sends right away; if it can't, the question waits in the panel for one press on Send.
+  if (selection) {
+    startFromPage(tab.id, EXPLAIN_QUESTION, selection, opening)
+      .catch(() => chrome.storage.session.set({ prefill: { ...prefill, task: EXPLAIN_QUESTION, usePage: true } }));
+    return;
+  }
+  await chrome.storage.session.set({ prefill });
 });
 
 // ---------- runs ----------
@@ -326,18 +324,18 @@ function openWithPrefill(msg, sender, reply, prefill) {
   return true;
 }
 
-// "Do it" on a tip: the tip's errand starts right away, with this page attached, and the panel shows it.
-function startFromTip(msg, sender, reply) {
+// An errand started from the page the user is on ("Do it" on a tip, "Ask Vali about this"): it starts right away
+// with the page attached, and the panel shows it. opening: openPanelNow(), already called inside the click.
+async function startFromPage(tabId, task, selection, opening) {
+  const rec = await startTask({ task, tabId, usePage: true, selection });
+  await chrome.storage.session.set({ focusTask: rec.id });
+  return { opened: await opening };
+}
+function startFromPageMessage(sender, reply, task, selection = "") {
   const tabId = sender.tab?.id;
-  const task = String(msg.task || "").trim().slice(0, 2000);
   if (!tabId || !task) { reply({ ok: false, error: "Nothing to start." }); return false; }
-  const opening = openPanelNow(tabId);
-  startTask({ task, tabId, usePage: true })
-    .then(async (rec) => {
-      await chrome.storage.session.set({ focusTask: rec.id });
-      reply({ ok: true, data: { opened: await opening } });
-    })
-    .catch((e) => reply({ ok: false, error: e?.message || String(e) }));
+  startFromPage(tabId, task, selection, openPanelNow(tabId))
+    .then((data) => reply({ ok: true, data }), (e) => reply({ ok: false, error: e?.message || String(e) }));
   return true;
 }
 
@@ -385,8 +383,8 @@ function markTipSeen(url) {
 // ---------- messages from the panel and the badge ----------
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg?.type === "presence-open") return openWithPrefill(msg, sender, reply, { source: "presence", task: "Help me fill in this form", usePage: true });
-  if (msg?.type === "explain") return openWithPrefill(msg, sender, reply, { source: "explain", task: EXPLAIN_QUESTION, usePage: true, selection: String(msg.selection || "").slice(0, 4000) });
-  if (msg?.type === "companion-do") return startFromTip(msg, sender, reply);
+  if (msg?.type === "explain") return startFromPageMessage(sender, reply, EXPLAIN_QUESTION, String(msg.selection || "").trim().slice(0, 4000));
+  if (msg?.type === "companion-do") return startFromPageMessage(sender, reply, String(msg.task || "").trim().slice(0, 2000));
   const handlers = {
     linkAccount: async () => {
       if (!isLinkSender(sender, chrome.runtime.id)) throw new Error("Link your account from the extension panel.");
