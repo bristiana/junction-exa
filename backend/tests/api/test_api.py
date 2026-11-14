@@ -11,7 +11,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from vali_api.app import create_app, poll_research_once
+from vali_api.app import create_app, poll_research_once, research_from_run
 from vali_api.monitors import create_monitor
 from vali_api.config import Config
 from vali_api.exa import ExaClient, ExaError
@@ -98,6 +98,17 @@ def test_search_and_isolation(api):
     client.headers['Authorization'] = 'Bearer ' + other['token']
     assert client.get('/v1/tasks/' + task['id']).status_code == 404
     assert client.get(url, params={'t': other['token']}).status_code == 404
+
+
+def test_a_drafted_reply_is_never_addressed_to_the_user():
+    run = {'status': 'completed', 'output': {'structured': {'actions': [
+        {'type': 'email', 'to': '{{email}}', 'subject': 'Rent increase', 'body': 'Hello, {{name}}'},
+        {'type': 'phone_call', 'to': '{{ Phone }}'},
+        {'type': 'email', 'to': 'vuokra@example.com'}, {'type': 'email', 'to': None}]}}}
+    actions = research_from_run(run)['output']['structured']['actions']
+    assert [a['to'] for a in actions] == ['{{recipient_email}}', '{{recipient_phone}}', 'vuokra@example.com', None]
+    assert actions[0]['body'] == 'Hello, {{name}}'
+    assert 'never put one in an action\'s "to"' in SYSTEM_PROMPT and '{{sender_email}}' in SYSTEM_PROMPT
 
 
 def test_agent_poll_cancel_and_separate_columns(api):

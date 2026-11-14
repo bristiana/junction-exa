@@ -2,13 +2,14 @@
 // Answer right here, and the live browser view of the run in progress.
 import { glanceItems } from '../logic.mjs';
 import { executionView, LIVE } from '../vendor/lib/execution.js';
+import { fillPlaceholders } from '../vendor/lib/actions.js';
 import { showWelcome } from './welcome.js';
 import { glanceKeyAction } from '../glancekeys.mjs';
 window.__desktopErrors = [];
 window.addEventListener('error', e => window.__desktopErrors.push(e.message));
 window.addEventListener('unhandledrejection', e => window.__desktopErrors.push(String(e.reason)));
 const $ = id => document.getElementById(id);
-let tasks = [], shortcut = 'Alt+Space', pending = false, focusId = null;
+let tasks = [], profile = {}, shortcut = 'Alt+Space', pending = false, focusId = null;
 const drafts = new Map(), answered = new Map();
 
 function el(tag, attrs = {}, ...kids) {
@@ -36,7 +37,7 @@ const lastProgress = t => (Array.isArray(t.progress) && t.progress.length ? t.pr
 // One errand: title, one status line (<b>Status</b> · detail), and at most two actions. Only the first errand that
 // needs the user gets the primary button; the rest are soft, so each view has one clear next step.
 function item(t, s, primary, live) {
-  const v = executionView(t);
+  const v = executionView(t, { profile });
   const asking = v?.question && answered.get(t.id) !== v.question.at;
   const approving = !asking && v?.phase === 'approval' && !t.execution.approval_decision;
   const running = !asking && !approving && (v?.live || t.status === 'queued' || t.status === 'running');
@@ -44,7 +45,7 @@ function item(t, s, primary, live) {
     || (s.active ? v?.step || lastProgress(t) : s.tone === 'done' || s.needsYou ? v?.result || t.output?.structured?.answer : '');
   const main = el('div', { class: 'main' },
     el('button', { class: 'task', type: 'button', text: t.task.split('\n')[0], title: 'Open in chat', onclick: () => open(t) }),
-    el('p', { class: 'status' }, el('b', { text: s.label }), detail ? ` · ${clip(detail)}` : ''));
+    el('p', { class: 'status' }, el('b', { text: s.label }), detail ? ` · ${clip(fillPlaceholders(detail, profile))}` : ''));
   const row = el('div', { class: 'row' }, el('i', { class: 'dot' }), main);
   const li = el('li', { class: `item tone-${s.tone}${s.needsYou ? ' you' : ''}${t.id === focusId ? ' focus' : ''}`, 'data-id': t.id }, row, t === live ? liveBox : null);
   const actionClass = primary ? 'btn' : 'btn soft';
@@ -123,11 +124,16 @@ async function refreshLive() {
 }
 setInterval(() => { if (liveId) refreshLive(); }, 1500);
 document.addEventListener('focusout', () => setTimeout(() => { if (pending) render(); }));
-window.vali.onChange((changes, area) => { if (area === 'local' && changes.tasks) { tasks = changes.tasks.newValue || []; render(); } });
+window.vali.onChange((changes, area) => {
+  if (area !== 'local' || !(changes.tasks || changes.profile)) return;
+  if (changes.tasks) tasks = changes.tasks.newValue || [];
+  if (changes.profile) profile = changes.profile.newValue || {};
+  render();
+});
 const onState = s => { shortcut = s.shortcut || shortcut; showWelcome(s); };
 window.vali.onState(onState);
 window.vali.call('state').then(onState);
-window.vali.call('storage:get', { area: 'local', keys: ['tasks'] }).then(s => { tasks = s.tasks || []; render(); });
+window.vali.call('storage:get', { area: 'local', keys: ['tasks', 'profile'] }).then(s => { tasks = s.tasks || []; profile = s.profile || {}; render(); });
 $('new').onclick = () => window.vali.call('newErrand');
 $('chat').onclick = () => window.vali.call('chat');
 document.body.onmouseenter = () => window.vali.call('glance', 'hover');
