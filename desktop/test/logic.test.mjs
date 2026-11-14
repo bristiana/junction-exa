@@ -45,11 +45,11 @@ test('approval, new questions, and completion notify exactly at transitions', ()
 });
 
 test('prepared research and missing information draw attention', () => {
-  const result = status => ({ ...task('completed'), output: { structured: { status } } });
-  assert.equal(taskState(result('ready_to_approve')), 'needs_approval');
+  const result = (status, extra) => ({ ...task('completed'), ...extra, output: { structured: { status } } });
+  assert.equal(taskState(result('ready_to_approve', { mode: 'claim' })), 'needs_approval');
   assert.equal(taskState(result('needs_info')), 'needs_approval');
   assert.equal(taskState(result('not_possible')), 'error');
-  assert.deepEqual(notificationEvents(task('running'), result('ready_to_approve')), ['approval']);
+  assert.deepEqual(notificationEvents(task('running'), result('ready_to_approve', { mode: 'book' })), ['approval']);
   assert.deepEqual(notificationEvents(task('running'), result('needs_info')), ['question']);
 });
 import { talkError, micError, caption, MAX_VOICE_BYTES, letterType } from '../logic.mjs';
@@ -103,7 +103,7 @@ test('captions show the user briefly, then Vali, and a hint before anyone spoke'
   assert.equal(talkCaption({ agent: 'Hei!', agentAt: 500, ...user, now: 9000 }).who, 'you');
 });
 
-import { exaLine, badgeOf } from '../logic.mjs';
+import { exaLine, badgeOf, plainStatus } from '../logic.mjs';
 import { bubbleLine } from '../valet.mjs';
 const running = extra => ({ status: 'running', ...extra });
 test('exaLine says what Exa is doing, from the task fields only', () => {
@@ -124,4 +124,25 @@ test('the bubble shows Exa work, but needing you wins', () => {
   assert.equal(bubbleLine({ pose: 'working', badge: badgeOf([ask, work]) }), 'I have a question about an errand.');
   assert.equal(badgeOf([ask]).exa, undefined);
   assert.equal(bubbleLine({ pose: 'success', badge: badgeOf([work]) }), 'All done. Have a look.');
+});
+
+test('a plain answer is Done, not Waiting for your OK; only a real next step is', () => {
+  const answer = (extra, seen = true) => ({ ...task('completed'), seen, ...extra, output: { structured: { status: 'ready_to_approve', ...extra.structured } } });
+  const find = answer({ mode: 'find' });
+  assert.deepEqual(plainStatus(find), { label: 'Done', tone: 'done', needsYou: false, active: false });
+  assert.deepEqual(plainStatus(answer({ mode: 'check' }, false)), { label: 'New answer', tone: 'done', needsYou: false, active: false });
+  assert.equal(taskState(find), 'success');
+  assert.deepEqual(notificationEvents(task('running'), find), ['done']);
+  const email = answer({ mode: 'check', structured: { actions: [{ type: 'email', label: 'Send' }] } }, false);
+  assert.equal(plainStatus(email).label, 'Waiting for your OK');
+  assert.equal(plainStatus(email).needsYou, true);
+  for (const mode of ['claim', 'book', 'write']) assert.equal(plainStatus(answer({ mode })).label, 'Waiting for your OK');
+});
+test('the mascot searches during research and serves during browser runs', () => {
+  const research = { ...task('running', null, 5) }, run = task('completed', { status: 'running' }, 4);
+  assert.equal(mascotState([research]), 'searching');
+  assert.equal(mascotState([research, run]), 'working');
+  assert.equal(mascotState([run]), 'working');
+  assert.equal(mascotState([research, task('completed', { status: 'awaiting_approval' }, 1)]), 'needs_approval');
+  assert.equal(bubbleLine({ pose: 'searching', badge: { count: 1 } }), 'I’m on it.');
 });

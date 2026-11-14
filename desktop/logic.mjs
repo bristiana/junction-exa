@@ -2,6 +2,14 @@ import { redactText } from './vendor/lib/redact.js';
 import { executionView } from './vendor/lib/execution.js';
 const ACTIVE = new Set(['starting', 'running', 'awaiting_approval', 'submitting']);
 const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
+// A finished answer is only "waiting for your OK" when something prepared is there to approve, or the errand
+// (claim / book / write) is to be done. A plain answer to a find / check errand is just done.
+const DO_IT = new Set(['claim', 'book', 'write']);
+export function hasNextStep(t) {
+  const s = t?.output?.structured;
+  return s?.status === 'ready_to_approve' && !!(s.actions?.length || s.form_fill?.length || DO_IT.has(t.mode));
+}
+const inResearch = t => taskState(t) === 'working' && !t.execution?.status;
 export function taskState(t) {
   if (!t) return 'idle';
   const e = t.execution;
@@ -14,16 +22,21 @@ export function taskState(t) {
   if (!TERMINAL.has(t.status)) return 'working';
   if (t.status === 'completed') {
     const status = t.output?.structured?.status;
-    if (['ready_to_approve', 'needs_info'].includes(status)) return 'needs_approval';
+    if (status === 'needs_info' || hasNextStep(t)) return 'needs_approval';
     if (status === 'not_possible') return 'error';
     return 'success';
   }
   return 'idle';
 }
+// Same order as the extension panel header: something for you, then a browser run, then research (the searching pose).
 export function mascotState(tasks, paused = false) {
   if (paused) return 'idle';
   const sorted = [...tasks].sort((a, b) => b.createdAt - a.createdAt);
-  return taskState(sorted.find(t => ['working', 'needs_approval'].includes(taskState(t))) || sorted[0]);
+  const mine = sorted.find(t => taskState(t) === 'needs_approval');
+  if (mine) return 'needs_approval';
+  const busy = sorted.filter(t => taskState(t) === 'working');
+  if (busy.length) return busy.every(inResearch) ? 'searching' : 'working';
+  return taskState(sorted[0]);
 }
 export function notificationEvents(previous, next) {
   // First poll establishes a baseline: no flood of old completed errands.
@@ -36,7 +49,7 @@ export function notificationEvents(previous, next) {
   if (e.status === 'done' && p.status !== 'done') out.push('done');
   else if (!e.status && next.status === 'completed' && previous.status !== 'completed') {
     const result = next.output?.structured?.status;
-    out.push(result === 'ready_to_approve' ? 'approval' : result === 'needs_info' ? 'question' : 'done');
+    out.push(hasNextStep(next) ? 'approval' : result === 'needs_info' ? 'question' : 'done');
   }
   return out;
 }
@@ -146,7 +159,7 @@ export function openConfig(saved, decrypt) {
 
 // ---------- the glance list beside the mascot ----------
 // One plain line per errand, in the same words as the extension panel (extension/lib/panel-state.js):
-// Waiting for your OK, Needs your answer, Needs login, Needs you, Working, Done, Stopped, Couldn't finish.
+// Waiting for your OK (only with something to approve), New answer, Needs your answer, Needs login, Needs you, Working, Done, Stopped, Couldn't finish.
 // needsYou: Vali waits on the user.
 export function plainStatus(t) {
   const x = t?.execution, v = executionView(t);
@@ -165,8 +178,9 @@ export function plainStatus(t) {
   if (t?.status === 'cancelled') return { label: 'Stopped', tone: 'quiet', needsYou: false, active: false };
   const s = t?.output?.structured?.status;
   if (t?.status === 'failed' || s === 'not_possible') return { label: 'Couldn’t finish', tone: 'bad', needsYou: false, active: false };
-  if (s === 'ready_to_approve' || s === 'needs_info') return you(s === 'needs_info' ? 'Needs your answer' : 'Waiting for your OK', !t.seen, false, s === 'needs_info' ? 'question' : 'approval');
-  return { label: 'Done', tone: 'done', needsYou: false, active: false };
+  if (s === 'needs_info') return you('Needs your answer', !t.seen, false, 'question');
+  if (hasNextStep(t)) return you('Waiting for your OK', !t.seen, false, 'approval');
+  return { label: t.seen ? 'Done' : 'New answer', tone: 'done', needsYou: false, active: false };
 }
 
 const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
