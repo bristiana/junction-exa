@@ -4,6 +4,8 @@ import logging
 import re
 from datetime import datetime, timezone
 
+from .lang import NAMES, detect
+
 logger = logging.getLogger('vali.research')
 
 
@@ -185,8 +187,12 @@ def clip(value, n):
 def build_query(task, page=None, profile=None):
     profile, page = profile or {}, page or {}
     parts = [f'Errand: {task.strip()}']
-    lang = (profile.get('language') or '').strip()
-    if lang:
+    detected, lang = detect(task), (profile.get('language') or '').strip()
+    if detected:  # the errand's own language wins over a saved preference
+        lang = NAMES[detected]
+        parts.append(f'Answer in: {lang}. Write answer, key_facts, steps, missing_info and action labels in {lang}, the '
+                     'language of the errand; search and read sources in Finnish or English as needed.')
+    elif lang:
         parts.append(f'Answer in: {lang}.')
     known = [k for k in PROFILE_FIELDS if k != 'language' and profile.get(k)]
     if known:
