@@ -1,7 +1,8 @@
 """Regressions from the live tester: answer language, how an answer opens, quote support, find prices, channels."""
 import pytest
 
-from vali_api.citations import FETCH_CHARS, MAP_SCHEMA, MAP_SYSTEM, PAGE_CHARS, _facts, cite, excerpt, own, unmark, verbatim
+from vali_api.citations import (FETCH_CHARS, MAP_SCHEMA, MAP_SYSTEM, PAGE_CHARS, _facts, cite, excerpt, opener, own,
+                                 split_sentences, unmark, verbatim)
 from vali_api.exa import ExaClient
 from vali_api.lang import detect
 from vali_api.research import FIND_RULES, build_query, map_find_output, priced_answer
@@ -26,12 +27,10 @@ def output(answer, *urls):
 
 
 def verdicts(table):
-    """A fake judge: claim index -> (verdict, soft, quote); an opener request gets a fixed sentence."""
+    """A fake judge: claim index -> (verdict, soft, quote)."""
     seen = []
     def llm(system, user, schema):
         seen.append(system + '\n' + user)
-        if '[C' not in user:
-            return {'sentence': 'Kela explains student financial aid; check your own income limit there.'}
         i = int(user.split('[C', 1)[1].split(']', 1)[0])
         verdict, soft, quote = table[i]
         return {'claims': [{'i': i, 'verdict': verdict, 'soft': soft, 'support': [{'page': 0, 'quote': quote}] if quote else []}]}
@@ -79,26 +78,34 @@ def test_an_unconfirmed_claim_never_opens_the_answer():
 
 
 def test_with_no_confirmed_claim_a_plain_sentence_on_the_sources_opens():
-    page = {KELA: 'Opintotuki is student financial aid.'}
-    result = output('The aid ends in May.', KELA)
+    page = {KELA: 'Opintotuki is student financial aid.', VERO: 'Tax cards.'}
+    result = output('The aid ends in May.', KELA, VERO)
     judge = verdicts({0: ('no', 'Not confirmed by the sources: the aid ends in May.', '')})
     cite(result, FakeExa(page), judge, 'opintotuki tulorajat')
-    assert result['structured']['answer'] == ('Kela explains student financial aid; check your own income limit there.\n'
-                                              'Not confirmed by the sources: the aid ends in May.')
-    lead = 'Kela explains student financial aid; check your own income limit there.'
-    assert result['lead'] == lead and lead in result['own']  # Vali's own line, not a claim
+    lead = 'En voinut vahvistaa tätä lukemistani sivuista. Tarkista kela.fi ja vero.fi.'  # the errand's language
+    assert result['structured']['answer'] == lead + '\nNot confirmed by the sources: the aid ends in May.'
+    assert result['lead'] == lead and all(own(s, result) for s in split_sentences(lead))  # Vali's own line, not a claim
     assert [c['text'] for c in result['claims']] == ['Not confirmed by the sources: the aid ends in May.']
-    assert any('sentence in Finnish' in u for u in judge.seen if '[C' not in u)  # the errand's language
+    assert all('[C' in u for u in judge.seen)  # no model writes the opener
 
 
-def test_opener_falls_back_without_a_model_answer():
+@pytest.mark.parametrize('errand,lead', [
+    ('how much is student aid', 'I could not confirm this on the pages I read. Check kela.fi.'),
+    ('nasıl başvururum için', 'I could not confirm this on the pages I read. Check kela.fi.'),  # no template: English
+    ('Wo melde ich mich in Berlin an', 'Ich konnte das auf den gelesenen Seiten nicht bestätigen. Prüfe kela.fi.')])
+def test_the_opener_is_a_fixed_sentence_in_the_errand_language(errand, lead):
     result = output('The aid ends in May.', KELA)
     def judge(system, user, schema):
-        if '[C' not in user:
-            raise RuntimeError('down')
-        return {'claims': [{'i': 0, 'verdict': 'no', 'soft': 'Not confirmed by the sources: the aid ends in May.', 'support': []}]}
-    cite(result, FakeExa({KELA: 'Opintotuki.'}), judge)
-    assert result['structured']['answer'].startswith('The sources (kela.fi) cover this errand. Check the details there')
+        assert '[C' in user, 'the opener never asks a model'
+        return {'claims': [{'i': 0, 'verdict': 'no', 'soft': '', 'support': []}]}
+    cite(result, FakeExa({KELA: 'Opintotuki.'}), judge, errand)
+    assert result['lead'] == lead
+
+
+def test_every_opener_names_the_sites_and_has_no_em_dash():
+    for code in ('en', 'fi', 'sv', 'ro', 'de', 'es', 'fr', 'ru', 'uk', 'nl', 'da', 'it', 'ar'):
+        sentence = opener(code, [{'domain': 'kela.fi'}, {'domain': 'vero.fi'}, {'domain': 'kela.fi'}])
+        assert 'kela.fi' in sentence and 'vero.fi' in sentence and sentence.count('kela.fi') == 1 and '—' not in sentence
 
 
 def test_markdown_and_stray_asterisks_never_lead():
