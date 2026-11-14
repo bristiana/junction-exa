@@ -76,6 +76,11 @@ class ExecuteBody(BaseModel):
     profile: dict[str, str] | None = None
 
 
+class AuthBody(BaseModel):
+    email: str = Field(min_length=3, max_length=200, pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+    password: str = Field(min_length=8, max_length=200)
+
+
 class ContinueBody(BaseModel):
     answer: str | None = Field(default=None, max_length=2000)
     profile: dict[str, str] | None = None
@@ -430,7 +435,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             if request.method not in ('GET', 'HEAD', 'OPTIONS'):
                 limiter, ip = application.state.limiter, client_ip(request)
                 limiter.check('ip:' + ip, limiter.ip_limit, limiter.ip_seconds)
-                if request.url.path == '/v1/users':
+                if request.url.path in ('/v1/users', '/v1/auth/login'):
                     limiter.check('signup:' + ip, limiter.signup_limit, limiter.signup_seconds, what='new accounts')
         except RateLimited as exc:
             return await rate_limited(request, exc)
@@ -468,10 +473,25 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def users():
         return application.state.store.create_user()
 
+    @application.post('/v1/auth/register')
+    def register(body: AuthBody, user=Depends(authenticate)):
+        """Give this account an email and password, so it can be opened from any browser."""
+        if not application.state.store.set_password(user['id'], body.email, body.password):
+            raise HTTPException(409, 'That email already has an account. Sign in instead.')
+        return {'email': body.email.strip().lower()}
+
+    @application.post('/v1/auth/login')
+    def login(body: AuthBody):
+        signed = application.state.store.login(body.email, body.password)
+        if not signed:
+            raise HTTPException(401, 'Wrong email or password.')
+        return signed
+
     @application.get('/v1/me')
     def me(user=Depends(authenticate)):
         number = user.get('wa_number')
-        return dict(user_id=user['id'], whatsapp_linked=bool(number), whatsapp_last4=number[-4:] if number else None,
+        return dict(user_id=user['id'], email=application.state.store.email_of(user['id']),
+                    whatsapp_linked=bool(number), whatsapp_last4=number[-4:] if number else None,
                     profile_synced=False)  # profiles stay on the device; old clients read this
 
     @application.put('/v1/profile')

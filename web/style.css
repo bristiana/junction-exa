@@ -656,3 +656,12 @@ body.signed-in .top .guest { display: none; }
 .option:hover { border-color: var(--accent); }
 .option-label { font-weight: 600; }
 .option-site { flex: none; font-size: 13px; color: var(--muted); }
+
+.login-form { display: grid; gap: 10px; text-align: left; margin-top: 6px; }
+.login-input { width: 100%; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg); outline: 0; }
+.login-input:focus { border-color: var(--ring); box-shadow: 0 0 0 3px var(--ring-soft); }
+.login-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.login-error { margin: 0; color: var(--bad); font-size: 14px; }
+.login-or { margin: 18px 0 10px; color: var(--muted); font-size: 14px; }
+.login-choices + .login-form { margin-top: 18px; }
+.login-choice { text-align: left; }
