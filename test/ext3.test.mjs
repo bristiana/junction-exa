@@ -90,3 +90,27 @@ test("Exa source lists ignore non-arrays and malformed grounding entries", () =>
     research: { citations: ["https://example.com/"] } }).sources,
   [{ url: "https://example.com/", title: "example.com", host: "example.com" }]);
 });
+
+test("Exa calls made while filling the form join the trail, counts and sources", () => {
+  const exa = [
+    { kind: "search", query: "Mannerheimintie 5 postcode", results: [{ url: "https://www.posti.fi/en/zip-code-search#x", title: "Posti" }, { url: "javascript:alert(1)" }], cost_usd: 0.007 },
+    { kind: "read", url: "https://www.hel.fi/en/contact", question: "Opening hours?", results: [{ url: "https://www.hel.fi/en/contact", title: "Contact" }] },
+    { kind: "read", url: "https://example.com/gone", results: [], error: "Could not read the page" },
+    { kind: "read", url: "javascript:alert(1)" }, { kind: "other", query: "x" }, null,
+  ];
+  const view = exaActivity({ mode: "execute", execution: { exa, usage: { exa_cost_usd: 0.008 } } });
+  assert.deepEqual(view.filling.map((e) => [e.kind, e.text, e.failed]), [
+    ["search", "Mannerheimintie 5 postcode", false], ["read", "Opening hours?", false], ["read", "example.com/gone", true]]);
+  assert.deepEqual(view.filling[0].results.map((r) => r.url), ["https://www.posti.fi/en/zip-code-search"]);
+  assert.equal(view.filling[1].url, "https://www.hel.fi/en/contact");
+  // Search hits stay under their query; only pages Exa read count as sources.
+  assert.equal(view.summary, "Exa: 1 search, 2 page reads, 1 source");
+  assert.deepEqual(view.sources, [{ url: "https://www.hel.fi/en/contact", title: "Contact", host: "hel.fi" }]);
+  assert.match(view.method, /looked up what the form needed/);
+  assert.match(view.note, /^Counts cover form filling/);
+  // Reported counts win over the recorded list; a research errand keeps its own method line.
+  const claim = exaActivity({ mode: "claim", execution: { exa, usage: { exa_searches: 4 } } });
+  assert.match(claim.summary, /^Exa: 4 searches, 2 page reads/);
+  assert.match(claim.method, /Exa research/);
+  for (const value of [null, {}, "x", 1]) assert.deepEqual(exaActivity({ execution: { exa: value } }).filling, []);
+});
