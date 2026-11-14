@@ -31,7 +31,7 @@ function officeItem(office) {
   return h('li', { class: 'office' },
     h('p', { class: 'office-name' }, office.name, office.km == null ? null : h('span', { class: 'muted' }, ` · ${office.km.toFixed(1)} km`)),
     office.address ? h('p', { class: 'muted' }, office.address) : null,
-    h('p', { class: office.holiday ? 'office-hours holiday' : 'office-hours' }, office.hours));
+    h('p', { class: `office-hours ${office.tone}` }, office.hours));
 }
 
 function sortByDistance(offices, draw, button) {
