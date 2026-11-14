@@ -416,15 +416,15 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                     final = p is not None and p >= 0.6
                                 if final and not approved:
                                     raise ValueError('Call request_approval first')
+                                browser.click(args['ref'], approved=approved)
                                 approved = False
-                                browser.click(args['ref'])
                             elif name == 'type_text':
                                 approved = False
                                 browser.type(args['ref'], substitute(args['text'], profile))
                                 filled_log[label_of(args['ref'])] = mask(args['text'], profile)
                             elif name == 'select_option':
+                                browser.select(args['ref'], substitute(args['option'], profile), approved=approved)
                                 approved = False
-                                browser.select(args['ref'], substitute(args['option'], profile))
                                 filled_log[label_of(args['ref'])] = mask(args['option'], profile)
                             elif name == 'set_checkbox':
                                 approved = False
@@ -446,6 +446,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                         if name not in ('exa_search', 'exa_read', 'ask_user'):
                             hooks.on_step(step_text, shot())
                     except Exception as exc:
+                        approved = False
                         error = True
                         content = mask(f'Tool error: {exc}', profile)
                         content += '\n' + snapshot()
