@@ -21,7 +21,16 @@ def worker_app():
         raise RuntimeError('DATABASE_URL is required for shared Modal worker state')
     return create_app(config=config, store=make_store(config),
                       spawn_research_poller=lambda tid: research_poller.spawn(tid),
-                      spawn_browser_session=lambda tid, goal, url, profile: browser_session.spawn(tid, goal, url, profile))
+                      spawn_browser_session=spawn_browser_session)
+
+
+def spawn_browser_session(tid, goal, url, profile):
+    # The sandbox is its own app ("hoida-sandbox", modal_sandbox.py) so the two deploy independently.
+    # Falls back to this app's copy while the sandbox app is not deployed.
+    try:
+        return modal.Function.from_name('hoida-sandbox', 'browser_session').spawn(tid, goal, url, profile)
+    except modal.exception.NotFoundError:
+        return browser_session.spawn(tid, goal, url, profile)
 
 
 # One warm container keeps webhooks and the extension fast; it shares one DB connection.
