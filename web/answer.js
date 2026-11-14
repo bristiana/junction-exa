@@ -1,6 +1,6 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, draftsOf, factsOf, sourcesOf, stepsOf } from './model.js';
+import { claimsOf, draftsOf, factsOf, sourcesOf, stepsOf, webWork } from './model.js';
 import { renderExecution } from './execution.js';
 import { citePill } from './cite.js';
 import { renderState } from './state.js';
@@ -26,7 +26,7 @@ export function renderAnswer(task, handlers) {
           facts(factsOf(task, sources)),
           drafts(draftsOf(task)),
           run ? null : steps(stepsOf(task)),
-          h('p', { class: 'exa-line' }, exaLine(task, sources))]),
+          h('p', { class: 'exa-line' }, webWork(task))]),
         run ? chapter('Vali did', renderExecution(task, { ...handlers, quiet: true })) : null,
         chapter('Now', renderState(task, handlers), 'now'))));
 }

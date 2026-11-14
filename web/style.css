@@ -625,3 +625,9 @@ a.watch-criteria:hover { text-decoration: underline; text-decoration-color: var(
 .tally-channels { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0 0; }
 .feed-exa { color: var(--muted); font-weight: 400; }
 .feed-row.tone-failed .feed-meta b { color: var(--muted); }
+
+.thread-state { padding: 0 20px 20px; }
+
+/* one frame for every page: the same width and side gutters */
+main { max-width: 1040px; }
+.answer-main, .thread-view { max-width: 760px; margin-left: auto; margin-right: auto; }

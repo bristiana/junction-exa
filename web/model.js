@@ -317,3 +317,39 @@ export function errandStage(task) {
   }
   return out(reached, 'failed', `Couldn't finish on ${site}${last ? ` after: ${last}` : ''}. ${run.error || ''}`.trim(), { kind: 'refill', question: asked, hint: 'Continue to let Vali try again from there, or open the site and finish it yourself.' });
 }
+
+// A browser step in words a non-technical person reads at a glance; '' for the browser's own bookkeeping.
+const NOISE = /^(Action refused|Pressed\b|Scrolled\b|Read the page|Looked at the page|Waiting for your approval|Finished|Stopped|Hovered\b|Waited\b|Error\b)/i;
+export function friendlyStep(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!t || NOISE.test(t) || /--\s*(make a choice|valitse)/i.test(t) || /timeout|locator|data-vali-ref/i.test(t)) return '';
+  const clean = (v) => v.replace(/[*:]+$/, '').trim();
+  let m;
+  if ((m = /^Opened\s+(\S+)/.exec(t)) && domainOf(m[1])) return `Opened ${domainOf(m[1])}`;
+  if ((m = /^Chose "(.+?)" in ".*"$/.exec(t))) return `Chose ${clean(m[1])}`;
+  if ((m = /^Clicked "(.+)"$/.exec(t))) return `Chose ${clean(m[1])}`;
+  if ((m = /^Set (.+?) to "(.+)"$/.exec(t))) return `Set ${clean(m[1].replace(/^"|"$/g, ''))} to ${m[2]}`;
+  if ((m = /^Filled "(.+?)"(?: with (.+))?$/.exec(t))) {
+    const mine = !m[2] || /^(your\b|\{\{)/i.test(m[2]);
+    return `Filled in ${mine ? 'your ' : ''}${clean(m[1]).toLowerCase()}${mine ? '' : `: ${m[2]}`}`;
+  }
+  return t.replace(/"([^"]+)"/g, '“$1”');
+}
+
+// What Vali did on the web for this errand, as one plain sentence.
+export function webWork(task) {
+  const trail = list(task?.research?.activity);
+  const searches = trail.filter((e) => e?.kind === 'search').length;
+  const pages = new Set(trail.filter((e) => ['read', 'source'].includes(e?.kind)).map((e) => e.url || e.text)).size;
+  const claims = list(output(task).claims).filter((c) => c && !c.own && typeof c.supported === 'boolean');
+  const parts = [];
+  if (task?.research?.reused_from) return 'Used an answer it had already checked.';
+  if (searches) parts.push(searches === 1 ? 'searched the web once' : `searched the web ${searches} times`);
+  if (pages) parts.push(`read ${pages} ${pages === 1 ? 'page' : 'pages'}`);
+  if (claims.length) parts.push(`confirmed ${claims.filter((c) => c.supported).length} of ${claims.length} facts on the page`);
+  const fill = list(task?.execution?.exa).length;
+  if (fill) parts.push(`looked up ${fill} ${fill === 1 ? 'detail' : 'details'} for the form`);
+  if (!parts.length) return '';
+  const line = parts.join(', ');
+  return line[0].toUpperCase() + line.slice(1) + '.';
+}

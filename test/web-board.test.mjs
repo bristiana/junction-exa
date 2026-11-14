@@ -58,10 +58,10 @@ test("the feed is newest first with channel, mode, status, the Exa line and doma
   const [first, second] = feedOf([web, wa]);
   assert.equal(first.id, "t1");
   assert.deepEqual([first.channel, first.mode, first.status, first.tone], ["whatsapp", "Find", "Done", "done"]);
-  assert.equal(first.exa, "Search 1 query, 1 result · Contents 1 of 2 sentences quoted");
+  assert.equal(first.exa, "Searched the web once, read 1 page, confirmed 1 of 2 facts on the page.");
   assert.deepEqual(first.domains, ["finnkino.fi"]);
   assert.equal(second.mode, "Research");
-  assert.match(second.exa, /Form fill 1 search, 1 page read/);
+  assert.match(second.exa, /looked up 2 details for the form/);
 });
 
 test("searches list every research and form-fill query with its errand and channel, newest first", () => {
@@ -130,7 +130,7 @@ test("helpers: placeholders read as words, PDFs by path, short answers keep two 
   assert.equal(shortAnswer(booking), "Kulttuurisauna has a slot on Friday at 18:00. It costs 15 EUR per person.");
   assert.equal(shortAnswer({ research: { output: { claims: [{ text: "One." }, { text: "Two." }, { text: "Three." }] } } }), "One. Two.");
   const { steps, more } = runSteps(booking, 3);
-  assert.deepEqual(steps, ['Clicked "18:00"', 'Set people to "4"', 'Filled "Email" with your email']);
+  assert.deepEqual(steps, ['Chose 18:00', 'Set people to 4', 'Filled in your email']);
   assert.equal(more, 2); // "Opened kulttuurisauna.fi" and "Clicked Friday"; quiet steps are not counted
 });
 
@@ -142,7 +142,7 @@ test("the thread: errand, research question and answer, Vali's short answer, the
     ["vali", "How many people?"],
     ["me", "4"],
     ["vali", "Kulttuurisauna has a slot on Friday at 18:00. It costs 15 EUR per person."],
-    ["vali", "Waiting for your OK · kulttuurisauna.fi"],
+    ["vali", "Waiting for your OK"],
     ["me", "Friday please"],
     ["vali", "Which email should I use?"],
     ["me", "My work email"],
@@ -156,7 +156,7 @@ test("the thread: errand, research question and answer, Vali's short answer, the
   const approved = threadOf({ ...booking, execution: { ...booking.execution, status: "completed", approval_decision: "approved", result: "Booked. See you Friday." } });
   assert.deepEqual(approved.slice(-2).map((b) => [b.who, b.text, b.tone]), [["me", "Approve", undefined], ["vali", "Booked. See you Friday.", "done"]]);
   const stopped = threadOf({ ...booking, execution: { ...booking.execution, status: "stopped", approval_decision: "stopped" } });
-  assert.deepEqual(stopped.slice(-2).map((b) => b.text), ["Stop", "Stopped. Nothing was sent."]);
+  assert.equal(stopped.at(-1).text, "Stop"); // the state block under the chat says where it stopped
   const working = threadOf({ task: "Kela benefits", research: { status: "running", activity: [{ kind: "search", text: "Kela student" }] } });
   assert.deepEqual(working.map((b) => [b.who, b.label, b.tone]), [["me", undefined, undefined], ["vali", "Working", "working"]]);
   assert.equal(working[1].text, "Searching “Kela student”");

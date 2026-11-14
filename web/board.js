@@ -6,6 +6,9 @@ import { h, show } from './dom.js';
 import { timeAgo } from './model.js';
 import { CHANNELS, icon } from './dashboard.js';
 import { feedOf, pagesOpened, searchesOf, threadOf, totalsOf, watchesOf } from './board-model.js';
+import { renderState } from './state.js';
+import { primaryAction } from './model.js';
+import { loadProfile } from './profile.js';
 
 const POLL_MS = 5000;
 const SHORT = { extension: 'Extension', mac: 'Mac', imessage: 'iMessage' };
@@ -122,14 +125,37 @@ function renderThread(task, checked) {
       h('header', { class: 'thread-head' },
         h('h1', { id: 'thread-title', class: 'sr-only' }, row.text),
         badge(row.channel),
-        h('span', { class: `feed-meta tone-${row.tone}` }, row.mode, ' · ', h('b', {}, row.status), ' · ', ago(row.at)),
+        h('span', { class: `feed-meta tone-${row.tone}` }, h('b', {}, row.status), ', ', ago(row.at)),
         h('a', { class: 'thread-open', href: `#/t/${encodeURIComponent(task.id)}`, 'data-key': 'open' }, 'Open errand')),
       h('ol', { class: 'bubbles', 'aria-label': 'Conversation' }, threadOf(task).map(bubble)),
+      h('div', { class: 'thread-state' }, renderState(task, threadHandlers(task))),
       pages.length ? h('section', { class: 'opened', 'aria-labelledby': 'opened-title' },
         panelHead('opened-title', 'Opened by Vali', pages.length),
         h('ul', { class: 'pages' }, pages.map(pageRow))) : null)));
   if (focused) document.querySelector(`#dashboard [data-key="${CSS.escape(focused)}"]`)?.focus();
   stamp();
+}
+
+// The same moves as on the errand page, straight from the chat: continue, answer, approve, stop.
+function threadHandlers(task) {
+  const act = async (call, button) => {
+    if (button) button.disabled = true;
+    try { await call(); } catch (error) { console.warn('Vali:', error.message); } finally { if (button) button.disabled = false; load(); }
+  };
+  const fill = (index, button) => act(() => api.execute(task.id, index, loadProfile()), button);
+  return {
+    onExecute: fill,
+    onStop: (button) => act(() => api.stop(task.id), button),
+    onApprove: (button) => act(() => api.approve(task.id), button),
+    onReply: (text, button) => act(() => api.message(task.id, text), button),
+    onResume: (answer, button) => act(() => api.resume(task.id, answer, loadProfile()).catch((error) => {
+      const action = primaryAction(task);
+      if (![404, 405].includes(error.status) || !action) throw error;
+      return api.execute(task.id, action.index, loadProfile());
+    }), button),
+    onFollowUp: () => { location.hash = `#/t/${encodeURIComponent(task.id)}`; },
+    onDetails: () => document.getElementById('to-details')?.click(),
+  };
 }
 
 function bubble(b) {
@@ -186,9 +212,9 @@ function feedRow(row, fresh) {
     h('a', { class: `feed-row tone-${row.tone}`, href: `#/dashboard/${encodeURIComponent(row.id)}`, 'data-key': row.id },
       h('span', { class: 'feed-top' },
         badge(row.channel),
-        h('span', { class: 'feed-meta' }, row.mode, ' · ', h('b', {}, row.status), ' · ', ago(row.at))),
+        h('span', { class: 'feed-meta' }, h('b', {}, row.status), ', ', ago(row.at))),
       h('span', { class: 'feed-text' }, row.text),
-      row.exa ? h('span', { class: 'feed-exa' }, svg(SEARCH_ICON), h('span', {}, row.exa)) : null,
+      row.exa ? h('span', { class: 'feed-exa' }, row.exa) : null,
       row.domains.length ? h('span', { class: 'domains' }, row.domains.map((d) => h('span', { class: 'domain' }, d))) : null));
 }
 
@@ -253,5 +279,5 @@ function stamp() {
   if (!live) return;
   live.classList.toggle('off', failing);
   const at = updatedAt ? new Date(updatedAt).toTimeString().slice(0, 8) : '';
-  live.querySelector('.live-text').textContent = failing ? 'Reconnecting' : `Live · ${at}`;
+  live.querySelector('.live-text').textContent = failing ? 'Reconnecting' : 'Live';
 }
