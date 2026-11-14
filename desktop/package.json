@@ -1,0 +1,26 @@
+{
+  "name": "vali-desktop",
+  "version": "0.1.0",
+  "description": "Vali, your errand butler in Finland",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "author": "Bogdan-ca <bogdan.c.2206@gmail.com>",
+  "scripts": {
+    "prepare": "node scripts/prepare.mjs",
+    "prestart": "npm run prepare",
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "prepack": "npm run prepare",
+    "pack": "npm run prepare && electron-builder --dir",
+    "dist": "npm run prepare && electron-builder --mac dmg"
+  },
+  "devDependencies": { "electron": "latest", "electron-builder": "latest" },
+  "build": {
+    "appId": "fi.vali.desktop",
+    "productName": "Vali",
+    "directories": { "output": "dist" },
+    "files": ["main.mjs", "bridge.cjs", "logic.mjs", "renderer/**/*", "vendor/**/*"],
+    "mac": { "category": "public.app-category.productivity", "target": ["dmg"] }
+  }
+}
