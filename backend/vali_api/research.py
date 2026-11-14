@@ -184,9 +184,40 @@ def clip(value, n):
     return value[:n] + '…' if len(value) > n else value
 
 
-def build_query(task, page=None, profile=None, known_details=()):
+CITIZENSHIP = {'eu': 'an EU/EEA citizen', 'nordic': 'a Nordic citizen', 'non_eu': 'a non-EU citizen'}
+
+
+def describe_situation(situation):
+    """One sentence about the person, from the non-identifying "Your situation" fields; '' when nothing is set."""
+    s = situation or {}
+    who = CITIZENSHIP.get(s.get('citizenship'), 'a foreigner')
+    if s.get('country'):
+        who += f" from {clip(s['country'], 40)}"
+    bits = [who]
+    if s.get('student'):
+        bits.append('a student' + (f" at {clip(s['school'], 60)}" if s.get('school') else ''))
+    if s.get('city'):
+        bits.append(f"living in {clip(s['city'], 40)}")
+    if s.get('has_personal_id') is False:
+        bits.append('no Finnish personal identity code yet')
+    elif s.get('has_personal_id'):
+        bits.append('has a Finnish personal identity code')
+    if s.get('has_bank') is False:
+        bits.append('no Finnish bank account, so no bank ID for strong identification')
+    elif s.get('has_bank'):
+        bits.append('has a Finnish bank account and bank ID')
+    if s.get('arrived'):
+        bits.append(f"in Finland since {clip(s['arrived'], 7)}")
+    if len(bits) == 1 and not s.get('citizenship') and not s.get('country'):
+        return ''
+    return 'The user is ' + ', '.join(bits) + '. Answer for exactly this situation.'
+
+
+def build_query(task, page=None, profile=None, known_details=(), situation=None):
     profile, page = profile or {}, page or {}
     parts = [f'Errand: {task.strip()}']
+    if describe_situation(situation):
+        parts.append(describe_situation(situation))
     detected, lang = detect(task), (profile.get('language') or '').strip()
     if detected:  # the errand's own language wins over a saved preference
         lang = NAMES[detected]
@@ -237,12 +268,25 @@ Only what the source says:
 Links that open the right thing:
 - Every url is the deepest page that does the job: the show or event's own page, the booking calendar for that
   date, the form's start page, the exact product. Never a home page when a deeper page exists.
-- Add query parameters (date, from/to, people) only in a format a cited page itself uses; never invent parameters."""
+- Add query parameters (date, from/to, people) only in a format a cited page itself uses; never invent parameters.
+For a foreigner in Finland:
+- Every user is a foreigner living in Finland (newcomers, international students). Answer for their situation: EU or
+  non-EU rules, life before the Finnish personal identity code and bank ID, student prices and discounts.
+- Explain each Finnish term once in a short parenthesis ("henkilötunnus (personal identity code)").
+- Prefer pages and options in English, and say when something is only in Finnish.
+- next_errand: the one most useful errand this person should do next, as a short request in their words
+  ("Register my address at DVV to get a personal ID"). Only something the sources support; never a made-up rule."""
 
 
-def build_run_request(task, page=None, profile=None, effort='low', known_details=()):
-    return dict(query=build_query(task, page, profile, known_details), systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST,
-                effort=effort, outputSchema=output_schema(bool((page or {}).get('fields'))), metadata={'app': 'vali'})
+NEXT_ERRAND = {'type': 'string', 'description': 'The one most useful next errand for this person, as a short request in '
+               'their own words, e.g. "Register my address at DVV". Empty when nothing obvious follows.'}
+
+
+def build_run_request(task, page=None, profile=None, effort='low', known_details=(), situation=None):
+    schema = output_schema(bool((page or {}).get('fields')))  # the extension's shared schema, plus next_errand
+    schema['properties']['next_errand'] = dict(NEXT_ERRAND)
+    return dict(query=build_query(task, page, profile, known_details, situation), systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST,
+                effort=effort, outputSchema=schema, metadata={'app': 'vali'})
 
 
 FIND_RULES = """
@@ -262,7 +306,7 @@ FIND_SCHEMA = {'type': 'object', 'properties': {
                 'each with its own page to book or buy', 'items': {'type': 'object', 'properties': {
         k: {'type': 'string'} for k in ('name', 'detail', 'price', 'url')},
         'required': ['name', 'detail', 'price', 'url']}},
-    'next_step': {'type': 'string'}}, 'required': ['answer', 'options', 'next_step']}
+    'next_step': {'type': 'string'}, 'next_errand': {'type': 'string'}}, 'required': ['answer', 'options', 'next_step']}
 
 
 def priced_answer(answer, options):
@@ -287,7 +331,8 @@ def map_find_output(response):
     structured = {'answer': content.get('answer', ''), 'status': 'info_only',
                   'key_facts': [{'label': o.get('name', ''), 'value': ' · '.join(filter(None, [o.get('detail'), o.get('price')]))} for o in options],
                   'steps': [{'title': 'Next step', 'detail': next_step}] if next_step else [],
-                  'actions': [{'type': 'open_link', 'label': o.get('name', ''), 'url': o.get('url'), 'body': o.get('detail', '')} for o in options], 'missing_info': []}
+                  'actions': [{'type': 'open_link', 'label': o.get('name', ''), 'url': o.get('url'), 'body': o.get('detail', '')} for o in options], 'missing_info': [],
+                  'next_errand': squash_line(content.get('next_errand'))[:200]}
     grounding = []
     for entry in output.get('grounding') or []:
         field = entry.get('field', '')

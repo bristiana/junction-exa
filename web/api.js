@@ -93,6 +93,9 @@ export const api = {
   tasks: () => call('GET', '/v1/tasks?limit=50'),
   pair: () => call('POST', '/v1/pair'),
   register: (email, password) => call('POST', '/v1/auth/register', { email, password }),
+  // Your situation: EU or not, student, city, personal ID and bank yes/no. Nothing that identifies you.
+  me: () => call('GET', '/v1/me'),
+  saveSituation: (situation) => call('PUT', '/v1/situation', situation),
   login: (email, password) => send('POST', '/v1/auth/login', { email, password }, false),
   stats: () => call('GET', '/v1/stats'),
   watches: () => call('GET', '/v1/watches'),

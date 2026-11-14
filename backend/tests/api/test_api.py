@@ -266,7 +266,7 @@ def test_port_matches_javascript():
     def count(schema):
         props = schema.get('properties', {})
         return len(props) + sum(count(v) for v in props.values()) + count(schema['items']) if 'items' in schema else len(props) + sum(count(v) for v in props.values())
-    assert count(FIND_SCHEMA) == 7
+    assert count(FIND_SCHEMA) == 8  # next_errand: the next errand for this person
 
 
 def test_defensive_progress():

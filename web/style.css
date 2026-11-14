@@ -665,3 +665,13 @@ body.signed-in .top .guest { display: none; }
 .login-or { margin: 18px 0 10px; color: var(--muted); font-size: 14px; }
 .login-choices + .login-form { margin-top: 18px; }
 .login-choice { text-align: left; }
+
+/* your situation (Details) and the next errand under an answer */
+.situation-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.situation-group { border: 0; margin: 0 0 10px; padding: 0; }
+.situation-group legend { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+.chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.next-errand { display: grid; gap: 2px; width: 100%; text-align: left; padding: 12px 14px; border: 1px dashed var(--accent); border-radius: 12px; background: var(--ring-soft); cursor: pointer; }
+.next-errand:hover { border-style: solid; }
+.next-errand-label { font-size: 13px; color: var(--accent); font-weight: 700; }
+.next-errand-text { font-weight: 600; }

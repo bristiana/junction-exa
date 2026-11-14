@@ -9,8 +9,13 @@ and make final approval atomic in their task store.
 import inspect
 
 from .parse import Command, parse_command
-from .render import (continue_buttons, render_ack, render_check, render_error, render_execution_update, render_help,
-                     render_link_failed, render_link_paused, render_linked, render_result)
+from .render import (continue_buttons, next_errand, render_ack, render_check, render_error, render_execution_update,
+                     render_help, render_link_failed, render_link_paused, render_linked, render_result, render_situation)
+
+# "Your situation" asked by buttons: EU or not, then student or not.
+SITUATION_REPLIES = {"eu": {"citizenship": "eu"}, "non_eu": {"citizenship": "non_eu"},
+                     "student": {"student": True}, "not_student": {"student": False}}
+STUDENT_QUESTION = ("Are you a student here?", [("sit:student", "Student"), ("sit:not_student", "Not a student")])
 
 
 async def _call(callback, *args, **kwargs):
@@ -21,7 +26,7 @@ async def _call(callback, *args, **kwargs):
 class WhatsAppFlow:
     def __init__(self, *, api, find_user_by_number, link_number, create_task,
                  get_active_task, execute, approve, stop, transcribe=None, read_letter=None, message=None,
-                 check=None, resume=None):
+                 check=None, resume=None, get_situation=None, set_situation=None):
         self.api = api
         self.find_user_by_number = find_user_by_number
         self.link_number = link_number
@@ -35,6 +40,8 @@ class WhatsAppFlow:
         self.message = message
         self.check = check  # check(user): triggers the newest live watch, returns its language or None
         self.resume = resume  # resume(tid or None): starts a stopped run again where it stopped
+        self.get_situation = get_situation  # get_situation(user) -> dict or None
+        self.set_situation = set_situation  # set_situation(user, patch): merges and saves
 
     async def handle(self, msg):
         # Read receipts also apply to unknown senders and unsupported media.
@@ -57,7 +64,7 @@ class WhatsAppFlow:
                 sent.append({"messaging_product": "whatsapp", "to": msg.from_number, "type": "interactive",
                              "interactive": {"body": {"text": body}, "buttons": [b for b, _ in buttons]}})
             except Exception:
-                fallback = body + "\nReply *continue* to pick up where it stopped."
+                fallback = body + ("\nReply *continue* to pick up where it stopped." if "continue" in str(buttons) else "")
                 await self.api.send_text(msg.from_number, fallback, reply_to=msg.message_id)
                 sent.append({"messaging_product": "whatsapp", "to": msg.from_number, "type": "text",
                              "text": {"body": fallback}, "context": {"message_id": msg.message_id}})
@@ -103,6 +110,18 @@ class WhatsAppFlow:
                 tid, n = tid.rsplit(":", 1)
             if action == "continue" and self.resume:
                 return await self._continue(tid)
+            if action == "sit" and self.set_situation and tid in SITUATION_REPLIES:
+                await _call(self.set_situation, user, SITUATION_REPLIES[tid])
+                self.reaction = "👍"
+                if tid in {"eu", "non_eu"}:
+                    self.buttons = STUDENT_QUESTION
+                    return []
+                situation = await _call(self.get_situation, user) if self.get_situation else None
+                return render_situation(situation)
+            if action == "next" and task and tid == task["id"] and next_errand(task):
+                follow = await _call(self.create_task, user, next_errand(task), source="whatsapp")
+                self.reaction = "👀"
+                return render_ack(follow)
             if not task or tid != task["id"] or action not in {"approve", "stop", "choose", "watch"} or (
                     action == "choose" and not (n or "").isdigit()):
                 return render_error("That button is no longer active. Reply *status* for the current errand.")
@@ -121,6 +140,9 @@ class WhatsAppFlow:
             return []
         if command.kind == "help":
             return render_help()
+        if text.strip().casefold() in {"my situation", "situation", "situatia mea", "situația mea"}:
+            situation = await _call(self.get_situation, user) if self.get_situation else None
+            return render_situation(situation)
         if command.kind == "continue" and self.resume:
             if execution.get("status") in {"stopped", "failed"}:
                 return await self._continue(task["id"])

@@ -122,24 +122,42 @@ def push_task(application, task_id, renderer):
                     log_failure('continue button failed', exc, task_id=task_id)
                     bodies = render_execution_update(task)
             buttons = result_buttons(task) if renderer is render_result and hasattr(api, 'send_buttons') else []
-            if buttons:
-                # The answer's actions as tap-to-choose buttons; the last part of the answer carries them.
-                parts = render_result(task, buttons=True)
-                last = parts.pop() if len(parts[-1]) <= 1024 else 'What next?'
-                for body in parts:
+
+            async def send_answer(bodies=bodies):
+                if buttons:
+                    # The answer's actions as tap-to-choose buttons; the last part of the answer carries them.
+                    parts = render_result(task, buttons=True)
+                    last = parts.pop() if len(parts[-1]) <= 1024 else 'What next?'
+                    for body in parts:
+                        await api.send_text(number, body)
+                    try:
+                        await api.send_buttons(number, last, buttons)
+                        return
+                    except Exception as exc:
+                        log_failure('result buttons failed', exc, task_id=task_id)
+                        replies = '\n'.join(f'Reply {i + 1} to {title}' for i, (_, title) in enumerate(buttons))
+                        bodies = split_messages(('' if last == 'What next?' else last + '\n\n') + replies)
+                for body in bodies:
                     await api.send_text(number, body)
-                try:
-                    await api.send_buttons(number, last, buttons)
-                    return
-                except Exception as exc:
-                    log_failure('result buttons failed', exc, task_id=task_id)
-                    replies = '\n'.join(f'Reply {i + 1} to {title}' for i, (_, title) in enumerate(buttons))
-                    bodies = split_messages(('' if last == 'What next?' else last + '\n\n') + replies)
-            for body in bodies:
-                await api.send_text(number, body)
+            await send_answer()
+            if renderer is render_result and hasattr(api, 'send_buttons'):
+                await ask_situation_once(application, api, task, number)
         run_outside_loop(send)
     except Exception as exc:
         log_failure("task notification failed", exc, task_id=task_id)
+
+
+async def ask_situation_once(application, api, task, number):
+    """After an answer, once per account: EU or not, by buttons, so later answers fit the person."""
+    store = application.state.store
+    if (task.get('research') or {}).get('status') != 'completed' or store.get_situation(task['user_id']) is not None:
+        return
+    store.set_situation(task['user_id'], {'asked': True})
+    try:
+        await api.send_buttons(number, 'One question so my answers fit you: are you an EU citizen?',
+                               [('sit:eu', 'EU or EEA'), ('sit:non_eu', 'Not EU')])
+    except Exception as exc:
+        log_failure('situation question failed', exc, task_id=task['id'])
 
 
 def run_outside_loop(make_coroutine, timeout=60):
