@@ -7,6 +7,7 @@ import secrets
 import sqlite3
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 
@@ -33,6 +34,10 @@ class Store:
             'device_link_codes(code_hash TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL, sealed_token TEXT NOT NULL, salt TEXT NOT NULL, expires_at TEXT NOT NULL)',
             'tasks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, source TEXT NOT NULL, mode TEXT NOT NULL, task TEXT NOT NULL, page_json TEXT NOT NULL, research_json TEXT NOT NULL, execution_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
             'watches(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, query TEXT NOT NULL, exa_monitor_id TEXT, created_at TEXT NOT NULL)',
+            'watch_details(watch_id TEXT PRIMARY KEY, task_id TEXT, secret TEXT NOT NULL)',
+            'watch_slots(user_id TEXT NOT NULL, slot INTEGER NOT NULL, watch_id TEXT UNIQUE NOT NULL, PRIMARY KEY(user_id,slot))',
+            'watch_updates(watch_id TEXT NOT NULL, event_id TEXT NOT NULL, data_json TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(watch_id,event_id))',
+            'failures(id TEXT PRIMARY KEY, task_id TEXT NOT NULL, stage TEXT NOT NULL, error TEXT NOT NULL, at TEXT NOT NULL)',
             f'shots(task_id TEXT NOT NULL, n INTEGER NOT NULL, jpeg {blob} NOT NULL, PRIMARY KEY(task_id,n))',
             f'live_frames(task_id TEXT PRIMARY KEY, jpeg {blob} NOT NULL, updated_at TEXT NOT NULL)']
         for table in tables:
@@ -43,6 +48,21 @@ class Store:
             cursor = self.connection.execute(query.replace('?', '%s') if self.postgres else query, params)
             rows = cursor.fetchall() if cursor.description else []
             return (dict(rows[0]) if rows else None) if one else [dict(r) for r in rows]
+
+    @contextmanager
+    def transaction(self):
+        with self.lock:
+            if self.postgres:
+                with self.connection.transaction():
+                    yield
+            else:
+                self.connection.execute('BEGIN IMMEDIATE')
+                try:
+                    yield
+                    self.connection.commit()
+                except Exception:
+                    self.connection.rollback()
+                    raise
 
     def create_user(self):
         token, uid = secrets.token_urlsafe(32), 'u_' + uuid.uuid4().hex
@@ -157,9 +177,14 @@ class Store:
         if expected is not None:
             query += ' AND research_json=?'
             params += (json.dumps(expected),)
-        return bool(self.sql(query + ' RETURNING id', params))
+        changed = bool(self.sql(query + ' RETURNING id', params))
+        if changed and research.get('status') == 'failed':
+            self.record_failure(tid, 'research', 'Research failed.')
+        return changed
 
     def update_execution(self, tid, execution):
+        if execution.get('status') == 'failed':
+            self.record_failure(tid, 'execution', 'Execution failed.')
         self.sql('UPDATE tasks SET execution_json=?, updated_at=? WHERE id=?', (json.dumps(execution), now(), tid))
 
     def start_execution(self, tid, execution, previous):
@@ -205,16 +230,103 @@ class Store:
         rows = self.sql('SELECT research_json FROM tasks WHERE user_id=? AND created_at>=?', (uid, today))
         return math.fsum(float(json.loads(r['research_json']).get('cost') or 0) for r in rows)
 
-    def create_watch(self, uid, query, monitor_id=None):
+    def record_failure(self, tid, stage, error):
+        messages = {
+            'research': 'Research failed.',
+            'research.poll': 'Research service is temporarily unavailable.',
+            'research.events': 'Research progress is temporarily unavailable.',
+            'execution': 'Execution failed.',
+            'watch.create': 'Recurring search setup failed.',
+            'watch.delete': 'Could not remove recurring search. Please retry.',
+        }
+        # A stable primary key makes concurrent inserts idempotent across workers.
+        failure_id = hashlib.sha256(json.dumps([tid, stage]).encode()).hexdigest()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        with self.lock:
+            self.sql('DELETE FROM failures WHERE at<?', (cutoff,))
+            self.sql('INSERT INTO failures SELECT ?,?,?,?,? '
+                     'WHERE NOT EXISTS (SELECT 1 FROM failures WHERE task_id=? AND stage=?) '
+                     'ON CONFLICT DO NOTHING',
+                     (failure_id, tid, stage, messages.get(stage, 'Task failed.'), now(), tid, stage))
+
+    def recent_failures(self, uid):
+        return self.sql('SELECT f.task_id,f.stage,f.error,f.at FROM failures f JOIN tasks t ON t.id=f.task_id '
+                        'WHERE t.user_id=? ORDER BY f.at DESC LIMIT 30', (uid,))
+
+    def create_watch(self, uid, query, monitor_id=None, task_id=None):
         wid = 'w_' + uuid.uuid4().hex
-        self.sql('INSERT INTO watches VALUES(?,?,?,?,?)', (wid, uid, query, monitor_id, now()))
-        return self.sql('SELECT * FROM watches WHERE id=?', (wid,), one=True)
+        with self.transaction():
+            self.sql('INSERT INTO watches VALUES(?,?,?,?,?)', (wid, uid, query, monitor_id, now()))
+            self.sql('INSERT INTO watch_details VALUES(?,?,?)', (wid, task_id, ''))
+        return self.get_watch(wid)
+
+    def get_watch(self, wid):
+        return self.sql('SELECT w.*,d.task_id,d.secret FROM watches w LEFT JOIN watch_details d ON d.watch_id=w.id WHERE w.id=?',
+                        (wid,), one=True)
+
+    def reserve_watch_slot(self, uid, wid):
+        # Unique SQL keys enforce the paid limit across workers, not just threads.
+        for slot in range(3):
+            if self.sql('INSERT INTO watch_slots VALUES(?,?,?) ON CONFLICT DO NOTHING RETURNING slot', (uid, slot, wid)):
+                return True
+        return False
+
+    def release_watch_slot(self, wid):
+        self.sql('DELETE FROM watch_slots WHERE watch_id=?', (wid,))
+
+    def activate_watch(self, wid, monitor_id, secret):
+        with self.transaction():
+            self.sql('UPDATE watches SET exa_monitor_id=? WHERE id=?', (monitor_id, wid))
+            self.sql('UPDATE watch_details SET secret=? WHERE watch_id=?', (secret, wid))
 
     def list_watches(self, uid):
-        return self.sql('SELECT * FROM watches WHERE user_id=? ORDER BY created_at DESC', (uid,))
+        watches = self.sql('SELECT * FROM watches WHERE user_id=? ORDER BY created_at DESC', (uid,))
+        for watch in watches:
+            updates = self.sql('SELECT event_id,data_json,seen FROM watch_updates WHERE watch_id=? ORDER BY event_id', (watch['id'],))
+            watch['updates'] = [{**json.loads(r['data_json']), 'id': r['event_id'], 'seen': bool(r['seen'])} for r in updates]
+            watch['unseen_count'] = sum(not u['seen'] for u in watch['updates'])
+        return watches
+
+    def add_watch_update(self, watch, event_id, update):
+        # Event deduplication and the task write must commit together.
+        with self.transaction():
+            return self._add_watch_update(watch, event_id, update)
+
+    def _add_watch_update(self, watch, event_id, update):
+        suffix = ' FOR UPDATE' if self.postgres else ''
+        if not self.sql('SELECT id FROM watches WHERE id=?' + suffix, (watch['id'],), one=True):
+            return False
+        task = self.get_task(watch['task_id']) if watch.get('task_id') else None
+        if task and self.postgres:
+            self.sql('SELECT id FROM tasks WHERE id=? FOR UPDATE', (task['id'],))
+            task = self.get_task(task['id'])
+        if not self.sql('INSERT INTO watch_updates VALUES(?,?,?,0) ON CONFLICT DO NOTHING RETURNING event_id',
+                        (watch['id'], event_id, json.dumps(update))):
+            return False
+        if task:
+            research = task['research']
+            research.setdefault('updates', []).append(update)
+            output = research.get('output') or {}
+            research['output'] = output
+            output['text'] = (output.get('text', '') + '\n' + update['text']).strip()
+            output.setdefault('grounding', []).append({'field': 'updates', 'citations': update['sources']})
+            self.update_research(task['id'], research)
+        return True
+
+    def see_watch_updates(self, uid, wid):
+        watch = self.get_watch(wid)
+        if not watch or watch['user_id'] != uid:
+            return False
+        self.sql('UPDATE watch_updates SET seen=1 WHERE watch_id=?', (wid,))
+        return True
 
     def delete_watch(self, uid, wid):
-        return bool(self.sql('DELETE FROM watches WHERE id=? AND user_id=? RETURNING id', (wid, uid)))
+        with self.transaction():
+            if not self.sql('DELETE FROM watches WHERE id=? AND user_id=? RETURNING id', (wid, uid)):
+                return False
+            for table in ('watch_details', 'watch_slots', 'watch_updates'):
+                self.sql('DELETE FROM ' + table + ' WHERE watch_id=?', (wid,))
+            return True
 
     def put_shot(self, tid, n, jpeg):
         self.sql('INSERT INTO shots VALUES(?,?,?) ON CONFLICT(task_id,n) DO UPDATE SET jpeg=excluded.jpeg', (tid, n, jpeg))
