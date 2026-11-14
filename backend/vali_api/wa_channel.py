@@ -4,7 +4,8 @@ import threading
 import logging
 
 from vali_wa.api import GraphAPIClient, GraphAPIError
-from vali_wa.render import render_nothing_new, render_result, render_watch_update, result_buttons, split_messages
+from vali_wa.render import (continue_buttons, render_execution_update, render_nothing_new, render_result,
+                            render_watch_update, result_buttons, split_messages)
 
 from .monitors import watch_criteria
 
@@ -109,6 +110,17 @@ def push_task(application, task_id, renderer):
                     except Exception as exc:
                         log_failure('approval buttons failed', exc, task_id=task_id)
                 return
+            if renderer is render_execution_update and hasattr(api, 'send_buttons') and continue_buttons(task):
+                parts = render_execution_update(task, buttons=True)
+                last = parts.pop()
+                for body in parts:
+                    await api.send_text(number, body)
+                try:
+                    await api.send_buttons(number, last, continue_buttons(task))
+                    return
+                except Exception as exc:
+                    log_failure('continue button failed', exc, task_id=task_id)
+                    bodies = render_execution_update(task)
             buttons = result_buttons(task) if renderer is render_result and hasattr(api, 'send_buttons') else []
             if buttons:
                 # The answer's actions as tap-to-choose buttons; the last part of the answer carries them.

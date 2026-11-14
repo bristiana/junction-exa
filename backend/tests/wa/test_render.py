@@ -69,9 +69,9 @@ def test_execution(task):
     task["execution"] = {"status": "done", "result": "Claim submitted"}
     assert render_execution_update(task) == ["Claim submitted"]
     task["execution"] = {"status": "failed", "error": "Login required", "final_url": "https://airline.example/claim"}
-    assert render_execution_update(task) == ["Vali could not finish: Login required\nfinish here: https://airline.example/claim"]
+    assert render_execution_update(task) == ["Vali could not finish: Login required\nfinish here: https://airline.example/claim\nReply *continue* to pick up where it stopped."]
     task["execution"] = {"status": "stopped"}
-    assert render_execution_update(task) == ["Stopped. Vali will not submit this errand."]
+    assert render_execution_update(task) == ["Stopped. Nothing was sent.\nReply *continue* to pick up where it stopped."]
 
 
 def test_watch_update_and_check_texts():

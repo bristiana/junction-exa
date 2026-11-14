@@ -9,7 +9,7 @@ and make final approval atomic in their task store.
 import inspect
 
 from .parse import Command, parse_command
-from .render import (render_ack, render_check, render_error, render_execution_update, render_help,
+from .render import (continue_buttons, render_ack, render_check, render_error, render_execution_update, render_help,
                      render_link_failed, render_link_paused, render_linked, render_result)
 
 
@@ -21,7 +21,7 @@ async def _call(callback, *args, **kwargs):
 class WhatsAppFlow:
     def __init__(self, *, api, find_user_by_number, link_number, create_task,
                  get_active_task, execute, approve, stop, transcribe=None, read_letter=None, message=None,
-                 check=None):
+                 check=None, resume=None):
         self.api = api
         self.find_user_by_number = find_user_by_number
         self.link_number = link_number
@@ -34,11 +34,13 @@ class WhatsAppFlow:
         self.read_letter = read_letter
         self.message = message
         self.check = check  # check(user): triggers the newest live watch, returns its language or None
+        self.resume = resume  # resume(tid or None): starts a stopped run again where it stopped
 
     async def handle(self, msg):
         # Read receipts also apply to unknown senders and unsupported media.
         await self.api.mark_read(msg.message_id)
         self.reaction = None
+        self.buttons = None  # (body, [(id, title)]) sent after the texts
         bodies = await self._handle(msg)
         if self.reaction and hasattr(self.api, "send_reaction"):
             await self.api.send_reaction(msg.from_number, msg.message_id, self.reaction)
@@ -48,6 +50,17 @@ class WhatsAppFlow:
             sent.append({"messaging_product": "whatsapp", "to": msg.from_number,
                          "type": "text", "text": {"body": body},
                          "context": {"message_id": msg.message_id}})
+        if self.buttons:
+            body, buttons = self.buttons
+            try:
+                await self.api.send_buttons(msg.from_number, body, buttons)
+                sent.append({"messaging_product": "whatsapp", "to": msg.from_number, "type": "interactive",
+                             "interactive": {"body": {"text": body}, "buttons": [b for b, _ in buttons]}})
+            except Exception:
+                fallback = body + "\nReply *continue* to pick up where it stopped."
+                await self.api.send_text(msg.from_number, fallback, reply_to=msg.message_id)
+                sent.append({"messaging_product": "whatsapp", "to": msg.from_number, "type": "text",
+                             "text": {"body": fallback}, "context": {"message_id": msg.message_id}})
         return sent
 
     async def _handle(self, msg):
@@ -88,6 +101,8 @@ class WhatsAppFlow:
             n = None
             if action == "choose" and ":" in tid:
                 tid, n = tid.rsplit(":", 1)
+            if action == "continue" and self.resume:
+                return await self._continue(tid)
             if not task or tid != task["id"] or action not in {"approve", "stop", "choose", "watch"} or (
                     action == "choose" and not (n or "").isdigit()):
                 return render_error("That button is no longer active. Reply *status* for the current errand.")
@@ -99,13 +114,17 @@ class WhatsAppFlow:
         # Short answers (yes, a number, etc.) belong to an outstanding question.
         if self.message and task and msg.kind == "text" and text.strip() and (
                 execution.get("status") in {"starting", "running"} or execution.get("question")) and (
-                command.kind not in {"stop", "status"} or (
+                command.kind not in {"stop", "status", "continue"} or (
                     execution.get("question") and text.strip().casefold() in {"no", "nu", "ei"})):
             await _call(self.message, task["id"], text)
             self.reaction = "✍️"  # the running errand has it; a reaction says so without a message
             return []
         if command.kind == "help":
             return render_help()
+        if command.kind == "continue" and self.resume:
+            if execution.get("status") in {"stopped", "failed"}:
+                return await self._continue(task["id"])
+            return await self._continue(None)
         if command.kind == "check" and self.check:
             lang = await _call(self.check, user)
             return render_check(lang) if lang else render_error("You have no live watch to check. Send me something to watch first.")
@@ -131,6 +150,11 @@ class WhatsAppFlow:
                     return render_error("There is no running execution to stop.")
                 updated = await _call(self.stop, task["id"])
             self.reaction = {"choose": "🚀", "approve": "👍", "stop": "✋"}[command.kind]
+            if command.kind == "stop" and self.resume and hasattr(self.api, "send_buttons") and isinstance(updated, dict):
+                buttons = continue_buttons(updated)
+                if buttons:
+                    self.buttons = ("Stopped. Nothing was sent.", buttons)
+                    return []
             if isinstance(updated, dict) and updated.get("execution"):
                 return render_execution_update(updated)
             return render_error({"choose": "Starting your chosen action.", "approve": "Approval received.",
@@ -144,3 +168,14 @@ class WhatsAppFlow:
         task = await _call(self.create_task, user, command.text, source="whatsapp")
         self.reaction = "👀"
         return render_ack(task)
+
+    async def _continue(self, tid):
+        """Start the stopped run again; it asks again in this chat for anything it was waiting on."""
+        try:
+            await _call(self.resume, tid)
+        except Exception as exc:
+            if getattr(exc, "status_code", None) == 409:
+                return render_error("There is nothing to continue. Reply *status* for the current errand.")
+            raise
+        self.reaction = "🔁"
+        return ["Picking up where it stopped."]

@@ -75,6 +75,11 @@ class ExecuteBody(BaseModel):
     profile: dict[str, str] | None = None
 
 
+class ContinueBody(BaseModel):
+    answer: str | None = Field(default=None, max_length=2000)
+    profile: dict[str, str] | None = None
+
+
 class MessageBody(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
 
@@ -661,6 +666,56 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def execute(tid: str, body: ExecuteBody, user=Depends(authenticate)):
         return execute_for_user(tid, body, user)
 
+    def continue_for_user(tid, body, user, channel=None):
+        """Start the cloud browser again on the same page and goal, told what the stopped run already did."""
+        task = owned(tid, user)
+        previous = task['execution']
+        if not previous:
+            raise HTTPException(409, 'Nothing to continue')
+        if previous['status'] not in {'done', 'failed', 'stopped'}:
+            raise HTTPException(409, 'Execution already active')
+        try:
+            goal = json.loads(previous.get('goal') or '{}')
+        except ValueError:
+            goal = {}
+        if not isinstance(goal, dict):
+            goal = {'goal': str(goal)}
+        goal.setdefault('task', task['task'])
+        steps = [str(step.get('text') or '') for step in previous.get('steps') or [] if isinstance(step, dict)]
+        steps = [text for text in steps if text][-25:]
+        question = (previous.get('question') or {}).get('text') if isinstance(previous.get('question'), dict) else None
+        asked = next((text[len('Asked you: '):] for text in reversed(steps) if text.startswith('Asked you: ')), None)
+        goal['resume'] = {
+            'note': 'Continue from where the earlier run stopped: redo the earlier steps quickly, then go on. '
+                    'Never submit without approval.',
+            'earlier_steps': steps,
+            'stopped': previous['status'] + (f": {previous['error']}" if previous.get('error') else ''),
+            'question': question or asked,
+            'answer': (body.answer or '').strip() or None,
+        }
+        goal = json.dumps(goal, ensure_ascii=False)
+        start_url = previous.get('start_url')
+        if not public_start_url(start_url, application.state.resolve_host):
+            raise HTTPException(422, 'A public http(s) start URL is required')
+        execution = dict(channel=channel or previous.get('channel'), status='starting', goal=goal, start_url=start_url,
+                         current_url=start_url, steps=[], shots=[], approval=None, approval_decision=None, result=None,
+                         error=None, resumed_from=len(steps), runs=int(previous.get('runs') or 1) + 1)
+        if not application.state.store.start_execution(tid, execution, previous):
+            raise HTTPException(409, 'Execution already changed')
+        application.state.spawn_browser_session(tid, goal, start_url, body.profile or {})
+        return application.state.store.get_task(tid)
+
+    @application.post('/v1/tasks/{tid}/continue')
+    def continue_run(tid: str, body: ContinueBody | None = None, user=Depends(authenticate)):
+        return continue_for_user(tid, body or ContinueBody(), user)
+
+    def resumable_task(user):
+        tasks = application.state.store.list_tasks(user['id'], 100)
+        found = next((t for t in tasks if (t.get('execution') or {}).get('status') in {'stopped', 'failed'}), None)
+        if not found:
+            raise HTTPException(409, 'Nothing to continue')
+        return found['id']
+
     @application.post('/v1/tasks/{tid}/approve')
     def approve(tid: str, user=Depends(authenticate)):
         task = owned(tid, user)
@@ -854,6 +909,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         message=lambda tid, text: message_for_user(tid, MessageBody(text=text), sender.get(), 'whatsapp'),
         execute=lambda tid, index: execute_for_user(tid, ExecuteBody(action_index=index), sender.get(), 'whatsapp'),
         approve=lambda tid: approve(tid, sender.get()), stop=lambda tid: stop_for_user(tid, sender.get(), notify=False),
+        resume=lambda tid: continue_for_user(tid or resumable_task(sender.get()), ContinueBody(), sender.get(), 'whatsapp'),
         transcribe=transcribe if config.elevenlabs_api_key else None,
         read_letter=read_letter if config.anthropic_api_key else None,
         check=lambda user: asyncio.to_thread(check_latest_watch, user))

@@ -8,7 +8,7 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Command:
-    kind: Literal["link", "approve", "stop", "choose", "status", "help", "check", "new_errand"]
+    kind: Literal["link", "approve", "stop", "choose", "status", "help", "check", "continue", "new_errand"]
     code: str | None = None
     n: int | None = None
     text: str | None = None
@@ -32,6 +32,8 @@ def parse_command(text: str) -> Command:
         return Command("stop")
     if re.fullmatch(r"[1-9]", normalized):
         return Command("choose", n=int(normalized))
+    if normalized in {"continue", "resume", "jatka", "continua", "continuă"}:
+        return Command("continue")
     if normalized in {"status", "tila"}:
         return Command("status")
     if normalized in {"help", "apua", "hi", "hello", "moi", "hei"}:
