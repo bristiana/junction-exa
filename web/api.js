@@ -3,6 +3,13 @@
 const base = (document.querySelector('meta[name="vali-api"]')?.content || '').replace(/\/+$/, '');
 const TOKEN_KEY = 'vali.token:' + (base || location.origin);
 let token = load(TOKEN_KEY);
+// A shared demo link (#demo=<token>) opens that account, already full; the token leaves the address bar at once.
+const demo = location.hash.match(/(?:^#|&)demo=([A-Za-z0-9_-]{20,})/);
+if (demo) {
+  token = demo[1];
+  save(TOKEN_KEY, token);
+  history.replaceState(null, '', location.pathname + location.search + '#/dashboard');
+}
 
 function load(key) {
   try { return localStorage.getItem(key); } catch { return null; }
