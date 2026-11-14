@@ -15,18 +15,20 @@ Built for the Exa "Internet Butler" challenge at Junction 2026. Exa judges on us
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (API, task shape) and [docs/SANDBOX.md](docs/SANDBOX.md) (browser agent, guardrails, measured cost).
 
-## Three surfaces, one task list
+## Two surfaces, one task list
 
-- **Chrome extension** (`extension/`). Side panel on Alt+V, or right-click a selection or page: "Vali: take care of this". It sends the page context with the errand (URL, title, selected text, redacted page text, form fields). The mascot peeks in on pages with a form.
-- **Desktop app** (`desktop/`, Electron). A mascot that stays on screen, Alt+Space for a quick errand, a chat window that reuses the extension panel, and macOS notifications when Vali needs approval, asks a question or is done.
-- **WhatsApp** (`backend/vali_wa/`). Text, voice notes (ElevenLabs speech-to-text) and photos of Finnish letters (read by Claude). Pair it with the extension: the panel shows a 6-digit code, you send `link 123456` to Vali. Errands from either side then show up on both. Status: Vali receives messages, but replies wait on Meta unlocking the business account.
+- **Mac app** (`desktop/`, Electron). A mascot that stays on screen. Alt+Space opens a quick box. Hold Alt+Shift+Space to say an errand, or press Alt+Shift+V to talk with Vali. Drop a photo or PDF of a letter on the mascot. Select text anywhere and press Alt+Shift+A to ask about it. Hover the mascot to see all errands at a glance, with Approve, Stop and Answer. The profile is encrypted on the Mac. `npm run dist` builds a dmg. Details in [desktop/README.md](desktop/README.md).
+- **Chrome extension** (`extension/`). Side panel on Alt+V, or right-click a selection or page: "Vali: take care of this". It sends the page context with the errand (URL, title, selected text, redacted page text, form fields). The mascot peeks in on pages with a form. Both apps use the shared design system in `shared/`; `extension/shared/` is a copy made by `npm run sync-shared`.
+- **WhatsApp** (`backend/vali_wa/`) is parked. Meta blocks sending from unverified business portfolios (error 131031), so Vali can receive messages but not reply. The code stays. The iMessage plan is in [docs/IMESSAGE.md](docs/IMESSAGE.md).
+
+Devices link with a 6-digit code (`POST /v1/link/code`, `POST /v1/link`), so the Mac app and the extension share one account.
 
 ## Privacy
 
-- Personal details (name, email, phone, address) stay on your device, in the extension or desktop settings.
+- Personal details (name, email, phone, address) stay on your device, in the extension or the Mac app settings.
 - The models (Exa and Claude) only see placeholders such as `{{name}}` and `{{email}}`. The sandbox types the real value at the last moment and masks it back to the placeholder in every page snapshot the model reads. Fields showing a real value are blurred in the live view and screenshots.
 - Page text is redacted in the browser before it leaves: emails, phone numbers, Finnish personal identity codes, IBANs, card numbers, address lines.
-- Syncing details to the server, so WhatsApp errands can fill forms, is opt-in (`PUT /v1/profile`).
+- Syncing details to the server, so errands without a device profile can fill forms, is opt-in (`PUT /v1/profile`).
 - Page text is treated as data, never as instructions. A page that tries to steer the agent ends the run as "suspicious page".
 
 ## Partners and where they are used
@@ -37,7 +39,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (API, task shape) and 
 | Modal | The API (`backend/modal_app.py`, app `vali`) with research pollers, and the browser sandbox as its own app (`backend/modal_sandbox.py`, app `vali-sandbox`, 2 CPU, 4 GB, one container per run). |
 | Aiven | Postgres for users, the shared task list, WhatsApp pairing and watches (`DATABASE_URL`). Locally the store falls back to SQLite. |
 | Jev | Errand routing (`vali_api/router.py`, `vali_api/jev.py`) and, in the sandbox, finding the element to click when the page re-rendered, plus a stricter second opinion on the submit guard (`vali_agent/jev.py`). |
-| ElevenLabs | Speech-to-text for WhatsApp voice notes (`vali_media/voice.py`). |
+| ElevenLabs | Speech-to-text for voice errands (`vali_media/voice.py`) and the Talk to Vali voice agent (`backend/vali_api/VOICE.md`). |
 | Claude | Drives the browser sandbox (`claude-opus-5-5`, effort low, prompt caching) and reads photos of letters (`vali_media/letters.py`). |
 | Codex | Used to build: Codex workers wrote and checked code alongside Claude Code. |
 
@@ -48,10 +50,11 @@ Cloudinary support exists for screenshots (`vali_media/screenshots.py`) but is n
 | Path | What |
 |---|---|
 | `extension/` | Chrome MV3 extension: side panel, mascot, page redaction, API client. Works directly against Exa when no server is set. |
-| `desktop/` | Electron app. Copies the extension panel and mascot into `vendor/` at start. See [desktop/README.md](desktop/README.md). |
-| `backend/vali_api/` | FastAPI app: routes, store, Exa research, routing, limits, WhatsApp webhook. |
+| `desktop/` | Mac app (Electron). Copies the extension panel and mascot into `vendor/` at start. See [desktop/README.md](desktop/README.md). |
+| `shared/` | Shared design system (tokens and components). |
+| `backend/vali_api/` | FastAPI app: routes, store, Exa research, routing, limits, uploads, voice agent, WhatsApp webhook. |
 | `backend/vali_agent/` | Browser agent: Playwright wrapper, Claude tool loop, privacy, submit guard, live view. No Modal import, runs locally too. |
-| `backend/vali_wa/` | WhatsApp Cloud API channel: webhook parsing, flow, message rendering. |
+| `backend/vali_wa/` | WhatsApp Cloud API channel (parked): webhook parsing, flow, message rendering. |
 | `backend/vali_media/` | Screenshots, voice notes, letter reading. |
 | `backend/modal_app.py`, `backend/modal_sandbox.py` | Modal apps `vali` and `vali-sandbox`. |
 | `backend/modal_smoke.py` | Ephemeral Modal runs of the sandbox on fixtures or real sites. |
