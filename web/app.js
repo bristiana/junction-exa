@@ -46,7 +46,7 @@ const handlers = {
   onReply: (text) => act(() => api.message(followed.id, text)),
   onCancel: () => act(() => api.cancel(followed.id)),
   onFollowUp: (text) => ask(text, followed.id),
-  onExecute: () => act(() => api.execute(followed.id)),
+  onExecute: (index) => act(() => api.execute(followed.id, index)),
   onApprove: () => act(() => api.approve(followed.id)),
   onStop: () => act(() => api.stop(followed.id)),
 };
