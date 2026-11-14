@@ -85,7 +85,7 @@ function actions(task, { onExecute }) {
   if (!action) return null;
   const busy = ['starting', 'running', 'awaiting_approval', 'submitting'].includes(runStatus(task));
   return h('div', { class: 'actions' },
-    h('button', { type: 'button', class: 'btn', disabled: busy, onclick: () => onExecute(action.index) }, 'Fill it for me'),
+    h('button', { type: 'button', class: 'btn', disabled: busy, onclick: (e) => onExecute(action.index, e.currentTarget) }, 'Fill it for me'),
     h('a', { class: 'btn soft', href: action.url, target: '_blank', rel: 'noopener noreferrer' }, `Open ${action.domain}`));
 }
 

@@ -11,8 +11,12 @@ const STATUS = {
 const LIVE = new Set(['starting', 'running', 'awaiting_approval', 'submitting']);
 let frameTimer = 0;
 
-export function renderExecution(task, { onApprove, onStop, onReply }) {
+export function stopFrames() {
   clearInterval(frameTimer);
+}
+
+export function renderExecution(task, { onApprove, onStop, onReply }) {
+  stopFrames();
   const run = task.execution;
   if (!run) return null;
   const status = runStatus(task);
@@ -29,24 +33,25 @@ export function renderExecution(task, { onApprove, onStop, onReply }) {
     waiting ? approval(run.approval, onApprove, onStop) : null,
     run.result && !live ? h('p', { class: 'run-result' }, run.result) : null,
     run.error ? h('p', { class: 'run-error' }, run.error) : null,
-    live && !waiting ? h('button', { type: 'button', class: 'btn quiet', onclick: onStop }, 'Stop') : null);
+    live && !waiting ? h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop') : null);
 }
 
 // While the run is live, the frame reloads every 1.2 s; afterwards it shows the last screenshot.
 function frame(task, live) {
   const shots = task.execution.shots || [];
   const last = shots[shots.length - 1];
-  const src = live ? api.imageUrl(`/v1/tasks/${task.id}/live.jpg`) : last ? shotSrc(last.url) : null;
+  const lastShot = last && Number.isInteger(last.n) ? shotSrc(task, last.n) : null;
+  const src = live ? api.imageUrl(`/v1/tasks/${encodeURIComponent(task.id)}/live.jpg`) : lastShot;
   if (!src) return null;
   const img = h('img', { class: 'run-frame', alt: 'What the browser Vali drives shows now', src: src + (live ? `&ts=${Date.now()}` : '') });
-  img.addEventListener('error', () => { if (last) img.src = shotSrc(last.url); else img.hidden = true; }, { once: true });
+  img.addEventListener('error', () => { if (lastShot) img.src = lastShot; else img.hidden = true; }, { once: true });
   if (live) frameTimer = setInterval(() => { if (img.isConnected && !document.hidden) img.src = src + `&ts=${Date.now()}`; }, 1200);
   return img;
 }
 
-// Screenshots are either API paths (signed with ?t=) or absolute image-host URLs.
-function shotSrc(url) {
-  return String(url).startsWith('/') ? api.imageUrl(url) : url;
+// Screenshots always load from this API's own /v1 path (signed with ?t=), never from a URL inside the task.
+function shotSrc(task, n) {
+  return api.imageUrl(`/v1/tasks/${encodeURIComponent(task.id)}/shots/${n}.jpg`);
 }
 
 // filled: [{label, value, source}] from the agent; values hold placeholders, never your real details.
@@ -57,6 +62,6 @@ function approval(details, onApprove, onStop) {
     filled.length ? h('dl', { class: 'filled' }, filled.map((f) => h('div', {}, h('dt', {}, f.label), h('dd', {}, String(f.value ?? ''))))) : null,
     h('p', { class: 'muted' }, 'Nothing is sent until you approve.'),
     h('div', { class: 'actions' },
-      h('button', { type: 'button', class: 'btn', onclick: onApprove }, 'Approve'),
-      h('button', { type: 'button', class: 'btn quiet', onclick: onStop }, 'Stop')));
+      h('button', { type: 'button', class: 'btn', onclick: (e) => onApprove(e.currentTarget) }, 'Approve'),
+      h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop')));
 }
