@@ -22,6 +22,13 @@ for (const [name, run] of [['link code', () => api.linkCode()], ['link', () => m
   catch (e) { log('INFO', name, comingSoon(e) ? 'not deployed yet (UI shows "coming soon")' : `HTTP ${e.status}: ${e.message}`); }
 }
 
+// Talk to Vali: the one-off ElevenLabs credential the mascot starts the conversation with (not the conversation itself;
+// `npm run talk-check` does that with a fake microphone).
+try {
+  const s = await api.voiceSession();
+  check(!!s?.conversation_token && s.connection_type === 'webrtc' && !!s.dynamic_variables?.secret__vali_session, `POST /v1/voice/session gives a WebRTC token (expires in ${s?.expires_in}s)`);
+} catch (e) { check(false, `POST /v1/voice/session: HTTP ${e.status}: ${e.message}`); }
+
 async function until(id, done, label, ms = 600000) {
   const end = Date.now() + ms;
   let last = '';

@@ -4,5 +4,6 @@ contextBridge.exposeInMainWorld('vali', {
   call: (op, arg) => ipcRenderer.invoke('vali', op, arg),
   onChange: on('vali:change'),
   onState: on('vali:state'),
-  onQuick: on('vali:quick')
+  onQuick: on('vali:quick'),
+  onTalk: on('vali:talk')
 });

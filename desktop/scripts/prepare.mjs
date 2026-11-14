@@ -9,6 +9,9 @@ for (const dir of ['lib', 'panel', 'mascot', 'shared']) {
   await mkdir(new URL(`vendor/${dir}/`, root), { recursive: true });
   await cp(new URL(`../../extension/${dir}/`, import.meta.url), new URL(`vendor/${dir}/`, root), { recursive: true });
 }
+// Talk to Vali: the ElevenLabs client's self-contained browser build (livekit included), loaded by the mascot window.
+await mkdir(new URL('vendor/elevenlabs/', root), { recursive: true });
+await cp(new URL('node_modules/@elevenlabs/client/dist/lib.iife.js', root), new URL('vendor/elevenlabs/client.js', root));
 const path = new URL('vendor/panel/panel.html', root);
 const original = await readFile(path, 'utf8');
 await writeFile(path, original.replace('<head>', `<head>
