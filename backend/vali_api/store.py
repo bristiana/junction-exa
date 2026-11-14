@@ -33,6 +33,7 @@ class Store:
             'users(id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL, profile_json TEXT NOT NULL, wa_number TEXT UNIQUE)',
             'wa_seen(message_id TEXT PRIMARY KEY, at TEXT NOT NULL)',
             'pair_codes(code TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL)',
+            'code_tries(scope TEXT PRIMARY KEY, window_start TEXT NOT NULL, tries INTEGER NOT NULL)',
             'device_link_codes(code_hash TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL, sealed_token TEXT NOT NULL, salt TEXT NOT NULL, expires_at TEXT NOT NULL)',
             'tasks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, source TEXT NOT NULL, mode TEXT NOT NULL, task TEXT NOT NULL, page_json TEXT NOT NULL, research_json TEXT NOT NULL, execution_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, lang TEXT)',
             'watches(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, query TEXT NOT NULL, exa_monitor_id TEXT, created_at TEXT NOT NULL)',
@@ -171,6 +172,21 @@ class Store:
             self.sql('UPDATE users SET wa_number=NULL WHERE wa_number=?', (number,))
             self.sql('UPDATE users SET wa_number=? WHERE id=?', (number, row['user_id']))
             return True
+
+    def count_code_try(self, scope, limit, seconds):
+        """Take one code try for scope; False once its window already holds `limit`. One upsert, so concurrent
+        tries on any replica never pass the limit. A window starts with its first try and lasts `seconds`."""
+        current = datetime.now(timezone.utc)
+        expired = (current - timedelta(seconds=seconds)).isoformat()
+        row = self.sql('INSERT INTO code_tries VALUES(?,?,1) ON CONFLICT(scope) DO UPDATE SET '
+                       'tries=CASE WHEN code_tries.window_start<=? THEN 1 ELSE code_tries.tries+1 END, '
+                       'window_start=CASE WHEN code_tries.window_start<=? THEN excluded.window_start ELSE code_tries.window_start END '
+                       'RETURNING tries', (scope, current.isoformat(), expired, expired), one=True)
+        return row['tries'] <= limit
+
+    def refund_code_try(self, scope):
+        """A try that was not a wrong code (the right one, or one refused elsewhere) does not count."""
+        self.sql('UPDATE code_tries SET tries=tries-1 WHERE scope=? AND tries>0', (scope,))
 
     def find_user_by_number(self, number):
         return self.sql('SELECT * FROM users WHERE wa_number=?', (number,), one=True)
