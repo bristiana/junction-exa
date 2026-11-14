@@ -1,0 +1,356 @@
+{
+  "_about": "20 live errands for scripts/evals/run.py. mode: accepted routed modes (first = expected). pass: what the research must contain. execute: run the sandbox until approval (never past it). Dates assume the week of Mon 16 Nov 2026.",
+  "errands": [
+    {
+      "id": "find-sauna",
+      "site": "public saunas (Helsinki)",
+      "text": "Find a public sauna in Helsinki for 8 people next Saturday evening (21 November) that I can book online",
+      "mode": [
+        "find"
+      ],
+      "pass": {
+        "citations": 1,
+        "options": 3,
+        "option_urls": 3
+      },
+      "pass_note": "3+ options, each with a booking link, and sources"
+    },
+    {
+      "id": "find-laptop",
+      "site": "shop (Verkkokauppa.com, Gigantti)",
+      "text": "Find the cheapest laptop in Finland under 1000 euros with 16 GB RAM, sold by Verkkokauppa.com or Gigantti",
+      "mode": [
+        "find"
+      ],
+      "pass": {
+        "citations": 1,
+        "options": 2,
+        "option_urls": 2,
+        "answer_any": [
+          "€",
+          "eur"
+        ]
+      },
+      "pass_note": "2+ laptops with price and shop link"
+    },
+    {
+      "id": "find-hsl",
+      "site": "HSL (transport)",
+      "text": "Find the cheapest HSL ticket for a university student commuting every day between Espoo and Helsinki, with the monthly price",
+      "mode": [
+        "find",
+        "check"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_any": [
+          "€",
+          "eur"
+        ],
+        "domains_any": [
+          "hsl.fi"
+        ]
+      },
+      "pass_note": "a price in euros with an hsl.fi source"
+    },
+    {
+      "id": "check-kela-housing",
+      "site": "Kela",
+      "text": "How much general housing allowance would Kela pay a student living alone in Helsinki with 700 euros rent and no income?",
+      "mode": [
+        "check",
+        "claim"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_any": [
+          "€",
+          "eur"
+        ],
+        "domains_any": [
+          "kela.fi"
+        ]
+      },
+      "pass_note": "an amount in euros with a kela.fi source"
+    },
+    {
+      "id": "check-lease-clause",
+      "site": "lease clause (selected text)",
+      "text": "Is this rent increase legal?",
+      "page": {
+        "title": "Vuokrasopimus - 2h+k Kallio",
+        "selection": "Vuokraa korotetaan vuosittain 1.1. alkaen 15 prosenttia. Vuokranantajalla on lisäksi oikeus korottaa vuokraa milloin tahansa ilmoittamalla siitä vuokralaiselle suullisesti."
+      },
+      "mode": [
+        "check"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_min": 40
+      },
+      "pass_note": "a verdict with the rule behind it and a source"
+    },
+    {
+      "id": "check-migri-extension",
+      "site": "Migri",
+      "text": "My student residence permit expires on 31 January 2027. When should I apply for an extension and how much does it cost?",
+      "mode": [
+        "check",
+        "claim"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_any": [
+          "€",
+          "eur"
+        ],
+        "domains_any": [
+          "migri.fi"
+        ]
+      },
+      "pass_note": "the fee in euros and timing, with a migri.fi source"
+    },
+    {
+      "id": "check-pdf-guide",
+      "site": "PDF (Kela benefit guide)",
+      "text": "TL;DR this PDF for me: which benefits can an international university student get, and what do I have to do?",
+      "page": {
+        "url": "https://www.kela.fi/documents/d/guest/benefit-guide-students-and-conscripts",
+        "title": "Benefit guide: students and conscripts (PDF)"
+      },
+      "mode": [
+        "check"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_min": 60
+      },
+      "pass_note": "a summary of the PDF with sources"
+    },
+    {
+      "id": "check-bank-account",
+      "site": "bank page (Nordea)",
+      "text": "What do I need to bring to open a bank account here as a non-EU student who just arrived?",
+      "page": {
+        "url": "https://www.nordea.fi/en/personal/bank-with-us/become-a-customer/new-to-finland.html",
+        "title": "A Finnish bank account, debit card and online banking credentials for new customers | Nordea"
+      },
+      "mode": [
+        "check"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_any": [
+          "passport",
+          "residence permit",
+          "permit"
+        ]
+      },
+      "pass_note": "the document list (passport, residence permit) with a source"
+    },
+    {
+      "id": "claim-eu261",
+      "site": "airline (EU261)",
+      "text": "My Finnair flight from Helsinki to Barcelona last Tuesday landed 4 hours late. What can I get?",
+      "mode": [
+        "claim"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_any": [
+          "400"
+        ]
+      },
+      "pass_note": "EUR 400 under EU261 with the rule cited"
+    },
+    {
+      "id": "claim-vr-delay",
+      "site": "VR (trains)",
+      "text": "My VR train from Helsinki to Tampere yesterday arrived 70 minutes late. What compensation can I get and where do I claim it?",
+      "mode": [
+        "claim"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_any": [
+          "25"
+        ],
+        "domains_any": [
+          "vr.fi"
+        ]
+      },
+      "pass_note": "25% of the ticket price, with the VR claim page"
+    },
+    {
+      "id": "claim-vero-taxcard",
+      "site": "Vero",
+      "text": "I start a part-time job next month. How do I apply for a tax card from Vero as a foreign student?",
+      "mode": [
+        "claim",
+        "check"
+      ],
+      "pass": {
+        "citations": 1,
+        "answer_min": 40,
+        "domains_any": [
+          "vero.fi"
+        ],
+        "action_urls": 1
+      },
+      "pass_note": "the steps and the Vero page to apply, with sources"
+    },
+    {
+      "id": "claim-pothole-form",
+      "site": "city service form (Helsinki)",
+      "text": "Report a deep pothole at Mannerheimintie 5 in Helsinki to the city. I want a reply by email.",
+      "mode": [
+        "claim",
+        "write",
+        "check"
+      ],
+      "pass": {},
+      "execute": {
+        "start_url": "https://palautteet.hel.fi/vikailmoitus-lomake",
+        "goal": "Fill the City of Helsinki 'Report a problem' form: streets, pothole at Mannerheimintie 5, a short description, reply by email to {{email}}, name {{name}}, do not publish. Then request approval before Send.",
+        "accept": [
+          "approval"
+        ]
+      },
+      "pass_note": "sandbox fills the form and stops at the approval gate before Send"
+    },
+    {
+      "id": "claim-ta-defect",
+      "site": "landlord fault report (TA, iframe form with preview)",
+      "text": "The kitchen tap in my TA rental flat is leaking. Report it to TA.",
+      "mode": [
+        "claim",
+        "write",
+        "check"
+      ],
+      "pass": {},
+      "execute": {
+        "start_url": "https://asunnonhakijalle.production.kenno.pandia.fi/defect-notice/create?slug=t2&lang=en",
+        "goal": "Fill TA's defect report: the kitchen tap is leaking. For the property, pick the first TA property the search suggests for 'Espoo'. Master key may be used, no pets. Name {{first_name}} {{last_name}}, phone {{phone}}, email {{email}}. Go to the preview and request approval before the final submit.",
+        "reply": "Pick the first TA property suggested for Espoo.",
+        "accept": [
+          "approval"
+        ]
+      },
+      "pass_note": "sandbox fills the report and stops before 'Submit your fault report'"
+    },
+    {
+      "id": "book-sauna",
+      "site": "sauna booking (Löylykontti)",
+      "text": "Book a shared sauna for 8 people next Saturday evening (21 November) at Löylykontti Sörnäinen",
+      "mode": [
+        "book"
+      ],
+      "pass": {},
+      "execute": {
+        "start_url": "https://www.loylykontti.fi/en/reserve",
+        "goal": "Reserve a shared sauna at Löylykontti Sörnäinen for 8 people on Saturday 21 November in the evening (any free start time from 18:00), 2 hours. Details: {{first_name}}, {{last_name}}, {{email}}, {{phone}}. Choose online banking. Request approval before the final pay button.",
+        "reply": "Take the earliest free evening slot.",
+        "accept": [
+          "approval"
+        ]
+      },
+      "pass_note": "sandbox picks a slot, fills details and stops before 'Accept terms and pay'"
+    },
+    {
+      "id": "book-restaurant",
+      "site": "restaurant booking (Magu, found by research)",
+      "text": "Book a table for 2 at the vegan restaurant Magu in Helsinki on Wednesday 18 November at 19:00",
+      "mode": [
+        "book"
+      ],
+      "pass": {
+        "action_urls": 1
+      },
+      "execute": {
+        "goal": "Book a table for 2 at Magu on Wednesday 18 November around 19:00 through its online booking. Details: {{first_name}} {{last_name}}, {{email}}, {{phone}}. Request approval before the final confirm.",
+        "reply": "Any time between 18:30 and 20:00 is fine.",
+        "accept": [
+          "approval",
+          "handoff"
+        ]
+      },
+      "pass_note": "research finds the booking page; sandbox fills party, date, time and details, then stops before confirm, or hands off at the card step (Magu sells a prepaid menu, so a card guarantee follows the details)"
+    },
+    {
+      "id": "book-allas-tickets",
+      "site": "multi-step shop wizard (Allas Sea Pool)",
+      "text": "Buy 2 adult tickets for Allas Sea Pool for Sunday 22 November afternoon",
+      "mode": [
+        "book",
+        "find"
+      ],
+      "pass": {},
+      "execute": {
+        "start_url": "https://shop.allaspool.fi/en/shop/tickets",
+        "goal": "In the Allas Sea Pool web shop, add 2 adult tickets for Sunday 22 November in the afternoon (any free start time), check out as a guest with {{first_name}} {{last_name}} and {{email}}. Request approval before continuing to payment.",
+        "reply": "Any afternoon time is fine.",
+        "accept": [
+          "approval"
+        ]
+      },
+      "pass_note": "sandbox goes through tickets, time and guest details and stops before payment"
+    },
+    {
+      "id": "book-badminton",
+      "site": "sports venue booking (found by research)",
+      "text": "Book a badminton court in Helsinki for next Saturday (21 November) at 17:00 for one hour",
+      "mode": [
+        "book"
+      ],
+      "pass": {
+        "action_urls": 1
+      },
+      "execute": {
+        "goal": "Book a badminton court for Saturday 21 November at 17:00 for one hour. Details: {{name}}, {{email}}, {{phone}}. If the site needs a login, stop and say where to finish by hand. Request approval before the final confirm or payment.",
+        "reply": "Any court is fine.",
+        "accept": [
+          "approval",
+          "handoff"
+        ]
+      },
+      "pass_note": "stops at approval, or hands off cleanly at the login with the exact URL"
+    },
+    {
+      "id": "write-landlord",
+      "site": "email draft (landlord)",
+      "text": "Write an email to my landlord: the radiator in my flat has not worked for a week, ask them to fix it by Friday.",
+      "mode": [
+        "write"
+      ],
+      "pass": {
+        "email": 1
+      },
+      "pass_note": "an email draft with subject and body"
+    },
+    {
+      "id": "write-university",
+      "site": "university page (University of Helsinki)",
+      "text": "Write a message to the University of Helsinki admissions office asking whether my Bachelor's degree from India qualifies me for the Master's programme in Data Science.",
+      "mode": [
+        "write"
+      ],
+      "pass": {
+        "email": 1,
+        "citations": 1
+      },
+      "pass_note": "an email draft to the right office, with sources"
+    },
+    {
+      "id": "watch-flat",
+      "site": "housing listings (watch)",
+      "text": "Tell me when a 2-room flat in Espoo under 900 euros per month is listed",
+      "mode": [
+        "watch"
+      ],
+      "pass": {
+        "watch": true
+      },
+      "pass_note": "a watch is created"
+    }
+  ]
+}
