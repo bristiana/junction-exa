@@ -447,7 +447,7 @@ function renderMissing(t, questions) {
   return h("div", { class: "missing" },
     h("h4", { text: "Vali needs" }),
     ...questions.map((q, i) => h("label", {}, q, inputs[i])),
-    h("div", { class: "btns row end", style: "margin-top:8px" }, h("button", {
+    h("div", { class: "btns row end" }, h("button", {
       class: "v-btn v-btn--sm",
       text: "Continue",
       onclick: async () => {
@@ -581,7 +581,7 @@ function renderQuestion(t, q) {
   };
   btn.addEventListener("click", submit);
   ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
-  return h("div", { class: "exec-question" }, h("strong", { text: "Vali asks" }), h("p", { text: q.text }), ta, h("div", { class: "btns row end" }, btn));
+  return h("div", { class: "exec-question" }, h("p", { text: q.text }), ta, h("div", { class: "btns row end" }, btn));
 }
 
 function inlineButton(t, text, cls, action, name = text) {
@@ -636,7 +636,7 @@ function renderExecution(t) {
   const v = executionView(t, { profile: state.profile, answered: answered.get(t.id) ?? null });
   if (!v) return null;
   const box = h("section", { class: `exec exec-${v.phase}` });
-  const stop = v.live ? serverButton("Stop", "v-btn v-btn--danger v-btn--sm", { type: "stop", taskId: t.id }, null, t) : null;
+  const stop = v.live ? serverButton("Stop", "v-btn v-btn--quiet v-btn--sm", { type: "stop", taskId: t.id }, null, t) : null;
   if (v.live) {
     const [status, tone] = errandStatus(t);
     const frame = h("div", { class: "v-live" + (v.phase === "approval" ? " v-live--waiting" : ""), "data-empty": frames.has(t.id) ? null : "Waiting for the first picture…" },
@@ -655,7 +655,7 @@ function renderExecution(t) {
     const reason = v.blocker?.reason || v.result || v.error || "I couldn’t finish this errand.";
     box.append(h("p", { class: "exec-reason", text: reason }));
     const url = v.blocker?.url || v.url;
-    if (url) box.append(h("div", { class: "btns row" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
+    if (url) box.append(h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
     if (v.filled.length) {
       box.append(h("h4", { text: "Filled so far" }), filledList(v.filled, { copy: true }),
         h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
@@ -688,6 +688,21 @@ function selectTask(t, focusAnswer = false) {
   if (focusAnswer) $("detail").querySelector("textarea.answer-box, .missing input")?.focus();
 }
 
+// The words after the status in a row: what Vali asks, waits for, does now, or found.
+function statusDetail(t, v) {
+  if (v?.question && !v.question.answered) return v.question.text;
+  if (v?.phase === "approval") return v.summary;
+  if (v?.blocker) return v.blocker.reason;
+  if (v?.live) return v.step;
+  if (t.status === "queued" || t.status === "running") {
+    const p = t.progress?.at(-1);
+    return p?.text ? (p.kind === "source" ? "Reading " : "Searching ") + p.text : "Starting";
+  }
+  if (v?.phase === "done") return v.result;
+  if (t.status === "failed") return t.error || "";
+  return t.output?.structured?.answer || "";
+}
+
 function renderCard(t) {
   const card = $("cardTpl").content.firstElementChild.cloneNode(true);
   const [label, tone] = errandStatus(t);
@@ -695,18 +710,20 @@ function renderCard(t) {
   card.querySelector(".still").src = `../mascot/${taskMascot(t)}.svg`;
   card.querySelector(".status").textContent = label;
   card.querySelector(".task-text").textContent = t.parentId ? "↳ " + t.task.split("\n\nMy answers:")[0] : t.task;
-  card.querySelector(".meta").textContent = t.source === "whatsapp" ? " · WhatsApp" : "";
   card.querySelector(".card-head").addEventListener("click", () => selectTask(t));
   card.dataset.id = t.id;
   const actions = card.querySelector(".v-row__actions");
   const v = executionView(t, { answered: answered.get(t.id) ?? null });
+  const detail = [statusDetail(t, v), t.source === "whatsapp" ? "WhatsApp" : ""].filter(Boolean).join(" · ");
+  card.querySelector(".meta").textContent = detail ? " · " + detail : "";
+  card.querySelector(".v-row__status").title = label + card.querySelector(".meta").textContent;
   if ((v?.question && !v.question.answered) || (!v && t.output?.structured?.missing_info?.length)) {
-    actions.append(inlineButton(t, "Answer", "v-btn v-btn--quiet v-btn--sm", () => selectTask(t, true)));
+    actions.append(inlineButton(t, "Answer", "v-btn v-btn--soft v-btn--sm", () => selectTask(t, true)));
   } else if (v?.phase === "approval") {
-    actions.append(serverButton("Approve", "v-btn v-btn--quiet v-btn--sm", { type: "approve", taskId: t.id }, APPROVED, t));
+    actions.append(serverButton("Approve", "v-btn v-btn--soft v-btn--sm", { type: "approve", taskId: t.id }, APPROVED, t));
   }
   if (v?.live || t.status === "queued" || t.status === "running") {
-    actions.append(serverButton("Stop", "v-btn v-btn--danger v-btn--sm", { type: v?.live ? "stop" : "cancel", taskId: t.id }, null, t));
+    actions.append(serverButton("Stop", "v-btn v-btn--quiet v-btn--sm", { type: v?.live ? "stop" : "cancel", taskId: t.id }, null, t));
   }
   return card;
 }
@@ -716,9 +733,19 @@ function selectedTask() {
   return selected || state.tasks.find((t) => LIVE.has(t.execution?.status)) || state.tasks[0];
 }
 
-function renderExaActivity(t, expanded) {
+// One Exa call from the browser run: what was asked, then links to the pages it returned.
+function renderLookup(e) {
+  const label = e.kind === "search" ? "Searched: " : "Read: ";
+  const what = e.url ? h("a", { href: e.url, target: "_blank", rel: "noopener noreferrer", text: e.text }) : e.text;
+  const found = e.kind === "search" ? e.results.slice(0, 3).map((r) =>
+    h("a", { class: "exa-host", href: r.url, target: "_blank", rel: "noopener noreferrer", title: r.title }, h("span", { class: "host", text: r.host }))) : [];
+  return h("li", {}, label, what, e.failed ? " (no answer)" : null, found.length ? h("div", { class: "exa-hosts" }, ...found) : null);
+}
+
+function renderExaActivity(t, expanded, busy) {
   const view = exaActivity(t);
-  if (!view.sources.length && !view.queries.length && view.note) return null; // nothing to show yet
+  if (busy && !view.filling.length) return null; // while research runs, show only live form lookups
+  if (!view.sources.length && !view.queries.length && !view.filling.length && view.note) return null; // nothing to show yet
   const hosts = new Map();
   for (const s of view.sources) if (!hosts.has(s.host)) hosts.set(s.host, s);
   return h("details", { class: "result-details exa-activity", open: expanded },
@@ -726,6 +753,7 @@ function renderExaActivity(t, expanded) {
     h("p", { class: "small", text: view.method }),
     view.note ? h("p", { class: "muted small", text: view.note }) : null,
     view.queries.length ? [h("h4", { text: "Searched for" }), h("ul", { class: "exa-queries" }, ...view.queries.map((q) => h("li", { text: q })))] : null,
+    view.filling.length ? [h("h4", { text: "While filling the form" }), h("ul", { class: "exa-queries exa-filling" }, ...view.filling.map(renderLookup))] : null,
     hosts.size ? [h("h4", { text: "Read" }), h("div", { class: "exa-hosts" }, ...[...hosts.values()].map((s) =>
       h("a", { class: "exa-host", href: s.url, target: "_blank", rel: "noopener noreferrer", title: s.title }, h("span", { class: "host", text: s.host }))))] : null);
 }
@@ -752,13 +780,13 @@ function renderDetail(t) {
     else body.append(...result);
   }
   else if (t.status === "failed") {
-    body.append(h("p", { class: "exec-reason exec-reason--bad", text: t.error || "I couldn’t finish this errand." }),
-      h("div", { class: "btns row" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Try again", onclick: async () => {
+    body.append(h("p", { class: "exec-reason", text: t.error || "I couldn’t finish this errand." }),
+      h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Try again", onclick: async () => {
         try { open.add((await send({ type: "start", task: t.task, tabId: t.tabId, usePage: !!t.page })).id); } catch (e) { toast(e.message); }
       } })));
   }
   else body.append(h("p", { class: "muted exec-result", text: "Stopped. Nothing was sent." }));
-  const exa = renderExaActivity(t, exaExpanded);
+  const exa = renderExaActivity(t, exaExpanded, t.status === "queued" || t.status === "running");
   if (exa) body.append(exa);
   if (t.status !== "queued" && t.status !== "running") {
     body.append(h("div", { class: "foot" }, h("span", { class: "muted", text: [elapsed(t), t.page?.title, t.cost != null ? "$" + Number(t.cost).toFixed(3) : null].filter(Boolean).join(" · ") }),
@@ -786,6 +814,8 @@ function render() {
     card.querySelector(".card-head").setAttribute("aria-expanded", String(card.dataset.id === selected?.id));
   }
   renderDetail(selected);
+  const next = !$("detail").hidden && $("detail").querySelector(".v-btn:not(.v-btn--quiet, .v-btn--soft, .v-btn--danger)");
+  $("send").classList.toggle("v-btn--soft", !!next);
   $("empty").hidden = state.tasks.length > 0;
 }
 

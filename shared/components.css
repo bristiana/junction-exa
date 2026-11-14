@@ -6,7 +6,7 @@
 /* Focus: one visible ring everywhere. .is-focus only fakes it for previews. */
 :where(.v-btn, .v-input, .v-textarea, .v-row__link):is(:focus-visible, .is-focus) { outline: 2px solid var(--v-ring); outline-offset: 2px; }
 
-/* Button: primary by default; --quiet, --danger; --sm, --lg */
+/* Button: primary by default; --soft (stands in when another button is the primary), --quiet, --danger; --sm, --lg */
 .v-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--v-s-2);
   min-height: var(--v-tap); padding: 0 var(--v-s-4); border: 1px solid transparent; border-radius: var(--v-r-md);
@@ -18,6 +18,8 @@
 .v-btn:active { transform: scale(0.98); }
 .v-btn--quiet { background: transparent; color: var(--v-accent); }
 .v-btn--quiet:hover { background: var(--v-accent-soft); }
+.v-btn--soft { background: var(--v-accent-soft); color: var(--v-accent); }
+.v-btn--soft:hover { background: var(--v-accent-soft); border-color: var(--v-ring); }
 .v-btn--danger { background: var(--v-danger-soft); color: var(--v-danger); }
 .v-btn--danger:hover { background: var(--v-danger); color: var(--v-on-danger); }
 .v-btn--sm { min-height: 36px; padding: 0 var(--v-s-3); font-size: var(--v-fs-sm); border-radius: var(--v-r-sm); }
@@ -43,7 +45,7 @@
 /* Card */
 .v-card { background: var(--v-surface); border: 1px solid var(--v-line); border-radius: var(--v-r-lg); padding: var(--v-s-4); box-shadow: var(--v-shadow-1); }
 .v-card--flush { padding: 0; overflow: hidden; }
-.v-card--attention { border-color: var(--v-accent); box-shadow: 0 0 0 1px var(--v-accent), var(--v-shadow-2); }
+.v-card--attention { box-shadow: inset 3px 0 var(--v-warning), var(--v-shadow-1); } /* plain card, amber edge, like a row that needs you */
 .v-card__title { margin: 0 0 var(--v-s-1); font-size: var(--v-fs-lg); font-weight: 650; }
 .v-card__actions { display: flex; flex-wrap: wrap; gap: var(--v-s-2); margin-top: var(--v-s-4); }
 
