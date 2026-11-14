@@ -22,6 +22,20 @@ from vali_wa.api import GraphAPIClient
 import asyncio
 
 
+WA_SECRET = 'test-app-secret'
+
+
+def sign_whatsapp(request):
+    """The webhook fails closed without a valid Meta signature, so test deliveries are signed like Meta's."""
+    if request.method == 'POST' and request.url.path == '/webhooks/whatsapp' and 'x-hub-signature-256' not in request.headers:
+        request.headers['X-Hub-Signature-256'] = 'sha256=' + hmac.new(WA_SECRET.encode(), request.read(), hashlib.sha256).hexdigest()
+
+
+def signed(client):
+    client.event_hooks = {'request': [sign_whatsapp], 'response': []}
+    return client
+
+
 @pytest.fixture
 def api():
     calls, polls, browsers = [], [], []
@@ -48,8 +62,9 @@ def api():
             poll_research_once(tid, application)  # the fake poller finishes a search errand's quote check at once
         else:
             polls.append(tid)
-    application = create_app(Config(sqlite_path=':memory:'), store, exa, spawn_poller, lambda *args: browsers.append(args))
-    with TestClient(application) as client:
+    application = create_app(Config(sqlite_path=':memory:', whatsapp_app_secret=WA_SECRET), store, exa, spawn_poller,
+                             lambda *args: browsers.append(args))
+    with signed(TestClient(application)) as client:
         user = client.post('/v1/users').json()
         client.headers['Authorization'] = 'Bearer ' + user['token']
         yield client, application, store, calls, polls, browsers, user
@@ -579,7 +594,8 @@ def test_whatsapp_response_is_sent_before_processing(wa):
         await application({'type': 'http', 'asgi': {'version': '3.0', 'spec_version': '2.4'},
                            'http_version': '1.1', 'method': 'POST', 'scheme': 'http',
                            'path': '/webhooks/whatsapp', 'raw_path': b'/webhooks/whatsapp',
-                           'query_string': b'', 'headers': [(b'content-type', b'application/json')],
+                           'query_string': b'', 'headers': [(b'content-type', b'application/json'), (
+                               b'x-hub-signature-256', b'sha256=' + hmac.new(WA_SECRET.encode(), raw, hashlib.sha256).hexdigest().encode())],
                            'client': ('127.0.0.1', 1234), 'server': ('testserver', 80)}, receive, send)
     asyncio.run(request())
     assert events == ['response', 'processing']
@@ -926,10 +942,10 @@ def test_whatsapp_voice_graph_to_elevenlabs_to_task(wa, monkeypatch):
     pair_whatsapp(api, deliver)
     async def send_voice():
         async with GraphAPIClient('phone-test', 'fake-graph', transport=httpx.MockTransport(respond)) as graph_api:
-            voice_app = create_app(Config(elevenlabs_api_key='fake-elevenlabs'), api[2],
+            voice_app = create_app(Config(elevenlabs_api_key='fake-elevenlabs', whatsapp_app_secret=WA_SECRET), api[2],
                                    application.state.exa, lambda tid: None, lambda *args: None,
                                    whatsapp_api=graph_api)
-            with TestClient(voice_app) as voice_client:
+            with signed(TestClient(voice_app)) as voice_client:
                 response = voice_client.post('/webhooks/whatsapp', json={'entry': [{'changes': [{'value': {
                     'messages': [{'from': '358401234567', 'id': 'voice-e2e', 'type': 'audio',
                                   'audio': {'id': 'audio-id', 'mime_type': 'audio/ogg; codecs=opus'}}]}}]}]})
@@ -974,3 +990,15 @@ def test_privacy_and_terms_pages_are_public():
     for path in ('/privacy', '/terms'):
         response = client.get(path)
         assert response.status_code == 200 and 'Vali' in response.text
+
+
+def test_webhooks_fail_closed_without_their_secrets(api):
+    client, application, *_ = api
+    config = application.state.config
+    config.whatsapp_app_secret = ''
+    delivery = {'entry': [{'changes': [{'value': {'messages': [{'from': '1', 'id': 'm', 'type': 'text', 'text': {'body': 'hi'}}]}}]}]}
+    assert client.post('/webhooks/whatsapp', json=delivery).status_code == 403
+    assert client.get('/health').json()['whatsapp_signed'] is False
+    assert client.post('/webhooks/exa?w=missing', json={}).status_code == 403
+    config.voice_tool_secret = ''
+    assert client.post('/v1/voice/tools/status', json={}).status_code == 503
