@@ -150,9 +150,9 @@ export function openConfig(saved, decrypt) {
 // needsYou: Vali waits on the user.
 export function plainStatus(t) {
   const x = t?.execution, v = executionView(t);
-  const you = (label, needsYou = true, active = false) => ({ label, tone: 'you', needsYou, active });
-  if (v?.question && !v.question.answered) return you('Needs your answer', true, true);
-  if (v?.phase === 'approval' && !x.approval_decision) return you('Waiting for your OK', true, true);
+  const you = (label, needsYou = true, active = false, attention = 'handoff') => ({ label, tone: 'you', needsYou, active, attention });
+  if (v?.question && !v.question.answered) return you('Needs your answer', true, true, 'question');
+  if (v?.phase === 'approval' && !x.approval_decision) return you('Waiting for your OK', true, true, 'approval');
   if (v?.phase === 'blocked') {
     if (v.blocker.kind === 'suspicious') return { label: 'Couldn’t finish', tone: 'bad', needsYou: false, active: false };
     return you(['login', 'suomifi'].includes(v.blocker.kind) ? 'Needs login' : 'Needs you', !t.seen);
@@ -165,7 +165,7 @@ export function plainStatus(t) {
   if (t?.status === 'cancelled') return { label: 'Stopped', tone: 'quiet', needsYou: false, active: false };
   const s = t?.output?.structured?.status;
   if (t?.status === 'failed' || s === 'not_possible') return { label: 'Couldn’t finish', tone: 'bad', needsYou: false, active: false };
-  if (s === 'ready_to_approve' || s === 'needs_info') return you(s === 'needs_info' ? 'Needs your answer' : 'Waiting for your OK', !t.seen);
+  if (s === 'ready_to_approve' || s === 'needs_info') return you(s === 'needs_info' ? 'Needs your answer' : 'Waiting for your OK', !t.seen, false, s === 'needs_info' ? 'question' : 'approval');
   return { label: 'Done', tone: 'done', needsYou: false, active: false };
 }
 
@@ -181,7 +181,8 @@ export function glanceItems(tasks = [], now = Date.now()) {
 }
 export function badgeOf(tasks = []) {
   const all = tasks.map(plainStatus);
-  return { count: all.filter(s => s.active).length, needsYou: all.some(s => s.needsYou) };
+  const attention = all.find(s => s.needsYou)?.attention;
+  return { count: all.filter(s => s.active).length, needsYou: !!attention, ...(attention ? { attention } : {}) };
 }
 
 // Console lines forwarded to stderr: tokens in query strings, Bearer headers and token fields are cut out.

@@ -438,6 +438,7 @@ async function runSmoke() {
   await waitFor(chat, `(() => { const img = document.querySelector('.live.has-frame img, .v-live:not([data-empty]) img'); return img?.complete && img.naturalWidth > 0; })()`, 'Smoke browser frame did not decode');
   const controls = await chat.webContents.executeJavaScript(`Array.from(document.querySelectorAll('#list button, #detail button, .exec button')).map(b => b.textContent.trim())`);
   if (!controls.includes('Stop') || !controls.some(t => t.startsWith('Approve'))) throw new Error('Approval controls are missing.');
+  await waitFor(mascot, `document.getElementById('line').textContent === 'I need your OK on an errand.'`, 'Approval bubble missing');
   await capture(mascot, out, 'mascot');
   await capture(chat, out, 'chat');
   // The compact list beside the mascot, with inline Approve / Stop and the live frame.
@@ -452,6 +453,7 @@ async function runSmoke() {
   await capture(chat, out, 'chat-question');
   showGlance({ focus: true });
   await waitFor(glance, `document.querySelector('.item.you .answer input')`, 'Glance answer box missing');
+  await waitFor(mascot, `document.getElementById('line').textContent === 'I have a question about an errand.'`, 'Question bubble missing');
   await capture(glance, out, 'glance-question');
   // Every kind of errand at once: waiting for your OK, needs your answer, running with the live view, needs login, done.
   const before = tasks;
@@ -470,6 +472,7 @@ async function runSmoke() {
   await chat.webContents.executeJavaScript(`document.querySelector('.desktop-link').scrollIntoView({block:'start'})`);
   await capture(chat, out, 'settings-profile');
   await chat.webContents.executeJavaScript(`document.querySelector('.desktop-imessage').scrollIntoView({block:'start'})`);
+  await waitFor(chat, `document.querySelector('.desktop-imessage-policy')?.disabled && document.querySelector('[aria-label="iMessage sender policy"]').matches(':disabled') && document.querySelector('[aria-label="Allowed iMessage senders"]').matches(':disabled')`, 'Off iMessage policy is not disabled');
   await capture(chat, out, 'settings-imessage');
   // The quick box: empty, then typing with a suggestion picked by arrow key, then a dropped letter.
   showQuick('type', {});
@@ -496,13 +499,18 @@ async function runSmoke() {
 async function smokeValet(out) {
   const mascotHas = (test, label) => waitFor(mascot, test, label);
   const pose = () => new Promise(r => setTimeout(r, 1200)); // let the butler settle into the new pose
-  await mascotHas(`!document.getElementById('bell').hasAttribute('hidden') && document.getElementById('line').textContent.includes('OK')`, 'Bell for approval missing');
+  await mascotHas(`!document.getElementById('bell').hasAttribute('hidden') && document.getElementById('line').textContent === 'I have a question about an errand.'`, 'Bell for question missing');
+  const fixture = tasks;
+  for (const kind of ['login', 'captcha', 'payment']) {
+    updateTasks([{ ...fixture[0], seen: false, execution: { status: 'failed', result: `needs ${kind}: finish by hand at https://example.com` } }]);
+    await mascotHas(`document.getElementById('line').textContent === 'I need you to finish a step.'`, `${kind} hand-off bubble missing`);
+  }
+  updateTasks(fixture);
   await mascot.webContents.executeJavaScript(`window.__smokeTalk('speaking', 'Hei! I found two saunas open on Saturday. Shall I book the one in Kallio?')`);
   await mascotHas(`document.getElementById('wrap').classList.contains('speaking') && document.getElementById('talk').textContent.includes('Stop')`, 'Talking state missing');
   await pose(); await capture(mascot, out, 'mascot-talk');
   await captureLight(mascot, out, 'mascot-talk');
   await mascot.webContents.executeJavaScript(`window.__smokeTalk('')`);
-  const fixture = tasks;
   updateTasks(fixture.filter(t => t.id === 'smoke-research'));
   await mascotHas(`document.getElementById('line').textContent.includes('on it')`, 'mascot-working line missing');
   await pose(); await capture(mascot, out, 'mascot-working'); await captureLight(mascot, out, 'mascot-working');
