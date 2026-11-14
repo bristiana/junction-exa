@@ -76,7 +76,10 @@ def is_official(source):
 
 def answer_text(output):
     structured = output.get('structured') or {}
-    return (structured.get('answer') or output.get('text') or '').strip()
+    text = (structured.get('answer') or output.get('text') or '').strip()
+    # A write errand's draft sits in its actions, and the page shows it under the answer.
+    drafts = [a.get('body') for a in structured.get('actions') or [] if isinstance(a, dict) and a.get('body')]
+    return '\n\n'.join([text] + [f'Draft:\n{d.strip()}' for d in drafts]).strip()
 
 
 def measure(task, seconds):
