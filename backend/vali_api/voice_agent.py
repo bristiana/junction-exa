@@ -56,6 +56,7 @@ def session_user_id(token, secret, now=None):
 def spoken(text, limit=SPOKEN_LIMIT):
     """Placeholders become plain words; long text is cut at a sentence end."""
     text = re.sub(r'\{\{(\w+)\}\}', lambda m: 'your ' + m[1].replace('_', ' '), str(text or ''))
+    text = re.sub(r'\s*(\[\d+\])+', '', text)  # citation markers like [1][2] are not for reading aloud
     text = ' '.join(text.split())
     if len(text) <= limit:
         return text

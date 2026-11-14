@@ -244,3 +244,8 @@ def test_agent_script_creates_then_updates():
 def test_agent_script_needs_env():
     with pytest.raises(SystemExit):
         load_script().setup({})
+
+
+def test_spoken_text_drops_citation_markers():
+    from vali_api.voice_agent import spoken
+    assert spoken('Try Löyly [1][2] or Allas [5].') == 'Try Löyly or Allas.'
