@@ -1,5 +1,21 @@
 # Overnight backlog (14-15 Nov)
 
+## Morning summary (08:30)
+Vali is ready to demo. 44 PRs merged overnight, each reviewed and green in CI. Live = main.
+
+Verified live this morning:
+- Golden 5/5: find, claim research, letter, execute on httpbin until approval and done, and an Exa lookup made while filling a form.
+- Evals 20/21 on real Finnish sites (the one miss is the sauna booking stopping at the bank choice, which is the intended payment hand-off). New-site sweep 8/10.
+- Mac app end to end in the real windows (npm run live-app): quick box, letter drop, research, How Vali found this, approve on httpbin, done.
+- Voice end to end without a mic (scripts/voice_check.py): the real ElevenLabs agent created and tracked an errand through our API, 14/14.
+
+What to show (docs/DEMO.md, 3 minutes): give a task on the Mac (Alt+Space, talk, drop a letter), see every errand at once (Alt+Shift+G, A approves, S stops), one errand to approval with the live view, How Vali found this with the Exa searches and the lookups made while filling the form, then talk to Vali.
+
+Before the demo: run `backend/.venv/bin/python scripts/demo_seed.py --token-file <demo token>` 10 minutes ahead, and do not deploy in the last hour (a deploy cuts running requests). The dmg is at desktop/dist/Vali-0.1.0-arm64.dmg.
+
+Known limits: phone calls need a Twilio number or SIP trunk; iMessage is built but needs a dedicated Apple ID; WhatsApp is blocked by Meta until business verification; payments always hand over to you.
+
+
 Five tracks until 10:00, presented to mentors in the morning:
 1. Call: talk to Vali by voice (ElevenLabs agent), phone later (V1, V2, P1).
 2. Valet: the mascot lives on screen, moves, reacts and follows what you do (S1-S3).
@@ -106,3 +122,4 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - 06:50 Merged #21-#25: how-to questions route to check, Mac first-run welcome, live captions while talking, Exa lookups during form runs (masked before sending, shown in the trail), extension polish. New-site sweep 8/10 (dentist routing fixed; Espoo form was down for maintenance). Golden 4/4. Running: outage hand-off + address suggestion guard fix, extension leftovers, demo docs, dmg rebuild.
 - 07:45 Merged #26-#35: demo docs, one-line composer, mascot narrates Exa and has a searching pose, golden lookup check, Mac live end-to-end check (demo flow passed twice), plain answers read Done, keyboard control of the list, site outages become a hand-off and address suggestions click (stricter guard kept for 'Place order'). Golden 5/5 after fixing the lookup errand's delivery time.
 - 08:30 Merged #37-#39: 08:00 regression 20/21 (sauna payment hand-off is intended, eval updated), voice check end to end (citation markers no longer spoken), letters reply to the sender and done text shows your details only on your device (company contact details checked in code). Live = main, golden 5/5. dmg rebuilt.
+- 08:30 Merged #40-#44: backlog, captions hide voice tags, demo seed script, aligned text buttons, dead database socket no longer hangs requests (cause verified in logs). Live = main, golden 5/5, dmg rebuilt. Code freeze; health checks only until 10:00. (Log times after 07:00 ran about 20 minutes ahead.)
