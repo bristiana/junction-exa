@@ -36,7 +36,7 @@ class Store:
             'code_tries(scope TEXT PRIMARY KEY, window_start TEXT NOT NULL, tries INTEGER NOT NULL)',
             'device_link_codes(code_hash TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL, sealed_token TEXT NOT NULL, salt TEXT NOT NULL, expires_at TEXT NOT NULL)',
             'tasks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, source TEXT NOT NULL, mode TEXT NOT NULL, task TEXT NOT NULL, page_json TEXT NOT NULL, research_json TEXT NOT NULL, execution_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, lang TEXT)',
-            'watches(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, query TEXT NOT NULL, exa_monitor_id TEXT, created_at TEXT NOT NULL)',
+            'watches(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, query TEXT NOT NULL, exa_monitor_id TEXT, created_at TEXT NOT NULL, check_requested_at TEXT)',
             'watch_details(watch_id TEXT PRIMARY KEY, task_id TEXT, secret TEXT NOT NULL)',
             'watch_slots(user_id TEXT NOT NULL, slot INTEGER NOT NULL, watch_id TEXT UNIQUE NOT NULL, PRIMARY KEY(user_id,slot))',
             'watch_updates(watch_id TEXT NOT NULL, event_id TEXT NOT NULL, data_json TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(watch_id,event_id))',
@@ -46,6 +46,7 @@ class Store:
         for table in tables:
             self.sql('CREATE TABLE IF NOT EXISTS ' + table)
         self._add_column('tasks', 'lang TEXT')
+        self._add_column('watches', 'check_requested_at TEXT')
         self._once('profiles-cleared', "UPDATE users SET profile_json='{}' WHERE profile_json<>'{}'")  # they stay on the device
 
     def _once(self, name, statement):
@@ -327,7 +328,7 @@ class Store:
     def create_watch(self, uid, query, monitor_id=None, task_id=None):
         wid = 'w_' + uuid.uuid4().hex
         with self.transaction():
-            self.sql('INSERT INTO watches VALUES(?,?,?,?,?)', (wid, uid, query, monitor_id, now()))
+            self.sql('INSERT INTO watches(id,user_id,query,exa_monitor_id,created_at) VALUES(?,?,?,?,?)', (wid, uid, query, monitor_id, now()))
             self.sql('INSERT INTO watch_details VALUES(?,?,?)', (wid, task_id, ''))
         return self.get_watch(wid)
 
@@ -349,6 +350,15 @@ class Store:
         with self.transaction():
             self.sql('UPDATE watches SET exa_monitor_id=? WHERE id=?', (monitor_id, wid))
             self.sql('UPDATE watch_details SET secret=? WHERE watch_id=?', (secret, wid))
+
+    def request_check(self, wid, requested=True):
+        # A user-asked run: its next completed delivery always replies, even with nothing new.
+        self.sql('UPDATE watches SET check_requested_at=? WHERE id=?', (now() if requested else None, wid))
+
+    def take_check(self, wid):
+        """Clear a requested check; True for the one delivery that clears it."""
+        return bool(self.sql('UPDATE watches SET check_requested_at=NULL WHERE id=? AND check_requested_at IS NOT NULL '
+                             'RETURNING id', (wid,)))
 
     def list_watches(self, uid):
         watches = self.sql('SELECT * FROM watches WHERE user_id=? ORDER BY created_at DESC', (uid,))

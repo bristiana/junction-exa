@@ -85,3 +85,6 @@ def test_watch_update_and_check_texts():
         '*New on your watch:* flats in Vantaa\nOne. Two is here.\nhttps://a.example/x\nhttps://b.example/']
     assert render_check('ro-RO') == ['Verific acum cu Exa. Îți scriu aici când termin.']
     assert render_check(None) == ["Checking now with Exa. I'll message you here when it finishes."]
+    from vali_wa.render import render_nothing_new
+    assert render_nothing_new('de') == ['Gerade mit Exa geprüft: nichts Neues seit dem letzten Mal. Ich beobachte weiter täglich.']
+    assert render_nothing_new('xx') == ["Checked with Exa just now: nothing new since last time. I'll keep watching daily."]

@@ -25,12 +25,17 @@ def watch_criteria(task):
     return criteria or task.strip()
 
 
+_TODO = re.compile(r'^(?:renew|book|apply|pay|cancel|register|submit|extend)\b', re.I)
+
+
 def watch_confirmation(criteria, message, live, cadence='1d'):
     """What is watched, how often and where it looks: said before any research result."""
+    todo = _TODO.match(criteria)  # 'renew my permit' is a to-do, not a thing to watch for
     if not live:
-        return f'I saved a watch for {criteria}. {message}'
+        return (f'I saved a reminder about: {criteria}.' if todo else f'I saved a watch for {criteria}.') + f' {message}'
     often = {'1d': 'once a day', '1h': 'once an hour', '1w': 'once a week'}.get(cadence, 'regularly')
-    return (f'I will watch for {criteria}. I will search the web for it {often} with Exa and tell you when new '
+    lead = f'I will remind you about: {criteria}.' if todo else f'I will watch for {criteria}.'
+    return (f'{lead} I will search the web for it {often} with Exa and tell you when new '
             'results appear.')
 
 
@@ -106,6 +111,12 @@ def delete_monitor(exa, watch):
         except ExaError as exc:
             if exc.status != 404:
                 raise
+
+
+def run_completed(payload):
+    # A finished run, with or without new results; failed runs do not count.
+    data = payload.get('data') if isinstance(payload, dict) else None
+    return payload.get('type') == 'monitor.run.completed' and isinstance(data, dict) and data.get('status') == 'completed'
 
 
 def trigger_monitor(exa, watch):

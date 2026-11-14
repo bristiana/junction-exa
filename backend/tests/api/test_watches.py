@@ -511,5 +511,71 @@ def test_whatsapp_check_now_triggers_newest_live_watch(watched):
     newest = client.get('/v1/watches').json()['watches'][0]
     assert reply('Check now') == ['Tarkistan nyt Exalla. Viestitän tänne, kun se on valmis.']
     assert calls[-1].url.path == '/monitors/' + newest['exa_monitor_id'] + '/trigger'
+    assert store.get_watch(newest['id'])['check_requested_at']  # its next run replies here
     store.sql('UPDATE tasks SET lang=? WHERE id=?', ('en', task['id']))
     assert reply('tarkista') == ["Checking now with Exa. I'll message you here when it finishes."]
+
+
+NOTHING_NEW = "Checked with Exa just now: nothing new since last time. I'll keep watching daily."
+
+
+def test_requested_check_always_replies_and_scheduled_runs_stay_silent(watched):
+    client, store, calls, behavior, app, identity = watched
+    number, send_text = link_whatsapp(store, identity), fake_whatsapp(app)
+    create(client)
+    watch = client.get('/v1/watches').json()['watches'][0]
+    assert send(client, watch, delivery(watch, event='scheduled_1', results=[])).status_code == 200
+    send_text.assert_not_awaited()  # a scheduled run with nothing new
+    assert client.post('/v1/watches/' + watch['id'] + '/check').status_code == 200
+    assert store.get_watch(watch['id'])['check_requested_at']
+    empty = delivery(watch, event='checked_1', results=[])
+    assert send(client, watch, empty).status_code == 200
+    assert send(client, watch, empty).status_code == 200  # an Exa retry of it
+    send_text.assert_awaited_once_with(number, NOTHING_NEW)
+    assert store.get_watch(watch['id'])['check_requested_at'] is None
+    assert send(client, watch, delivery(watch, event='scheduled_2', results=[])).status_code == 200
+    assert send_text.await_count == 1
+    # A requested check that finds something sends the update, once, and is cleared by it.
+    assert client.post('/v1/watches/' + watch['id'] + '/check').status_code == 200
+    assert send(client, watch, delivery(watch, event='checked_2')).status_code == 200
+    assert send_text.await_args.args[1].startswith('*New on your watch:* flats in Helsinki\nA flat is available.')
+    assert send(client, watch, delivery(watch, event='scheduled_3', results=[])).status_code == 200
+    assert send_text.await_count == 2
+
+
+def test_requested_check_waits_for_a_completed_run_and_failed_trigger_unmarks(watched):
+    client, store, calls, behavior, app, identity = watched
+    send_text = fake_whatsapp(app)
+    link_whatsapp(store, identity)
+    task = create(client)
+    store.sql('UPDATE tasks SET lang=? WHERE id=?', ('fi', task['id']))
+    watch = client.get('/v1/watches').json()['watches'][0]
+    assert client.post('/v1/watches/' + watch['id'] + '/check').status_code == 200
+    failed = delivery(watch, event='failed_run', results=[])
+    failed['data']['status'] = 'failed'
+    assert send(client, watch, failed).status_code == 200
+    send_text.assert_not_awaited()  # a failed run is not 'nothing new'; the request stays for the next run
+    assert send(client, watch, delivery(watch, event='checked', results=[])).status_code == 200
+    send_text.assert_awaited_once()
+    assert send_text.await_args.args[1] == 'Tarkistin juuri Exalla: ei mitään uutta viime kerran jälkeen. Seuraan edelleen päivittäin.'
+    behavior['create'] = 503
+    assert client.post('/v1/watches/' + watch['id'] + '/check').status_code == 502
+    assert store.get_watch(watch['id'])['check_requested_at'] is None
+    assert send(client, watch, delivery(watch, event='after_failure', results=[])).status_code == 200
+    assert send_text.await_count == 1
+
+
+def test_check_column_added_to_an_older_watches_table(tmp_path):
+    import sqlite3
+    path = str(tmp_path / 'old.db')
+    old = sqlite3.connect(path)
+    old.execute('CREATE TABLE watches(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, query TEXT NOT NULL, '
+                'exa_monitor_id TEXT, created_at TEXT NOT NULL)')
+    old.commit()
+    old.close()
+    store = SQLiteStore(path)
+    watch = store.create_watch('u_old', 'watch for flats')
+    assert watch['check_requested_at'] is None
+    store.request_check(watch['id'])
+    assert store.take_check(watch['id']) is True and store.take_check(watch['id']) is False
+    store.close()
