@@ -156,3 +156,10 @@ def test_a_booking_offers_book_it(notification):
     task = {'id': 't1', 'task': 'Book me a sauna on Friday', 'research': {'output': {'structured': {'actions': [
         {'type': 'open_link', 'label': 'Open booking calendar', 'url': 'https://kulttuurisauna.fi/'}, {'label': 'Remind me'}]}}}}
     assert result_buttons(task) == [('choose:t1:1', 'Book it'), ('choose:t1:2', 'Remind me')]
+
+
+def test_info_answers_offer_a_watch():
+    from vali_wa.render import result_buttons
+    task = {'id': 't2', 'mode': 'check', 'task': 'Kela housing supplement for students', 'research': {'output': {'structured': {
+        'actions': [{'label': 'Open OmaKela', 'url': 'https://kela.fi'}, {'label': 'Read the rules'}, {'label': 'Call Kela'}]}}}}
+    assert result_buttons(task)[-1] == ('watch:t2', 'Watch this') and len(result_buttons(task)) == 3

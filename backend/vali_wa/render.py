@@ -196,6 +196,9 @@ def result_buttons(task, profile=None):
         if booking and i == 0 and action.get("url"):
             title = "Book it"  # the first action of a booking runs the booking, not just opens a page
         buttons.append((f"choose:{task['id']}:{i + 1}", title if len(title) <= 20 else title[:19].rstrip() + "…"))
+    if task.get("mode") in ("check", "find") and not booking:
+        # Proactive: an answer can become a daily Exa watch that reports only what is new.
+        buttons = buttons[:2] + [(f"watch:{task['id']}", "Watch this")]
     return buttons
 
 

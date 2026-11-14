@@ -291,3 +291,10 @@ def test_choice_button_starts_the_action(task):
     assert ("execute", task["id"], 0) in calls
     stale = IncomingMessage(NUMBER, "in_test", "interactive", text="Open it", reply_id="choose:other:1")
     assert "no longer active" in flow_scenario(task, stale)[0][0]
+
+
+def test_watch_button_turns_the_answer_into_a_watch(task):
+    task["execution"] = None
+    reply = IncomingMessage(NUMBER, "in_test", "interactive", text="Watch this", reply_id=f"watch:{task['id']}")
+    bodies, calls, _ = flow_scenario(task, reply)
+    assert any(c[0] == "create" and c[2].startswith("Watch for changes: ") for c in calls)
