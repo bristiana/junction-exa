@@ -63,7 +63,9 @@ class Store:
             'handoffs(task_id TEXT PRIMARY KEY, data_json TEXT NOT NULL, expires_at TEXT NOT NULL)',
             # Email and password sign-in: one login per account, any number of signed-in browsers.
             'credentials(email TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL, pw_hash TEXT NOT NULL, created_at TEXT NOT NULL)',
-            'sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL)']
+            'sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL)',
+            # "Your situation": EU or not, student, city, ID and bank yes/no. Not identifying; answers fit the person.
+            'situations(user_id TEXT PRIMARY KEY, data_json TEXT NOT NULL, updated_at TEXT NOT NULL)']
         for table in tables:
             self.sql('CREATE TABLE IF NOT EXISTS ' + table)
         self._add_column('tasks', 'lang TEXT')
@@ -145,6 +147,15 @@ class Store:
         self.sql('DELETE FROM credentials WHERE user_id=?', (uid,))
         self.sql('INSERT INTO credentials VALUES(?,?,?,?)', (email, uid, password_hash(password), now()))
         return True
+
+    def get_situation(self, uid):
+        row = self.sql('SELECT data_json FROM situations WHERE user_id=?', (uid,), one=True)
+        return json.loads(row['data_json']) if row else None
+
+    def set_situation(self, uid, data):
+        self.sql('INSERT INTO situations VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET data_json=excluded.data_json, '
+                 'updated_at=excluded.updated_at', (uid, json.dumps(data), now()))
+        return data
 
     def email_of(self, uid):
         row = self.sql('SELECT email FROM credentials WHERE user_id=?', (uid,), one=True)

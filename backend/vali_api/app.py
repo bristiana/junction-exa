@@ -51,6 +51,18 @@ CARRIED = ('question', 'activity_head', 'cost_before', 'effort', 'known_details'
 KnownDetail = Literal['name', 'email', 'phone', 'address', 'postal_code', 'city', 'country', 'date_of_birth', 'nationality']
 
 
+class SituationBody(BaseModel):
+    """Your situation: who the answers are for. Nothing here identifies the person."""
+    citizenship: Literal['eu', 'nordic', 'non_eu'] | None = None
+    country: str | None = Field(default=None, max_length=40)
+    student: bool | None = None
+    school: str | None = Field(default=None, max_length=60)
+    city: str | None = Field(default=None, max_length=40)
+    has_personal_id: bool | None = None
+    has_bank: bool | None = None
+    arrived: str | None = Field(default=None, pattern=r'^\d{4}-\d{2}$')
+
+
 class TaskBody(BaseModel):
     task: str = Field(min_length=1, max_length=20000)
     page: dict | None = None
@@ -59,6 +71,7 @@ class TaskBody(BaseModel):
     channel: str | None = Field(default=None, max_length=20)
     # Names of the details saved on the device, never their values: the research writes {{name}} instead of asking.
     known_details: list[KnownDetail] = Field(default_factory=list, max_length=9)
+    situation: SituationBody | None = None  # saved on the account when given
 
 
 class LinkBody(BaseModel):
@@ -199,9 +212,17 @@ def missing_info_question(output):
     return {'text': missing[0].strip()[:300], 'options': [], 'answer': None} if missing else None
 
 
+def situation_of(state, task):
+    try:
+        return state.store.get_situation(task['user_id'])
+    except Exception:
+        return None
+
+
 def find_research(state, task, text, known_details=()):
     """One Exa search+answer call; the quote check follows in the poller, off the request."""
-    response = state.exa.search(dict(query=build_query(text, task['page'], known_details=known_details), type='auto', numResults=5,
+    query = build_query(text, task['page'], known_details=known_details, situation=situation_of(state, task))
+    response = state.exa.search(dict(query=query, type='auto', numResults=5,
                                      contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST + FIND_RULES))
     found = dict(output=map_find_output(response), cost=(response.get('costDollars') or {}).get('total') or 0,
                  activity=activity.from_search(task, text, response))
@@ -225,7 +246,8 @@ def refine_research(application, task, answer):
                 state.exa.cancel_run(research['run_id'])
             except ExaError:
                 pass
-        run_request = build_run_request(text, task['page'], known_details=research.get('known_details') or ())
+        run_request = build_run_request(text, task['page'], known_details=research.get('known_details') or (),
+                                        situation=situation_of(state, task))
         if research['status'] == 'completed' and research.get('run_id'):
             run_request['previousRunId'] = research['run_id']
         refined = {**research_from_run(state.exa.create_run(run_request)), 'question': question, 'activity': head,
@@ -473,6 +495,17 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def users():
         return application.state.store.create_user()
 
+    def save_situation(user, body):
+        current = application.state.store.get_situation(user['id']) or {}
+        merged = {**{k: v for k, v in current.items() if k != 'asked'},
+                  **{k: v for k, v in body.model_dump().items() if v is not None}}
+        return application.state.store.set_situation(user['id'], merged)
+
+    @application.put('/v1/situation')
+    def put_situation(body: SituationBody, user=Depends(authenticate)):
+        """Your situation, so every answer fits an EU or non-EU newcomer, a student, no personal ID yet."""
+        return {'situation': save_situation(user, body)}
+
     @application.post('/v1/auth/register')
     def register(body: AuthBody, user=Depends(authenticate)):
         """Give this account an email and password, so it can be opened from any browser."""
@@ -490,7 +523,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     @application.get('/v1/me')
     def me(user=Depends(authenticate)):
         number = user.get('wa_number')
+        situation = application.state.store.get_situation(user['id'])
         return dict(user_id=user['id'], email=application.state.store.email_of(user['id']),
+                    situation={k: v for k, v in (situation or {}).items() if k != 'asked'} or None,
                     whatsapp_linked=bool(number), whatsapp_last4=number[-4:] if number else None,
                     profile_synced=False)  # profiles stay on the device; old clients read this
 
@@ -507,6 +542,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if not body.task.strip():
             raise HTTPException(422, 'Task must not be blank')
         check_task_budget(application, user, count_request=not budget_checked)
+        if body.situation is not None:
+            save_situation(user, body.situation)
         state = application.state
         mode, kind = route(body.task, body.page, classify=state.jev.classify if state.jev else None)
         previous_run = None
@@ -528,7 +565,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             if kind == 'search':
                 research.update(find_research(state, task, body.task, research['known_details']))
             elif kind == 'agent':
-                run_request = build_run_request(body.task, body.page, effort=body.effort, known_details=research['known_details'])
+                run_request = build_run_request(body.task, body.page, effort=body.effort, known_details=research['known_details'],
+                                                situation=situation_of(state, task))
                 if previous_run:
                     run_request['previousRunId'] = previous_run
                 research = {**research_from_run(state.exa.create_run(run_request)), 'activity': [activity.opening(task)],
@@ -935,7 +973,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         resume=lambda tid: continue_for_user(tid or resumable_task(sender.get()), ContinueBody(), sender.get(), 'whatsapp'),
         transcribe=transcribe if config.elevenlabs_api_key else None,
         read_letter=read_letter if config.anthropic_api_key else None,
-        check=lambda user: asyncio.to_thread(check_latest_watch, user))
+        check=lambda user: asyncio.to_thread(check_latest_watch, user),
+        get_situation=lambda user: application.state.store.get_situation(user['id']),
+        set_situation=lambda user, patch: save_situation(user, SituationBody(**patch)))
 
     def process_messages(messages):
         # Sync background work gets a worker thread, keeping blocking providers off ASGI.

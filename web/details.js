@@ -1,4 +1,5 @@
 // The "Your details" sheet: the profile Fill it for me sends with that one form. Kept in this browser only.
+import { api } from './api.js';
 import { h, show } from './dom.js';
 import { PROFILE_FIELDS, deleteProfile, loadProfile, saveProfile } from './profile.js';
 
@@ -34,7 +35,55 @@ export function openDetails(needed = []) {
           for (const label of inputs) label.querySelector('input').value = '';
           status.textContent = 'Deleted from this browser.';
         } }, 'Delete my details'))),
-    status);
+    status,
+    situationForm());
   sheet.showModal();
   (inputs.find((label) => needed.some((d) => d.key === label.querySelector('input').name)) || inputs[0]).querySelector('input').focus();
+}
+
+// "Your situation": who Vali answers for. Saved on your account (nothing here identifies you), so WhatsApp uses it too.
+const CHOICES = [
+  ['citizenship', 'Citizenship', [['eu', 'EU or EEA'], ['nordic', 'Nordic'], ['non_eu', 'Outside the EU']]],
+  ['student', 'Student', [[true, 'Yes'], [false, 'No']]],
+  ['has_personal_id', 'Finnish personal ID', [[true, 'Yes'], [false, 'Not yet']]],
+  ['has_bank', 'Finnish bank account', [[true, 'Yes'], [false, 'Not yet']]],
+];
+const TEXTS = [['country', 'Country', 'Romania'], ['school', 'School', 'Aalto University'], ['city', 'City in Finland', 'Espoo'], ['arrived', 'Arrived', '2026-09']];
+
+function situationForm() {
+  const state = {};
+  const note = h('p', { class: 'muted details-status', role: 'status' });
+  const groups = CHOICES.map(([key, label, options]) => h('fieldset', { class: 'situation-group' },
+    h('legend', {}, label),
+    h('div', { class: 'chips' }, options.map(([value, text]) => h('button', {
+      type: 'button', class: 'chip', 'data-key': key, 'data-value': String(value), 'aria-pressed': 'false',
+      onclick: (event) => {
+        state[key] = value;
+        for (const chip of event.currentTarget.parentNode.children) chip.setAttribute('aria-pressed', String(chip === event.currentTarget));
+      },
+    }, text)))));
+  const inputs = TEXTS.map(([key, label, placeholder]) => h('label', { class: 'detail-field' }, h('span', {}, label),
+    h('input', { type: key === 'arrived' ? 'month' : 'text', name: key, placeholder, maxlength: '60' })));
+  const form = h('form', { class: 'details-form situation', onsubmit: async (event) => {
+    event.preventDefault();
+    const texts = Object.fromEntries(inputs.map((l) => l.querySelector('input')).filter((i) => i.value.trim()).map((i) => [i.name, i.value.trim()]));
+    try {
+      await api.saveSituation({ ...state, ...texts });
+      note.textContent = 'Saved. Vali answers for your situation, here and on WhatsApp.';
+    } catch (error) {
+      note.textContent = error.message || 'Could not save. Try again.';
+    }
+  } }, groups, inputs, h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'btn' }, 'Save my situation')), note);
+  api.me().then(({ situation }) => {
+    for (const [key, value] of Object.entries(situation || {})) {
+      state[key] = value;
+      for (const chip of form.querySelectorAll(`[data-key="${key}"]`)) chip.setAttribute('aria-pressed', String(chip.dataset.value === String(value)));
+      const input = form.querySelector(`input[name="${key}"]`);
+      if (input) input.value = value;
+    }
+  }).catch(() => {});
+  return h('section', { class: 'situation-section' },
+    h('h3', { class: 'section-title' }, 'Your situation'),
+    h('p', { class: 'muted details-intro' }, 'So every answer fits you: EU rules or not, student prices, life before a personal ID.'),
+    form);
 }

@@ -201,7 +201,15 @@ def result_buttons(task, profile=None):
     if task.get("mode") in ("check", "find") and not booking:
         # Proactive: an answer can become a daily Exa watch that reports only what is new.
         buttons = buttons[:2] + [(f"watch:{task['id']}", "Watch this")]
+    if next_errand(task):
+        # The most useful next errand for this person; the message body says what it is.
+        buttons = buttons[:2] + [(f"next:{task['id']}", "Do the next step")]
     return buttons
+
+
+def next_errand(task):
+    structured = (((task or {}).get("research") or {}).get("output") or {}).get("structured") or {}
+    return " ".join(str(structured.get("next_errand") or "").split())[:200]
 
 
 def render_result(task, profile=None, buttons=False):
@@ -233,7 +241,24 @@ def render_result(task, profile=None, buttons=False):
         sections.append("\n".join(actions))
     if sources:
         sections.append("\n".join(f"[{s['n']}] {s['url']}" for s in sources))
+    if next_errand(task):
+        sections.append(f"Next for you: {_text(next_errand(task), profile)}")
     return split_messages("\n\n".join(sections))
+
+
+SITUATION_LABELS = {"eu": "EU citizen", "nordic": "Nordic citizen", "non_eu": "non-EU citizen"}
+
+
+def render_situation(situation):
+    s = {k: v for k, v in (situation or {}).items() if k != "asked"}
+    if not s:
+        return ["I don't know your situation yet. Send an errand and I'll ask two quick questions."]
+    bits = [SITUATION_LABELS.get(s.get("citizenship"), "foreigner") + (f" from {s['country']}" if s.get("country") else "")]
+    if s.get("student") is not None:
+        bits.append(("student" + (f" at {s['school']}" if s.get("school") else "")) if s["student"] else "not a student")
+    if s.get("city"):
+        bits.append(f"in {s['city']}")
+    return ["Your situation: " + ", ".join(bits) + ". I answer for that."]
 
 
 CONTINUE_HINT = "\nReply *continue* to pick up where it stopped."

@@ -26,7 +26,8 @@ export function renderAnswer(task, handlers) {
           facts(factsOf(task, sources)),
           drafts(draftsOf(task)),
           run ? null : steps(stepsOf(task)),
-          h('p', { class: 'exa-line' }, webWork(task))]),
+          h('p', { class: 'exa-line' }, webWork(task)),
+          nextErrand(task, handlers)]),
         run ? chapter('Vali did', [renderExecution(task, { ...handlers, quiet: true }),
           h('p', { class: 'exa-line' }, 'In a private cloud browser on Modal, one errand at a time.')]) : null,
         chapter('Now', renderState(task, handlers), 'now'))));
@@ -117,3 +118,11 @@ function steps(items) {
         step.detail ? h('p', { class: 'step-detail' }, step.detail) : null)))));
 }
 
+
+// The one most useful next errand for this person, from the research; one tap starts it.
+function nextErrand(task, { onFollowUp }) {
+  const text = String(task.research?.output?.structured?.next_errand || '').trim();
+  if (!text) return null;
+  return h('button', { type: 'button', class: 'next-errand', onclick: () => onFollowUp(text) },
+    h('span', { class: 'next-errand-label' }, 'Next for you'), h('span', { class: 'next-errand-text' }, text));
+}
