@@ -100,3 +100,18 @@ def test_no_output_is_left_alone():
     result = {'text': '', 'structured': {}, 'grounding': []}
     cite(result, FakeExa())
     assert result['claims'] == [] and result['sources'] == []
+
+
+def test_freshness_from_published_date():
+    from datetime import date
+    from vali_api.citations import freshness
+    today = date(2026, 11, 14)
+    assert freshness('2025-06-01T00:00:00.000Z', today) == {'published': '2025-06-01', 'stale': False}
+    assert freshness('2025-05-01', today) == {'published': '2025-05-01', 'stale': True}
+    assert freshness(None, today) == {} and freshness('soon', today) == {}
+
+
+def test_sources_carry_published_and_stale():
+    result = output('You must submit the notification of move within one week after moving.')
+    cite(result, FakeExa())
+    assert result['sources'][0]['published'] == '2025-01-02' and result['sources'][0]['stale'] is True  # > 18 months before today
