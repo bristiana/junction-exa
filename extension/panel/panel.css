@@ -116,6 +116,10 @@ sup.cite a, .exec-values .src { text-decoration: none; background: var(--v-accen
 .exa-queries li::before { content: "“"; color: var(--v-muted); }
 .exa-queries li::after { content: "”"; color: var(--v-muted); }
 .exa-hosts { display: flex; flex-wrap: wrap; gap: var(--v-s-1); }
+.exa-uses { display: grid; gap: var(--v-s-1); margin: 0; font-size: var(--v-fs-sm); }
+.exa-uses div { display: flex; gap: var(--v-s-2); }
+.exa-uses dt { min-width: 8.5em; font-weight: 600; }
+.exa-uses dd { margin: 0; color: var(--v-muted); }
 .exa-host { padding: 0 var(--v-s-2); border: 1px solid var(--v-line-2); border-radius: var(--v-r-pill); background: var(--v-surface); font-size: var(--v-fs-sm); text-decoration: none; }
 
 #task { min-height: var(--v-tap); resize: none; overflow-y: auto; }

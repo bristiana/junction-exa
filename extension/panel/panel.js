@@ -10,6 +10,7 @@ import { executionView, LIVE } from "../lib/execution.js";
 
 import { linkCodeInput, codeCountdown, linkError } from "../lib/device-link.js";
 import { exaActivity } from "../lib/exa-activity.js";
+import { exaUses, EXA_USES } from "../shared/exa-uses.js";
 import { panelStatus as errandStatus } from "./errand-status.js";
 
 const $ = (id) => document.getElementById(id);
@@ -112,6 +113,7 @@ function renderSettings() {
   $("serverPresets").replaceChildren(...SERVER_PRESETS.map(([label, url]) =>
     h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, title: url, onclick: () => { $("backendUrl").value = url; $("connectBtn").click(); } })));
   refreshServerStatus();
+  $("exaUses").replaceChildren(exaUsesList(EXA_USES));
   const box = $("profileFields");
   box.replaceChildren(
     ...PROFILE_FIELDS.map(([k, label]) =>
@@ -782,6 +784,16 @@ function renderExaActivity(t, expanded, busy) {
       h("a", { class: "exa-host", href: s.url, target: "_blank", rel: "noopener noreferrer", title: s.title }, h("span", { class: "host", text: s.host }))))] : null);
 }
 
+// The Exa capabilities this errand used, with their counts (shared/exa-uses.js).
+function exaUsesList(rows) {
+  return h("dl", { class: "exa-uses" }, ...rows.map(([label, detail]) => h("div", {}, h("dt", { text: label }), h("dd", { text: detail }))));
+}
+
+function renderExaUses(t) {
+  const rows = exaUses(t);
+  return rows.length ? h("section", {}, h("h4", { text: "Exa" }), exaUsesList(rows.map((r) => [r.label, r.detail]))) : null;
+}
+
 function renderDetail(t) {
   const body = $("detail");
   const expanded = body.dataset.taskId === t?.id && body.querySelector(".result-details:not(.exa-activity)")?.open;
@@ -813,6 +825,8 @@ function renderDetail(t) {
   const exa = renderExaActivity(t, exaExpanded, t.status === "queued" || t.status === "running");
   if (exa) body.append(exa);
   if (t.status !== "queued" && t.status !== "running") {
+    const used = renderExaUses(t);
+    if (used) body.append(used);
     body.append(h("div", { class: "foot" }, h("span", { class: "muted", text: [elapsed(t), t.page?.title, t.cost != null ? "$" + Number(t.cost).toFixed(3) : null].filter(Boolean).join(" · ") }),
       serverButton("Remove", "v-btn v-btn--quiet v-btn--sm", { type: "remove", taskId: t.id })));
   }
