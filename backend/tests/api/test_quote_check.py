@@ -75,6 +75,12 @@ def test_the_same_question_reuses_recent_research_at_no_cost():
     assert [e['kind'] for e in research['activity']] == ['think', 'think', 'done'] and polls == [first['id']]
     other = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki', 'page': {'url': 'https://x.fi'}}).json()
     assert other['research']['status'] == 'running'  # page context is never reused
+    for body in [{'task': 'find a sauna in Helsinki', 'effort': 'high'}, {'task': 'find a sauna in Helsinki open now'}]:
+        assert client.post('/v1/tasks', json=body).json()['research']['status'] == 'running'  # other effort, live facts
+    # Another account never gets this account's research or trail.
+    client.headers['Authorization'] = 'Bearer ' + client.post('/v1/users').json()['token']
+    stranger = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki'}).json()['research']
+    assert stranger['status'] == 'running' and 'reused_from' not in stranger
 
 
 def test_a_stalled_quote_check_restarts_on_the_next_poll():

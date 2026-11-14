@@ -6,6 +6,7 @@ from contextvars import ContextVar
 import hmac
 import json
 import logging
+import re
 from io import BytesIO
 from urllib.parse import urlsplit, unquote
 import threading
@@ -43,7 +44,7 @@ from .wa_channel import ChannelAPI, push_task, log_failure, logger as whatsapp_l
 
 logger = logging.getLogger('vali.api')
 TERMINAL = {'completed', 'failed', 'cancelled'}
-CARRIED = ('question', 'activity_head', 'cost_before')  # research fields that outlive a run poll
+CARRIED = ('question', 'activity_head', 'cost_before', 'effort')  # research fields that outlive a run poll
 
 
 class TaskBody(BaseModel):
@@ -93,6 +94,7 @@ def quoting(task, research):
 
 
 REUSE_FOR = timedelta(minutes=30)
+TIME_SENSITIVE = re.compile(r'\b(?:now|today|tonight|tomorrow|next|live|open|delay\w*|late|on time|currently|right away)\b', re.I)
 
 
 def reused_research(task, research, answered_at):
@@ -474,9 +476,10 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if body.previous_task_id:
             previous_run = owned(body.previous_task_id, user)['research'].get('run_id')
         research = dict(kind=kind, status='queued', run_id=None, progress=[], output=None, cost=None, stop_reason=None, error=None,
-                        question=early_question(body.task, mode))
-        reused = None if body.page or previous_run or kind == 'monitor' else state.store.recent_research(
-            body.task, mode, (datetime.now(timezone.utc) - REUSE_FOR).isoformat())
+                        question=early_question(body.task, mode), effort=body.effort)
+        reusable = not (body.page or previous_run or kind == 'monitor' or TIME_SENSITIVE.search(body.task))
+        reused = reusable and state.store.recent_research(
+            user['id'], body.task, mode, body.effort, (datetime.now(timezone.utc) - REUSE_FOR).isoformat())
         task = state.store.create_task(user['id'], body.task, body.page, mode, research, source=source)
         if reused:  # the same question minutes ago: its cited research, at no cost and no wait
             research = reused_research(task, *reused)
@@ -491,7 +494,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                 if previous_run:
                     run_request['previousRunId'] = previous_run
                 research = {**research_from_run(state.exa.create_run(run_request)), 'activity': [activity.opening(task)],
-                            'question': research['question']}
+                            'question': research['question'], 'effort': body.effort}
             else:
                 watch, message = provision_watch(config, state.store, state.exa, user['id'], body.task, task['id'])
                 if watch is None:
