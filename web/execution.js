@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { h } from './dom.js';
 import { domainOf, runStatus } from './model.js';
 import { questionBlock } from './working.js';
+import { fillPlaceholders, loadProfile } from './profile.js';
 
 const STATUS = {
   starting: 'Opening the page', running: 'Filling the form', awaiting_approval: 'Waiting for your OK',
@@ -23,14 +24,15 @@ export function renderExecution(task, { onApprove, onStop, onReply }) {
   const live = LIVE.has(status);
   const waiting = status === 'awaiting_approval';
   const steps = Array.isArray(run.steps) ? run.steps.slice(-6) : [];
+  const profile = loadProfile(); // placeholders show your own values, on this page only
   return h('section', { class: `run card ${waiting ? 'waiting' : ''}` },
     h('div', { class: 'run-head' },
       h('span', { class: `badge ${live ? 'live' : status}` }, STATUS[status] || status),
       run.current_url ? h('span', { class: 'run-url' }, domainOf(run.current_url)) : null),
     frame(task, live),
-    steps.length ? h('ol', { class: 'run-steps' }, steps.map((step) => h('li', {}, step.text))) : null,
+    steps.length ? h('ol', { class: 'run-steps' }, steps.map((step) => h('li', {}, fillPlaceholders(step.text, profile)))) : null,
     run.question?.text ? questionBlock({ text: run.question.text, options: [] }, onReply) : null,
-    waiting ? approval(run.approval, onApprove, onStop) : null,
+    waiting ? approval(run.approval, profile, onApprove, onStop) : null,
     run.result && !live ? h('p', { class: 'run-result' }, run.result) : null,
     run.error ? h('p', { class: 'run-error' }, run.error) : null,
     live && !waiting ? h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop') : null);
@@ -54,12 +56,12 @@ function shotSrc(task, n) {
   return api.imageUrl(`/v1/tasks/${encodeURIComponent(task.id)}/shots/${n}.jpg`);
 }
 
-// filled: [{label, value, source}] from the agent; values hold placeholders, never your real details.
-function approval(details, onApprove, onStop) {
+// filled: [{label, value, source}] from the agent; values hold placeholders, shown here with Your details.
+function approval(details, profile, onApprove, onStop) {
   const filled = Array.isArray(details?.filled) ? details.filled.filter((f) => f?.label) : [];
   return h('div', { class: 'approval' },
     details?.summary ? h('p', { class: 'approval-summary' }, details.summary) : null,
-    filled.length ? h('dl', { class: 'filled' }, filled.map((f) => h('div', {}, h('dt', {}, f.label), h('dd', {}, String(f.value ?? ''))))) : null,
+    filled.length ? h('dl', { class: 'filled' }, filled.map((f) => h('div', {}, h('dt', {}, f.label), h('dd', {}, fillPlaceholders(f.value, profile))))) : null,
     h('p', { class: 'muted' }, 'Nothing is sent until you approve.'),
     h('div', { class: 'actions' },
       h('button', { type: 'button', class: 'btn', onclick: (e) => onApprove(e.currentTarget) }, 'Approve'),

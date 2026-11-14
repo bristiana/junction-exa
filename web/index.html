@@ -17,6 +17,7 @@
   <div class="top-right">
     <a href="#/hub" class="link-btn">First weeks</a>
     <button type="button" id="to-errands" class="link-btn">Your errands</button>
+    <button type="button" id="to-details" class="link-btn">Your details</button>
     <button type="button" id="to-trust" class="link-btn">Privacy</button>
     <span class="by-exa">Search by <b>Exa</b></span>
     <div class="palette-picker">
@@ -52,7 +53,7 @@
       <button type="button" class="chip">Bank account without a Finnish ID</button>
     </div>
     <p class="privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2Zm-8 0V7a3 3 0 0 1 6 0v2H9Z"/></svg>
-      The AI only sees placeholders like {{name}}. If you approve a form, your details go to Vali’s cloud browser for that one form and are not stored.</p>
+      The AI sees placeholders like {{name}} for what you save in Your details. When you press Fill it for me, they go to Vali’s cloud browser for that one form and are not stored. What you type in an errand is sent as text, so don’t type ID numbers there.</p>
     <section id="errands" class="errands"></section>
   </section>
 
@@ -67,6 +68,14 @@
     <button class="link-btn" aria-label="Close">Close</button>
   </form>
   <div id="trust-body"></div>
+</dialog>
+
+<dialog id="details" class="sheet" aria-labelledby="details-title">
+  <form method="dialog" class="sheet-head">
+    <h2 id="details-title">Your details</h2>
+    <button class="link-btn" aria-label="Close">Close</button>
+  </form>
+  <div id="details-body"></div>
 </dialog>
 </body>
 </html>
