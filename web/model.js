@@ -198,6 +198,7 @@ const LETTER_TITLE = 'Uploaded letter';
 export function channelOf(task) {
   if (task?.page?.title === LETTER_TITLE) return 'letter';
   const channel = String(task?.channel || task?.source || 'extension');
+  if (channel === 'api') return 'web'; // made by a script or another client: shown as the web
   return channel === 'desktop' ? 'mac' : channel;
 }
 
