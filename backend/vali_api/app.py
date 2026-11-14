@@ -175,6 +175,10 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
     def on_usage(usage):
         store.patch_execution(task_id, {'usage': usage})
 
+    def on_exa(calls):
+        # Straight to the store, like on_usage: a new lookup is not a status change worth a push.
+        store.patch_execution(task_id, {'exa': calls})
+
     def unread():
         execution = store.get_task(task_id)['execution'] or {}
         inbox = execution.get('inbox') or []
@@ -208,14 +212,15 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
         patch_execution(task_id, {'status': 'running'})
         base = dict(on_step=on_step, wait_for_approval=wait_for_approval, should_stop=should_stop)
         try:
-            hooks = AgentHooks(**base, on_frame=on_frame, on_usage=on_usage, pending_messages=pending_messages, ask_user=ask_user)
+            hooks = AgentHooks(**base, on_frame=on_frame, on_usage=on_usage, pending_messages=pending_messages, ask_user=ask_user,
+                               on_exa=on_exa)
         except TypeError:  # an agent build without live view, usage or inbox hooks
             hooks = AgentHooks(**base)
         result = run_browser_agent(goal=goal, start_url=start_url, profile=profile, hooks=hooks)
         value = result if isinstance(result, dict) else vars(result)
         patch_execution(task_id, {'status': 'stopped' if should_stop() else value['status'],
                                        'result': value.get('result', ''), 'current_url': value.get('final_url'), 'error': value.get('error'),
-                                       **{k: value[k] for k in ('usage', 'sources', 'filled') if value.get(k) is not None}})
+                                       **{k: value[k] for k in ('usage', 'sources', 'filled', 'exa') if value.get(k) is not None}})
     except Exception:
         patch_execution(task_id, {'status': 'stopped' if should_stop() else 'failed', 'error': 'Browser session failed.'})
 

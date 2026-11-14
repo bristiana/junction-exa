@@ -93,6 +93,53 @@ def test_exa_tools_sources_usage_and_messages(local_site):
             assert value.casefold() not in sent.casefold()
 
 
+def test_exa_calls_are_recorded_masked_and_reported_live(local_site):
+    seen, live = [], []
+    exa = exa_fake(seen)
+    llm = Scripted([
+        ('exa_search', {'query': 'Kela office near Test Person {{city}}', 'include_domains': ['kela.fi']}),
+        ('exa_read', {'url': 'ftp://example.com/x', 'question': None}),
+        ('exa_read', {'url': 'https://example.com/claim?who=Test Person', 'question': 'Opening hours for Test Person?'}),
+        ('finish', {'result': 'ok'}),
+    ])
+    hooks = plain_hooks(on_exa=live.append)
+    result = run_browser_agent('x', local_site + '/claim.html', PROFILE | {'city': 'Espoo'}, hooks, llm, exa=exa, jev=Jev(api_key=''))
+    assert result.status == 'done'
+    search, bad, read = result.exa
+    assert search == {'kind': 'search', 'query': 'Kela office near {{name}} Espoo', 'domains': ['kela.fi'], 'cost_usd': 0.007,
+                      'results': [{'url': 'https://eur-lex.europa.eu/eli/reg/2004/261', 'title': 'EU261 compensation'}]}
+    assert bad['kind'] == 'read' and bad['results'] == [] and 'http' in bad['error'] and bad['cost_usd'] == 0
+    assert read == {'kind': 'read', 'url': 'https://example.com/claim?who={{name}}', 'question': 'Opening hours for {{name}}?',
+                    'cost_usd': 0.001, 'results': [{'url': 'https://example.com/claim?who={{name}}', 'title': 'Claim form'}]}
+    assert [len(calls) for calls in live] == [1, 2, 3] and live[-1] == result.exa
+    # What is sent to Exa is masked too; only the public city is filled in.
+    assert seen[0][1]['query'] == 'Kela office near {{name}} Espoo'
+    assert seen[1][1]['urls'] == ['https://example.com/claim?who={{name}}']
+    assert seen[1][1]['highlights']['query'] == 'Opening hours for {{name}}?'
+    assert 'Test Person' not in json.dumps([result.exa, result.sources, seen])
+
+
+def test_exa_log_masks_before_truncating_and_is_capped():
+    exa = exa_fake([])
+    exa.masker = lambda text: text.replace('Test Person', '{{name}}')
+    exa.search('x' * 190 + ' Test Person')  # a cut at 200 would leave "Test Pe" behind if sliced first
+    assert exa.calls[0]['query'] == 'x' * 190 + ' {{name}}'[:9]
+    assert 'Test' not in exa.calls[0]['query']
+    for _ in range(40):
+        exa.search('q')
+    assert len(exa.calls) == 30 and round(exa.cost_usd, 3) == 0.287  # all 41 calls ran and were billed
+
+
+def test_system_prompt_sends_unknown_facts_to_exa(local_site):
+    llm = Scripted([('finish', {'result': 'ok'})])
+    run_browser_agent('x', local_site + '/claim.html', {}, plain_hooks(ask_user=lambda q: None), llm,
+                      exa=exa_fake([]), jev=Jev(api_key=''))
+    system = llm.received[0][0]
+    assert 'postcode' in system and 'look it up with exa_search before filling it' in system
+    assert 'Exa cannot find it, use ask_user' in system
+    assert 'fail("missing: <the fact>")' in system
+
+
 def test_tools_hidden_without_keys(local_site):
     llm = Scripted([('finish', {'result': 'ok'})])
     run_browser_agent('x', local_site + '/claim.html', {}, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))

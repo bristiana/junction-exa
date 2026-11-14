@@ -17,6 +17,8 @@ class AgentHooks:
     pending_messages: Callable[[], list[str]] | None = None
     # Optional: ask the user one question and wait for the answer; None when nobody answered in time.
     ask_user: Callable[[str], str | None] | None = None
+    # Optional: every Exa call so far (kind, query or url, result urls and titles, cost), after each call.
+    on_exa: Callable[[list[dict]], None] | None = None
 
 
 class ConsoleHooks(AgentHooks):

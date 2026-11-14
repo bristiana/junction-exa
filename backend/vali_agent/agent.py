@@ -34,13 +34,17 @@ TOOLS = [
     _tool('scroll', 'Scroll one viewport.', {'direction': {'type': 'string', 'enum': ['up', 'down']}}),
     _tool('read_page', 'Get fresh element references and page text.', {}),
     _tool('look', 'Inspect a redacted screenshot; use sparingly.', {}),
-    _tool('exa_search', 'Search the live web with Exa without leaving this page (rules, amounts, deadlines, '
-          'opening hours, the right form or address). Returns titles, URLs, dates and highlights.',
+    _tool('exa_search', 'Search the live web with Exa without leaving this page. Use it whenever a field needs a fact '
+          'that is not in the profile, the goal or this page: an office or venue address, a postcode, a fee or amount, '
+          'an opening time or deadline, which option or category applies. Pass include_domains for the official site '
+          'when you know it. Returns titles, URLs, dates and highlights.',
           {'query': _STRING, 'include_domains': {'type': ['array', 'null'], 'items': _STRING}}),
-    _tool('exa_read', 'Read a web page with Exa without leaving this page; pass a question to get the most relevant parts.',
+    _tool('exa_read', 'Read one web page with Exa without leaving this page (a search result, the site\'s own price, help '
+          'or contact page) when the search highlights do not answer it; pass a question to get the most relevant parts.',
           {'url': _STRING, 'question': _NULLABLE}),
     _tool('ask_user', 'Ask the user one short question when a choice is theirs (e.g. which slot) or a needed fact is '
-          'missing; waits for the answer. Never ask for personal details: use placeholders.', {'question': _STRING}),
+          'missing and the web cannot answer it; waits for the answer. Never ask for personal details: use placeholders.',
+          {'question': _STRING}),
     _tool('request_approval', 'Ask the human before one final submission. Give each filled value its source URL when it '
           'came from research or the web (null for profile placeholders and the user\'s own words).', {
         'summary': _STRING, 'filled': {'type': 'array', 'items': {
@@ -60,6 +64,7 @@ class AgentResult:
     usage: dict | None = None
     sources: list | None = None
     filled: list | None = None  # what was filled so far (placeholders), for finishing by hand
+    exa: list | None = None  # every Exa call made while filling, masked
 
 
 def _validate(value, schema):
@@ -107,6 +112,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
     browser = None
     screencast = None
     exa = exa if exa is not None else ExaTools()
+    exa.masker = lambda text: mask(text, profile)
     jev = jev if jev is not None else Jev()
     usage = {key: 0 for key in _USAGE_KEYS} | {'model_calls': 0}
     tools = [t for t in TOOLS if (t['name'] not in ('exa_search', 'exa_read') or exa.enabled)
@@ -129,18 +135,32 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         'fail("suspicious page: <one line>"). '
         'Stop at login, captcha or payment blockers: call fail("needs <login, captcha or payment>: '
         'finish by hand at <url>") naming the one blocker you hit and its URL. '
-        + ('Use exa_search / exa_read to look up facts you need (rules, amounts, deadlines, slots, the right form) '
-           'instead of guessing or leaving the page; cite the URL as the source in request_approval. ' if exa.enabled else '')
-        + ('When a choice is the user\'s or a needed fact is missing, use ask_user once instead of guessing. ' if hooks.ask_user else '')
+        + ('The profile only holds the user\'s own details. When a field needs a fact that is not in the profile, the goal '
+           'or this page (an office or venue address, a postcode, a fee or amount, an opening time or deadline, which '
+           'option or category applies), look it up with exa_search before filling it, then exa_read the best result if '
+           'the highlights do not settle it. Your own memory is not a source: an address, postcode, fee or time you '
+           'think you know still gets an Exa lookup. Never guess, invent or leave such a field blank, and never leave '
+           'the page to look it up. In request_approval, give each looked-up value its Exa URL as the source. ' if exa.enabled else '')
+        + ('When a choice is the user\'s, or a needed fact is missing' + (' and Exa cannot find it' if exa.enabled else '')
+           + ', use ask_user once instead of guessing. ' if hooks.ask_user else '')
+        + ('If Exa' + (' and ask_user' if hooks.ask_user else '') + ' cannot give you a needed fact, call '
+           'fail("missing: <the fact>") instead of retrying in a loop or inventing it. ' if exa.enabled else '')
         + 'When everything is filled and only the final submit or payment is left, call request_approval with a summary '
         'of every value (never fail at that point); if payment follows, the user finishes it at the bank. '
         'Messages from the user may arrive while you work; follow them unless they conflict with these rules. '
         'Call finish or fail when done. Finish with a one-line result including any reference number shown.', profile)
 
     def outcome():
-        sources = [{k: mask(v, profile) if isinstance(v, str) else v for k, v in s.items()} for s in exa.sources]
         return AgentResult(status, mask(result, profile), final_url, steps, dict(usage) | {'exa_cost_usd': round(exa.cost_usd, 4),
-                           'jev_calls': jev.calls}, sources, [{'label': k, 'value': v} for k, v in filled_log.items()])
+                           'jev_calls': jev.calls}, list(exa.sources), [{'label': k, 'value': v} for k, v in filled_log.items()],
+                           list(exa.calls))
+
+    def report_exa():
+        if hooks.on_exa:
+            try:
+                hooks.on_exa(list(exa.calls))
+            except Exception:
+                pass
 
     def follow_page():
         nonlocal screencast
@@ -330,11 +350,18 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                         elif name == 'exa_search':
                             hooks.on_step('Searched the web with Exa: ' + mask(args['query'], profile)[:160], None)
                             # The city is not identifying and local search needs it; nothing else is substituted.
-                            query = args['query'].replace('{{city}}', str(profile.get('city', '{{city}}')))
-                            content = mask(exa.search(query, args['include_domains']), profile)
+                            query = mask(args['query'], profile).replace('{{city}}', str(profile.get('city', '{{city}}')))
+                            try:
+                                content = mask(exa.search(query, args['include_domains']), profile)
+                            finally:
+                                report_exa()
                         elif name == 'exa_read':
                             hooks.on_step('Read with Exa: ' + mask(args['url'], profile)[:200], None)
-                            content = exa.read(args['url'], args['question'])
+                            try:
+                                question = mask(args['question'], profile) if args['question'] else None
+                                content = exa.read(mask(args['url'], profile), question)
+                            finally:
+                                report_exa()
                         elif name == 'ask_user':
                             question = mask(args['question'], profile)
                             hooks.on_step('Asked you: ' + question[:200], None)
