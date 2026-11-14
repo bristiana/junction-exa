@@ -66,3 +66,19 @@ def test_default_check_is_not_a_clear_keyword_match(text, page):
 ])
 def test_question_words_preserve_explicit_actions(text, expected):
     assert route(text, classify=lambda task, page: None) == expected
+
+
+@pytest.mark.parametrize('text,expected', [
+    ('How do I book a public dentist appointment in Helsinki and what is the fee?', ('check', 'agent')),
+    ('How much does an HSL monthly ticket cost?', ('check', 'agent')),
+    ('Can you book a sauna for me on Saturday?', ('book', 'agent')),
+    ('Book me a badminton court tomorrow at 18', ('book', 'agent')),
+])
+def test_information_questions_route_to_check(text, expected):
+    assert route(text, classify=lambda task, page: ('book', 0.9, 0.5)) == expected
+    assert route(text, classify=lambda task, page: None) == expected
+
+
+def test_information_questions_keep_find_and_watch():
+    for mode in ('find', 'watch'):
+        assert route('What are the best saunas open on Saturday?', classify=lambda t, p: (mode, 0.9, 0.5))[0] == mode
