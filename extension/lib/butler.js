@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  const STATES = ['idle', 'listening', 'thinking', 'working', 'teaching', 'checking', 'needs_approval', 'success', 'error'];
+  const STATES = ['idle', 'listening', 'thinking', 'working', 'serving', 'typing', 'teaching', 'checking', 'needs_approval', 'success', 'error'];
 
   /* ---------- Palettes ----------
      b* body, c* crest, iri* iridescent rim, accent2 = hat feather / confetti. */
@@ -169,7 +169,7 @@
       <path d="M7 -18.5 A6 6 0 0 1 12 -22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
     </g>
 
-    <!-- WORK: floating laptop (code scrolls, progress fills) -->
+    <!-- TYPING: floating laptop (code scrolls, progress fills) -->
     <g data-p="lap" opacity="0">
       <path d="M-27 0 L27 0 L31 6 Q31 8 29 8 L-29 8 Q-31 8 -31 6 Z" fill="${url('silver')}" stroke="#b9c0d8" stroke-width="1"/>
       <path d="M-9 4 L9 4" stroke="#b9c0d8" stroke-width="1.6" stroke-linecap="round"/>
@@ -262,12 +262,12 @@
   const REST = {
     floatY: 0, lean: 0, sqx: 0, sqy: 0,
     fx: 0, fy: 0,
-    crx: 0, cry: 0, crr: 0,
+    crx: 0, cry: 0, crr: 0, headTilt: 0,
     eyeOpen: 1, happy: 0, squint: 0, smile: 0, mouthO: 0, blush: 0.55,
     browL: 0, browR: -8, browLY: 0, browRY: -1.5,
     earL: 0, earR: 0,
     hatLift: 0, hatRot: -8, hatX: 0, tieRot: 0,
-    rhx: 50, rhy: 142, lhx: 150, lhy: 144,
+    rhx: 50, rhy: 142, lhx: 150, lhy: 144, gloveRR: 0, gloveLR: 0, napkinHide: 0,
     attChin: 0, attEar: 0, attHat: 0,
     trayC: 0, trayK: 0, glass: 0, glassRot: 0,
     sweat: 0, spark: 0, think: 0, monoDrop: 0,
@@ -321,6 +321,21 @@
       T.think = 1;
     },
     working(T, tau, L) {
+      POSES.serving(T, tau, L);
+    },
+    serving(T, tau, L) {
+      // A measured valet's walk; the raised glove and tray move as one.
+      const step = Math.sin(tau * 2 * PI / 1.8);
+      T.floatY = -5 - 2 * Math.cos(tau * 2 * PI / .9);
+      T.lean = 1.2 * step; T.sqy = 0;
+      T.trayC = 1; T.rhx = 32; T.rhy = 112;
+      T.gloveRR = -55;
+      T.lhx = 148 + 2 * step; T.lhy = 140 - 2 * step;
+      T.fx = -1 + L.x; T.fy = -1; T.headTilt = -2;
+      T.smile = .8; T.browL = -4; T.browR = -5;
+      T.tieRot = 2 * step;
+    },
+    typing(T, tau, L) {
       // types away on a floating laptop, gloves taking turns on the keys
       const s = Math.sin(tau * 2 * PI / 0.9);
       T.floatY -= 1.2 * Math.abs(s); T.lean += 3; T.crr += 1.5 * s;
@@ -387,24 +402,21 @@
       T.confT = ph;
       T.scr = 1; T.checkDraw = 1;                          // job done: the window shows a tick
     },
-    error(T, tau, L) {
-      const ph = phase(tau, 3.4);
-      const w = win(ph, 0, .05, .26, .38);
-      const fix = win(ph, .3, .42, .76, .88);
-      const straight = smooth(.44, .8, ph);
-      T.tieRot = 20 * (1 - straight) + 4 * Math.sin(tau * 20) * fix * (1 - straight);
-      T.squint = w; T.eyeOpen = 0.85; T.mouthO = w;
-      const worry = Math.max(w, 0.55);
-      T.browL = -16 * worry; T.browR = 16 * worry; T.browLY = 1; T.browRY = 1;
-      T.floatY += 5 * w; T.lean += 1.5 * Math.sin(tau * 42) * w; T.sqy -= 0.04 * w; T.sqx += 0.025 * w;
-      T.earL = -12 * w; T.earR = 12 * w; T.fy += 2;
-      T.sweat = Math.max(w, fix * 0.9); T.sweatY = ph * 8;
-      T.monoDrop = 1 - smooth(.78, .95, ph);               // monocle pops, dangles, gets put back
-      T.rhx = lerp(56, 91, fix); T.rhy = lerp(138, 131, fix);
-      T.lhx = lerp(144, 109, fix); T.lhy = lerp(138, 131, fix);
+    error(T, tau) {
+      // An apologetic, open-palmed shrug, held clearly throughout the loop.
+      const shrug = .5 + .5 * Math.sin(tau * 2 * PI / 3.4);
+      T.rhx = 47; T.rhy = 111 - 3 * shrug; T.gloveRR = -65;
+      T.lhx = 153; T.lhy = 111 - 3 * shrug; T.gloveLR = 65;
+      T.napkinHide = 1;
+      T.headTilt = -6; T.crr = 0;
+      T.eyeOpen = .9; T.smile = .35;
+      T.browL = -16; T.browR = 16; T.browLY = -2; T.browRY = -2;
+      T.monoDrop = .18; // slightly askew, still attached to its chain
+      T.tieRot = 3;
+
     }
   };
-  const STATIC_TAU = { idle: 0, listening: 2.6, thinking: 0, working: 0.6, teaching: 2 * TEACH_STEP + 1.1,
+  const STATIC_TAU = { idle: 0, listening: 2.6, thinking: 0, working: 0, serving: 0, typing: 0.6, teaching: 2 * TEACH_STEP + 1.1,
                        checking: 2.9, needs_approval: 0, success: 1.26, error: 2.04 };
 
   function rot([x, y], [cx, cy], deg) {
@@ -511,11 +523,11 @@
       set('shadow', 'transform', `translate(100 196) scale(${f(1 - .28 * h)} ${f(1 - .2 * h)}) translate(-100 -196)`);
       set('shadow', 'opacity', f(.55 - .25 * h));
 
-      set('crest', 'transform', `translate(${f(P.crx)} ${f(P.cry)}) rotate(${f(P.crr)} ${CREST_PIVOT[0]} ${CREST_PIVOT[1]})`);
+      set('crest', 'transform', `translate(${f(P.crx)} ${f(P.cry)}) rotate(${f(P.crr + P.headTilt)} ${CREST_PIVOT[0]} ${CREST_PIVOT[1]})`);
       set('earL', 'transform', `rotate(${f(-18 + P.earL)} 82 92)`);
       set('earR', 'transform', `rotate(${f(18 + P.earR)} 118 92)`);
       set('hat', 'transform', `translate(${f(P.hatX)} ${f(HAT_SEAT - P.hatLift)}) rotate(${f(P.hatRot)} ${HAT_PIVOT[0]} ${HAT_PIVOT[1]}) rotate(${f(P.hatSpin)} ${HAT_PIVOT[0]} ${HAT_PIVOT[1] - 11})`);
-      set('face', 'transform', `translate(${f(P.fx)} ${f(P.fy)})`);
+      set('face', 'transform', `translate(${f(P.fx)} ${f(P.fy)}) rotate(${f(P.headTilt)} 100 90)`);
 
       const closed = Math.max(P.happy, P.squint);
       const sy = Math.max(0.08, P.eyeOpen * (1 - blink) * (1 - closed));
@@ -545,10 +557,10 @@
       glue(crestToWorld(ATTACH.ear, P), P.attEar);
       glue(hatToWorld(ATTACH.hatGrip, P), P.attHat);
       ry += P.tapY;
-      set('gloveR', 'transform', `translate(${f(rx)} ${f(ry)})`);
-      set('gloveL', 'transform', `translate(${f(P.lhx)} ${f(P.lhy)})`);
+      set('gloveR', 'transform', `translate(${f(rx)} ${f(ry)}) rotate(${f(P.gloveRR)})`);
+      set('gloveL', 'transform', `translate(${f(P.lhx)} ${f(P.lhy)}) rotate(${f(P.gloveLR)})`);
       set('napkin', 'transform', `translate(${f(P.lhx)} ${f(P.lhy + 5)})`);
-      set('napkin', 'opacity', f(clamp(1 - 1.5 * Math.max(P.pad, P.baton, P.glass, P.lap), 0, 1)));
+      set('napkin', 'opacity', f(clamp(1 - 1.5 * Math.max(P.pad, P.baton, P.glass, P.lap, P.napkinHide), 0, 1)));
 
       const prop = (n, v, x, y, r = 0) => {
         set(n, 'opacity', f(clamp(v * 1.4 - .2, 0, 1)));
