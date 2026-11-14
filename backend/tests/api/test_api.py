@@ -1034,3 +1034,15 @@ def test_a_chunked_upload_over_the_limit_is_cut_off(api):
             yield b'x' * (1024 * 1024)
     response = client.post('/v1/letters', content=chunks(), headers={'Content-Type': 'multipart/form-data; boundary=b'})
     assert response.status_code == 413 and response.json() == {'detail': 'Upload exceeds 10 MB'}
+
+
+def test_pair_returns_the_whatsapp_number_from_config(monkeypatch):
+    monkeypatch.setenv('VALI_WHATSAPP_NUMBER', '+358 40 123-4567')
+    assert Config().whatsapp_number == '358401234567'
+    store = SQLiteStore(':memory:')
+    application = create_app(Config(sqlite_path=':memory:', whatsapp_number='358401234567'), store, None, lambda tid: None, lambda *a: None)
+    with TestClient(application) as client:
+        client.headers['Authorization'] = 'Bearer ' + client.post('/v1/users').json()['token']
+        body = client.post('/v1/pair').json()
+        assert body['whatsapp'] == '358401234567' and len(body['code']) == 6
+    store.close()

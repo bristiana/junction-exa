@@ -65,6 +65,7 @@ export const api = {
     { task, previous_task_id: previousTaskId || undefined, known_details: knownDetails.length ? knownDetails : undefined }),
   task: (id) => call('GET', `/v1/tasks/${encodeURIComponent(id)}`),
   tasks: () => call('GET', '/v1/tasks?limit=50'),
+  pair: () => call('POST', '/v1/pair'),
   stats: () => call('GET', '/v1/stats'),
   services: () => call('GET', '/v1/services'),
   service: (id) => call('GET', `/v1/services/${encodeURIComponent(id)}`),

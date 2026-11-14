@@ -468,7 +468,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.post('/v1/pair')
     def pair(user=Depends(authenticate)):
-        return application.state.store.create_pair_code(user['id'])
+        return {**application.state.store.create_pair_code(user['id']), 'whatsapp': config.whatsapp_number}
 
     def create_task_for_user(body, user, source='extension', *, budget_checked=False):
         if not body.task.strip():

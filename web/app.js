@@ -10,6 +10,7 @@ import { renderDashboard } from './dashboard.js';
 import { createMascot, mountPalettePicker } from './mascot.js';
 import { openTrust } from './trust.js';
 import { openDetails } from './details.js';
+import { openWhatsapp } from './whatsapp.js';
 import { loadProfile } from './profile.js';
 import { openHub } from './hub.js';
 
@@ -160,6 +161,8 @@ $('to-errands').addEventListener('click', () => {
 $('to-trust').addEventListener('click', () => openTrust(followed?.task));
 $('trust').addEventListener('click', (event) => { if (event.target === $('trust')) $('trust').close(); });
 $('to-details').addEventListener('click', () => openDetails());
+$('to-whatsapp').addEventListener('click', () => openWhatsapp());
+$('whatsapp').addEventListener('click', (event) => { if (event.target === $('whatsapp')) $('whatsapp').close(); });
 $('details').addEventListener('click', (event) => { if (event.target === $('details')) $('details').close(); });
 // Saved or deleted details change the open answer's hint and approval values, so it redraws.
 $('details').addEventListener('close', () => { if (followed?.task) { followed.key = null; render(followed.task); } });
@@ -167,6 +170,7 @@ $('details').addEventListener('close', () => { if (followed?.task) { followed.ke
 // ---------- routes ----------
 function route() {
   if ($('details').open) $('details').close();
+  if ($('whatsapp').open) $('whatsapp').close();
   notice(leaving);
   leaving = '';
   const match = location.hash.match(/^#\/t\/([\w-]+)$/);
