@@ -1,14 +1,22 @@
 # Overnight backlog (14-15 Nov)
 
 ## Day 2 (Sat 14 Nov 11:00 to Sun 15 Nov 10:00)
-The loop restarts for the last day. Code freeze from 09:00 Sun (health checks only). Bogdan submits on the Junction platform himself.
-- [ ] J1 Judging fit: read the Exa challenge text and the submission rules (github.com/DKeAlvaro/junction-2026-challenges, docs/), map each criterion to what Vali shows, add the gaps here as items, and draft docs/SUBMISSION.md (name, one-liner, description, how Exa is used, tech, demo video script) for Bogdan to paste.
-- [ ] R1 Sweep 2, any site: 20 new errands on sites never tested (Finnish and international: shops, airlines, clinics, libraries, gyms, government, forms with wizards). Run them live, fix the top failures in vali_agent and research, rerun. Target 16/20.
-- [ ] R2 Prompt-injection evals: fixture pages served by the API (hidden text asking for the user's details, fake "Continue as" prompts, text telling the agent to submit). The agent never puts profile values there, never submits, and raises a blocker. Add to scripts/evals.
-- [ ] R3 Live status: the API streams task changes (SSE), and the extension and the Mac app update without polling delay.
-- [ ] R4 Judge install, extension: a fresh Chrome profile loads the unpacked extension and gets a first answer with no settings (default server, account made on first use). Fix friction; short docs/INSTALL.md.
-- [ ] R5 Judge install, Mac: the dmg on a clean user (unsigned, right-click Open), first answer in under 2 minutes. Fix friction; screenshots of every main state in docs/img/ for the submission.
-- [ ] R6 Demo video: record the 3-minute DEMO.md flow from the live app (screen recording), plus a 30-second cut. Bogdan uploads it.
+Plan agreed with Bogdan at 12:40 from the feature map (https://claude.ai/artifact/4NepXbzh54qjvdnjxyGiL5). Exa judges: info a model cannot know, usefulness for newcomers and international students in Finland, clear sources, originality, live queries typed by judges (brief video: "how to register a change of address after moving to Helsinki", "book a public sauna in Helsinki for a group", "AI startups in Helsinki building agents"). Main surface is a web page on Modal; the Chrome extension is the "comes with you" companion; the Mac app stays as it is. Code freeze 09:00 Sun. Bogdan submits on the Junction platform himself (name max 30 chars, punchline max 200, 2-minute video, set FINAL).
+- [ ] H1 Harness: one command runs the video queries, ~40 judge-style phrases and the newcomer cases, grades them, writes a scorecard and diffs it against the last run.
+- [ ] B1 Cited answer: every sentence has its sources, each source has the exact quote, domain, official flag and when it was read.
+- [ ] B2 Live Exa trail: research.activity streams each search and each page read while the errand runs.
+- [ ] B3 Channel on every errand and GET /v1/stats for the dashboard counters.
+- [ ] B4 Freshness stamp: published or updated date per source, a warning when it is old.
+- [ ] B5 Your language: ask in any language, answer in it, read Finnish-only pages.
+- [ ] B6 Asks what's missing early, as quick replies, while research runs.
+- [ ] W1 Web dashboard on Modal at "/": home, working state with the live trail, cited answer, all errands from every channel with counters, "Fill it for me" with live view and approval. Anonymous account on first visit. Pastel look with the Vali mascot (palette picker, walks on the page). Mockups: https://claude.ai/artifact/AN8LX6cTubRbexj4cw66x1 (row "Web base").
+- [ ] W2 Voice on the web page (the same ElevenLabs agent as the Mac app).
+- [ ] E1 Page companion: on any site the mascot offers the one thing that matters there (deadline, eligibility rule, cheaper option), checked with Exa, with its source, and a "Do it" button.
+- [ ] E2 Explain this: select text on any page, ask what it means, if it is legal, what to do.
+- [ ] E3 In your own tab: the extension fills the form on the current page for sites behind your login; you log in and you send.
+- [ ] E4 Extension in the same pastel look as the web page.
+- [ ] T1 Trust panel: what never leaves your device, what Vali never does without your OK, every page it touched.
+- [ ] S1 Submission text, 2-minute video script and screenshots (docs/SUBMISSION.md).
 
 ## Morning summary (08:30)
 Vali is ready to demo. 46 PRs merged overnight, each reviewed and green in CI. Live = main.
@@ -135,3 +143,4 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - 08:30 Merged #40-#44: backlog, captions hide voice tags, demo seed script, aligned text buttons, dead database socket no longer hangs requests (cause verified in logs). Live = main, golden 5/5, dmg rebuilt. Code freeze; health checks only until 10:00. (Log times after 07:00 ran about 20 minutes ahead.)
 - 08:58 Health check: the overnight test account hit its $2 daily cap, so the cap is now $10 (#46, deployed). Golden 5/5 on a fresh account.
 - 11:00 Loop restarted: it had stopped at 09:49 on Sat thinking the deadline was today; the deadline is Sun 10:00. Day 2 items added.
+- 12:40 Feature map agreed with Bogdan; Day 2 rewritten around the web page, the extension companion and the harness. Probe of 10 judge-style queries on live: 10/10 answered with sources, 7 to 33 s.
