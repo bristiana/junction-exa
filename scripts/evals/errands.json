@@ -1,5 +1,5 @@
 {
-  "_about": "20 live errands for scripts/evals/run.py. mode: accepted routed modes (first = expected). pass: what the research must contain. execute: run the sandbox until approval (never past it). Dates assume the week of Mon 16 Nov 2026.",
+  "_about": "21 live errands for scripts/evals/run.py. mode: accepted routed modes (first = expected). pass: what the research must contain. execute: run the sandbox until approval (never past it). Dates assume the week of Mon 16 Nov 2026.",
   "errands": [
     {
       "id": "find-sauna",
@@ -217,6 +217,26 @@
         ]
       },
       "pass_note": "sandbox fills the form and stops at the approval gate before Send"
+    },
+    {
+      "id": "execute-lookup-httpbin",
+      "site": "httpbin test order form, facts looked up with Exa",
+      "text": "Order a medium margherita pizza on the httpbin test order form at https://httpbin.org/forms/post, delivered to the Allas Sea Pool in Helsinki at the time it opens on Sunday. Use my name, phone and email.",
+      "mode": [
+        "write",
+        "book",
+        "claim",
+        "check"
+      ],
+      "pass": {},
+      "execute": {
+        "start_url": "https://httpbin.org/forms/post",
+        "goal": "Fill the httpbin test order form: customer name {{name}}, telephone {{phone}}, email {{email}}, size Medium, no toppings. Preferred delivery time: the time the Allas Sea Pool in Helsinki opens on Sunday. Delivery instructions: the Allas Sea Pool's street address and postcode. Then request approval before Submit order.",
+        "accept": [
+          "approval"
+        ]
+      },
+      "pass_note": "the opening time and street address are in neither the profile nor the page: the sandbox looks them up with Exa, then stops at the approval gate"
     },
     {
       "id": "claim-ta-defect",

@@ -63,6 +63,8 @@ def test_live_frame_usage_inbox_and_question(api, monkeypatch):
     def fake_agent(goal, start_url, profile, hooks):
         hooks.on_frame(b'frame-1')
         hooks.on_usage({'input_tokens': 1200, 'output_tokens': 80, 'cache_read_input_tokens': 900})
+        hooks.on_exa([{'kind': 'search', 'query': 'TA Espoo properties', 'results': [], 'cost_usd': 0.007}])
+        seen['exa_live'] = store.get_task(tid)['execution']['exa']
         assert hooks.pending_messages() == []
         client.post(f'/v1/tasks/{tid}/messages', json={'text': 'make it 8 people'})
         seen['messages'] = hooks.pending_messages()
@@ -89,6 +91,8 @@ def test_live_frame_usage_inbox_and_question(api, monkeypatch):
     assert execution['status'] == 'done'
     assert execution['usage'] == {'input_tokens': 1200, 'output_tokens': 80}
     assert execution['sources'] == [{'url': 'https://example.com/rules'}]
+    assert seen['exa_live'][0]['query'] == 'TA Espoo properties'  # visible while the run is still going
+    assert execution['exa'] == seen['exa_live']
     assert client.get(f'/v1/tasks/{tid}/live.jpg', params={'t': client.headers['Authorization'][7:]}).status_code in (200, 404)
 
 
