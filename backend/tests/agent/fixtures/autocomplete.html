@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><title>Autocomplete</title>
+<style>.hit{cursor:pointer}</style>
+<label for="where">Where is the fault?</label>
+<input id="where" type="text" autocomplete="off">
+<div id="list"></div>
+<label><input id="key" type="checkbox" role="switch"> Master key may be used</label>
+<script>
+const where = document.getElementById('where'), list = document.getElementById('list');
+let keys = 0;
+// Like a React autocomplete: reacts to real key events only and loads suggestions late.
+where.addEventListener('keydown', () => keys++);
+where.addEventListener('input', () => {
+  if (!keys) return;
+  list.textContent = '…';
+  setTimeout(() => {
+    list.innerHTML = '<div><span class="hit"><span>Aamutie 2, Espoo</span></span><span class="hit"><span>Asgård 6, Espoo</span></span></div>';
+    for (const hit of list.querySelectorAll('.hit')) hit.onclick = () => { where.value = hit.textContent; list.innerHTML = ''; };
+  }, 400);
+});
+</script>

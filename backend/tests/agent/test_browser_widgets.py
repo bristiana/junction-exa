@@ -156,3 +156,34 @@ def test_identification_and_challenges(browser, local_site, kind, expected):
     browser.page.route('https://**/*', lambda route: route.fulfill(body='<html></html>', content_type='text/html'))
     browser.goto(local_site+'/widget_blockers.html?kind='+kind)
     assert expected in browser.blockers()
+
+
+def test_autocomplete_suggestions_and_native_switch(browser, local_site):
+    browser.goto(local_site + '/autocomplete.html')
+    snapshot = browser.snapshot()
+    browser.type(ref(snapshot, 'Where is the fault?'), 'Espoo')
+    snapshot = browser.snapshot()
+    assert 'span[clickable] "Aamutie 2, Espoo"' in snapshot  # typed with keys, waited past the "…" placeholder
+    browser.click(ref(snapshot, 'Aamutie 2, Espoo'))
+    assert browser.page.locator('#where').input_value() == 'Aamutie 2, Espoo'
+    snapshot = browser.snapshot()
+    browser.check(ref(snapshot, 'Master key may be used'), True)
+    assert browser.page.locator('#key').is_checked()
+
+
+def test_guest_checkout_is_not_a_login_wall(browser, local_site):
+    browser.goto(local_site + '/login.html')
+    assert 'login' in browser.blockers()
+    browser.goto(local_site + '/guest_checkout.html')
+    assert browser.blockers() == []
+
+
+def test_newlines_are_never_typed_as_enter(browser, local_site):
+    browser.goto(local_site + '/newline_form.html')
+    browser.type(ref(browser.snapshot(), 'Note'), 'a\n')
+    assert browser.page.locator('body').get_attribute('data-submitted') is None
+
+
+def test_guest_text_outside_a_control_keeps_the_login_wall(browser, local_site):
+    browser.goto(local_site + '/login_footer_guest.html')
+    assert 'login' in browser.blockers()

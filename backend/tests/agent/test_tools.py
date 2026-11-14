@@ -336,3 +336,30 @@ def test_without_jev_a_missing_ref_asks_to_read_the_page(local_site):
     llm = Scripted([('click', {'ref': None, 'target': 'Submit claim'}), told])
     result = run_browser_agent('x', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert result.status == 'done'
+
+
+def test_menu_toggles_skip_jev_and_filter_buttons_pass(local_site):
+    jev = Jev(api_key='fake', transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={'answers': {'q': {'noul': 0.95}}})))  # Jev would call everything final
+    def opened(messages):
+        assert not messages[-1]['content'][0]['is_error']
+        return 'finish', {'result': 'menu opened'}
+    llm = Scripted([('click', {'ref': 'e1', 'target': 'Paikat'}), opened])
+    result = run_browser_agent('x', local_site + '/dropdown_toggle.html', {}, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=jev)
+    assert result.status == 'done' and jev.calls == 0
+    assert not is_final_submit('<button type="submit">Kaikki</button> button type=submit Kaikki', 'Kaikki')
+
+
+def test_toggles_that_order_or_submit_are_still_gated(local_site):
+    jev = Jev(api_key='fake', transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={'answers': {'q': {'noul': 0.95}}})))
+    def refused(messages):
+        assert 'Call request_approval first' in messages[-1]['content'][0]['content']
+        return 'click', {'ref': 'e4', 'target': 'Options'}  # a submit button inside a form is no toggle
+    def refused_again(messages):
+        assert 'Call request_approval first' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'gated'}
+    llm = Scripted([('click', {'ref': 'e3', 'target': 'Place my order'}), refused, refused_again])
+    result = run_browser_agent('x', local_site + '/dropdown_toggle.html', {}, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=jev)
+    assert result.status == 'done'
+    assert is_final_submit('<button aria-haspopup="true">Place my order</button>', 'Place my order')

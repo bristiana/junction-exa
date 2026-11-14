@@ -4,6 +4,8 @@ import re
 import threading
 import time
 
+from .privacy import private_values
+
 # Fields holding real profile values are blurred in every frame and screenshot that leaves the sandbox.
 _BLUR_STYLE = '[data-vali-private]{filter:blur(7px)!important}'
 _MARK = r'''(values) => {
@@ -25,7 +27,7 @@ _MARK = r'''(values) => {
 
 def mark_private(page, profile):
     """Blur elements that show a real profile value, in every frame. Best effort, never raises."""
-    values = [str(v).lower() for v in (profile or {}).values() if v and len(str(v)) >= 3]
+    values = [v.lower() for v in private_values(profile).values() if len(v) >= 3]
     if not values:
         return
     for frame in page.frames:

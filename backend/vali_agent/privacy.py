@@ -1,6 +1,15 @@
 """Keep profile values at the browser boundary."""
 import re
 
+# Not identifying on their own, and the agent needs them to read local pages ("City of Helsinki"):
+# typed through placeholders like the rest, but never masked or blurred.
+PUBLIC_FIELDS = {'city', 'country', 'nationality', 'language'}
+
+
+def private_values(profile: dict[str, str]) -> dict[str, str]:
+    """The profile fields that must never reach the model, the store or a screenshot."""
+    return {key: str(value) for key, value in (profile or {}).items() if value and key not in PUBLIC_FIELDS}
+
 
 def substitute(text: str, profile: dict[str, str]) -> str:
     def replace(match):
@@ -12,7 +21,7 @@ def substitute(text: str, profile: dict[str, str]) -> str:
 
 
 def mask(text: str, profile: dict[str, str]) -> str:
-    values = sorted(((str(value), key) for key, value in profile.items() if value),
+    values = sorted(((value, key) for key, value in private_values(profile).items()),
                     key=lambda item: len(item[0]), reverse=True)
     if not values:
         return text

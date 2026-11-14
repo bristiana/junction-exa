@@ -1,6 +1,7 @@
 """One persistent browser page with snapshot references."""
 import re
 from playwright.sync_api import sync_playwright, expect, TimeoutError as BrowserTimeout
+from .privacy import private_values
 
 _CAPTURE = r'''({start, limit}) => {
  const visible = el => { const r=el.getBoundingClientRect(), s=getComputedStyle(el);
@@ -26,10 +27,16 @@ _CAPTURE = r'''({start, limit}) => {
  // On a page with a form, footer links and long menus are noise that costs tokens on every step.
  const hasFields=all.some(el=>el.matches('input:not([type=hidden]):not([type=search]),select,textarea') && visible(el));
  const longNav=new Set(all.filter(el=>el.matches('nav,[role=navigation]') && el.querySelectorAll('a[href]').length>12));
+ // Div/span widgets (suggestion lists, slot cells, calendar days) have no role but show a pointer cursor:
+ // take the outermost pointer element that holds no real control and only a short text.
+ const pointer=el=>!!el && el.nodeType===1 && getComputedStyle(el).cursor==='pointer';
+ const clickable=el=>!el.closest(selector) && pointer(el) && !pointer(el.parentElement) && !el.querySelector(selector) &&
+   el.innerText && el.innerText.trim().length<=80;
  const elements=all.filter(el=>{
-   if(!el.matches(selector) || !visible(el)) return false;
+   const listed=el.matches(selector);
+   if(!(listed || clickable(el)) || !visible(el)) return false;
    if(hasFields && el.matches('a[href]') && (el.closest('footer,[role=contentinfo]') || [...longNav].some(n=>n.contains(el)))) return false;
-   if(!el.matches(selector.replace(',[tabindex]','')) && el.tabIndex<0) return false;
+   if(listed && !el.matches(selector.replace(',[tabindex]','')) && el.tabIndex<0) return false;
    const r=el.getBoundingClientRect();
    if((r.bottom < -3*innerHeight || r.top > 4*innerHeight) &&
       !el.matches('input,select,textarea,[contenteditable="true"],[role="combobox"],[role="checkbox"],[role="radio"],[role="switch"]')) return false;
@@ -44,6 +51,7 @@ _CAPTURE = r'''({start, limit}) => {
    const ref='e'+(start+i); el.setAttribute('data-vali-ref',ref);
    let kind=el.localName==='input' ? 'input['+el.type+']' : el.localName;
    if(el.getAttribute('role')) kind+='[role='+el.getAttribute('role')+']';
+   else if(!el.matches(selector)) kind+='[clickable]';
    let line='['+ref+'] '+kind+' '+JSON.stringify(clip(label(el)));
    if (el.localName==='button') line+=' type='+el.type;
    if ('value' in el) line+=' value='+JSON.stringify(clip(el.value));
@@ -112,7 +120,7 @@ class Browser:
             self.page.wait_for_load_state('networkidle', timeout=1200)
         except BrowserTimeout:
             pass
-        self.page.wait_for_timeout(100)
+        self._wait_quiet()
         # A popup opened by the last action arrives as an event during the waits above.
         popups = [p for p in self._popups if not p.is_closed() and p is not self.page]
         self._popups.clear()
@@ -129,6 +137,22 @@ class Browser:
             open_pages = [p for p in self._context.pages if not p.is_closed()]
             if open_pages:
                 self.page, self._refs = open_pages[-1], {}
+
+    def _wait_quiet(self, quiet_ms=250, cap_ms=2500):
+        """Wait until the DOM stops changing and shows no "Loading..." or a lone "…" placeholder:
+        calendars, slot lists and suggestion lists often fill in after network idle."""
+        try:
+            self.page.evaluate('''([quiet, cap]) => new Promise(done => {
+              const busy = () => !!document.querySelector('[aria-busy=true]') ||
+                /(^|\\n)\\s*(loading|ladataan|laddar)\\b|(^|\\n)\\s*(…|\\.\\.\\.)\\s*(\\n|$)/i.test(document.body?.innerText || '');
+              let timer; const stop = () => { observer.disconnect(); done(); };
+              const end = () => busy() ? (timer = setTimeout(end, quiet)) : stop();
+              const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(end, quiet); });
+              observer.observe(document, {subtree: true, childList: true, attributes: true, characterData: true});
+              timer = setTimeout(end, quiet); setTimeout(stop, cap);
+            })''', [quiet_ms, cap_ms])
+        except Exception:
+            self.page.wait_for_timeout(100)  # the page navigated meanwhile
 
     def _element(self, ref):
         if not isinstance(ref, str) or not re.fullmatch(r'e[1-9]\d*', ref):
@@ -183,10 +207,12 @@ class Browser:
             raise ValueError('That element is gone (the page changed); call read_page') from exc
 
     def element_info(self, ref):
-        """Visible label and whether the element sits inside a cookie/consent banner."""
+        """Visible label, whether it only opens a menu (toggle) and whether it sits in a cookie/consent banner."""
         return self._element(ref).evaluate('''el => ({
           label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\\s+/g,' ').trim().slice(0,120),
           tag: el.localName, href: el.getAttribute('href') || '', inForm: !!el.closest('form'),
+          // Only a plain menu button counts as a toggle: never a submit button or anything inside a form.
+          toggle: (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-haspopup')) && el.type !== 'submit' && !el.closest('form'),
           consent: !!el.closest('[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[data-testid*=cookie i],[data-testid*=consent i],[id*=usercentrics i],[id*=onetrust i],#CybotCookiebotDialog,[aria-label*=cookie i],[aria-label*=eväst i]')
             || /cookie|eväste|kakor|consent/i.test((el.closest('dialog,[role=dialog],[aria-modal=true]')?.innerText || '').slice(0, 3000))
             || (el.getRootNode() instanceof ShadowRoot && /usercentrics|cookie|consent/i.test(el.getRootNode().host.id + ' ' + el.getRootNode().host.className))
@@ -233,6 +259,9 @@ class Browser:
             return
         if el.evaluate("el => !['input','textarea'].includes(el.localName) || ['submit','button','checkbox','radio','file','password','hidden','reset','image','range','color'].includes(el.type)"):
             raise ValueError('Choose a writable text field')
+        if self._types_by_keys(el, text):
+            self._settle()
+            return
         el.focus()
         el.evaluate('''(el,value) => {
           const proto=el.localName==='textarea'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
@@ -241,6 +270,19 @@ class Browser:
           el.dispatchEvent(new Event('change',{bubbles:true})); el.blur();
         }''', text)
         self._settle()
+
+    @staticmethod
+    def _types_by_keys(el, text):
+        """Short single-line fields get real keystrokes and keep focus, so autocomplete lists open.
+
+        Long text, textareas and anything with a line break use the value setter instead: a typed
+        newline is an Enter key, which can submit the form past the approval guard."""
+        if len(text) > 80 or '\n' in text or '\r' in text or not el.evaluate("el => el.localName === 'input'"):
+            return False
+        el.fill('')
+        el.press_sequentially(text)
+        el.dispatch_event('change')
+        return True
 
     def select(self, ref, option):
         el = self._element(ref)
@@ -275,7 +317,9 @@ class Browser:
 
     def check(self, ref, checked):
         el = self._element(ref)
-        if el.get_attribute('role') in ('checkbox','switch'):
+        # A native <input type=checkbox role=switch> keeps its state in .checked, not aria-checked.
+        native = el.evaluate("el => el.localName === 'input'")
+        if el.get_attribute('role') in ('checkbox','switch') and not native:
             if el.get_attribute('aria-disabled') == 'true':
                 raise ValueError('Choose an enabled checkbox or switch')
             state = el.get_attribute('aria-checked')
@@ -325,7 +369,13 @@ class Browser:
               // A page with its own fields is a form that merely mentions identification (footer links, "or log in").
               const fields=els.filter(el=>el.matches('input:not([type=hidden]):not([type=search]):not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]),textarea,select'));
               const strongAuth=/suomi\.fi|tunnistaudu|tunnistautuminen|pankkitunnu|mobiilivarmenne|bankid|strong (electronic )?identification/i;
-              if(els.some(el=>el.matches('input[type=password]'))
+              // A sign-in box next to a guest checkout is not a wall: the agent continues as a guest.
+              // Only a control whose own text offers it counts; page or footer text alone never does.
+              const guestWords=/as a guest|guest checkout|checkout as guest|continue as (a )?guest|without (logging in|signing in|an account|registering)|vieraana|ilman (kirjautumista|rekisteröitymistä|tiliä)|som gäst|utan (att logga in|konto)/i;
+              const ownText=el=>(el.labels?.[0]?.innerText || el.innerText || el.value || '').trim();
+              const guest=els.some(el=>el.matches('button,a[href],[role=button],[role=radio],input[type=radio],input[type=button],input[type=submit]')
+                 && ownText(el).length<=250 && guestWords.test(ownText(el)));
+              if(els.some(el=>el.matches('input[type=password]')) && !guest
                  || /(^|\.)tunnistus\.suomi\.fi$/i.test(location.hostname)
                  || els.some(el=>el.matches('iframe') && /tunnistus\.suomi\.fi/i.test(el.src||''))
                  || (!fields.length && strongAuth.test(text) && els.filter(el=>el.matches('a[href],button,[role=button]')).length < 8)) found.push('login');
@@ -352,7 +402,7 @@ class Browser:
             if(privateText(el.value) || [...el.childNodes].some(n=>n.nodeType===3 && privateText(n.textContent)) || [...el.attributes].some(a=>privateText(a.value))) el.setAttribute('data-vali-private','1');
           }
           if(document.querySelector('canvas')) document.body.setAttribute('data-vali-private','1');
-        }''', [str(v) for v in profile.values() if v])
+        }''', list(private_values(profile).values()))
         try:
             return self.page.screenshot(type='jpeg', quality=quality, mask=[self.page.locator('[data-vali-private]')])
         finally:
