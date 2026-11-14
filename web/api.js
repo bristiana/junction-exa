@@ -55,7 +55,7 @@ export const api = {
   tasks: () => call('GET', '/v1/tasks?limit=50'),
   stats: () => call('GET', '/v1/stats'),
   cancel: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/cancel`),
-  execute: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/execute`, {}),
+  execute: (id, actionIndex) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/execute`, { action_index: actionIndex }),
   approve: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/approve`),
   stop: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/stop`),
   message: (id, text) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/messages`, { text }),
