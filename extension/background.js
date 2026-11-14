@@ -1,7 +1,7 @@
 // Vali service worker: starts errands, keeps polling them in the background, notifies when one is ready,
 // and fills forms in the user's tab once they approve. Only this file writes the task list; the panel reads it.
-// Two modes: with no "Vali server" set it talks to Exa directly (direct mode); with one, errands go through the
-// Vali API (lib/backend.js) and tasks started on WhatsApp show up here too.
+// Two modes: errands go through the Vali API (lib/backend.js; the deployed server unless settings say otherwise) and
+// tasks started on WhatsApp show up here too; with the server cleared in settings it talks to Exa directly.
 
 import { createRun, getRun, getRunEvents, cancelRun, TERMINAL } from "./lib/exa.js";
 import { buildRunRequest } from "./lib/task.js";
@@ -25,8 +25,8 @@ function withTasks(fn) {
   return chain;
 }
 async function settings() {
-  const { exaKey = "", profile = {}, effort = "low", backendUrl = "" } = await chrome.storage.local.get(["exaKey", "profile", "effort", "backendUrl"]);
-  return { exaKey, profile, effort, backendUrl };
+  const { exaKey = "", profile = {}, effort = "low", backendUrl } = await chrome.storage.local.get(["exaKey", "profile", "effort", "backendUrl"]);
+  return { exaKey, profile, effort, backendUrl: backend.resolveBaseUrl(backendUrl) };
 }
 async function findTask(id) {
   const { tasks = [] } = await chrome.storage.local.get("tasks");
@@ -84,6 +84,7 @@ async function startTask({ task, tabId, usePage, selection, previousRunId, paren
   const localPage = page ? { url: page.url, title: page.title, fields: page.fields || [], hadSelection: !!page.selection } : null;
 
   if (backendUrl) {
+    await backend.ensureConnected();
     const parent = parentId ? await findTask(parentId) : null;
     const remote = await backend.createTask({
       task,
@@ -147,6 +148,7 @@ function progressFromEvents(events = []) {
 
 // Server mode: one list call brings updates for this browser's errands and new ones from WhatsApp.
 async function pollBackend() {
+  await backend.ensureConnected();
   const { tasks: remote = [] } = (await backend.listTasks()) || {};
   const { hiddenTasks = [] } = await chrome.storage.local.get("hiddenTasks");
   const finished = [];
@@ -330,6 +332,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     }),
     approve: () => onServerTask(msg.taskId, (t) => backend.approve(t.remoteId)),
     stop: () => onServerTask(msg.taskId, (t) => backend.stop(t.remoteId)),
+    message: () => onServerTask(msg.taskId, (t) => backend.message(t.remoteId, msg.text)),
     remove: async () => {
       const t = await findTask(msg.taskId);
       if (t?.remoteId) {

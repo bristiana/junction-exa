@@ -1,10 +1,18 @@
-// Client for the Vali API (docs/ARCHITECTURE.md). Used when a "Vali server" URL is set in settings;
-// without one the extension talks to Exa directly (lib/exa.js).
+// Client for the Vali API (docs/ARCHITECTURE.md). The deployed Vali server is the default; settings can point it
+// elsewhere (a local server, the mock) or clear it, and then the extension talks to Exa directly (lib/exa.js).
 // The base URL and the bearer token live in chrome.storage.local (backendUrl, backendToken). The token is never logged.
+// backendUrl missing = the default server; "" = direct mode, chosen in settings.
 // createClient() and the mapping helpers are pure, so they run in Node tests too.
 
 import { TERMINAL } from "./exa.js";
 import { redactText } from "./redact.js";
+
+export const DEFAULT_BASE_URL = "https://bogdan-c-2206--hoida-web.us-east.modal.run";
+
+// The stored backendUrl -> the server to use ("" = direct mode).
+export function resolveBaseUrl(stored) {
+  return stored === undefined || stored === null ? DEFAULT_BASE_URL : String(stored);
+}
 
 export class BackendError extends Error {
   constructor(status, body) {
@@ -72,6 +80,16 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
       call(`/v1/tasks/${id(taskId)}/execute`, { method: "POST", body: clean({ action_index, start_url, goal, profile }) }),
     approve: (taskId) => call(`/v1/tasks/${id(taskId)}/approve`, { method: "POST", body: {} }),
     stop: (taskId) => call(`/v1/tasks/${id(taskId)}/stop`, { method: "POST", body: {} }),
+    // A message to the running browser (the answer to execution.question); the agent reads it between steps.
+    message: (taskId, text) => call(`/v1/tasks/${id(taskId)}/messages`, { method: "POST", body: { text: String(text || "") } }),
+    // The newest frame of the live browser view. The image endpoint takes the token as ?t= (an <img> sends no headers).
+    liveUrl(task) {
+      const taskId = task?.remoteId || task?.id;
+      if (!baseUrl || !token || !taskId) return null;
+      const u = new URL(`${baseUrl}/v1/tasks/${id(taskId)}/live.jpg`);
+      u.searchParams.set("t", token);
+      return u.href;
+    },
     // Screenshot n of a task's browser run: Cloudinary URLs as they are, API-served ones with the token as ?t=.
     shotUrl(task, n) {
       const taskId = task?.remoteId || task?.id;
@@ -99,7 +117,7 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
 // ---------- the configured server (chrome.storage.local) ----------
 export async function loadConfig() {
   const s = await chrome.storage.local.get(["backendUrl", "backendToken"]);
-  return { baseUrl: s.backendUrl || "", token: s.backendToken || "" };
+  return { baseUrl: resolveBaseUrl(s.backendUrl), token: s.backendToken || "" };
 }
 async function configured() {
   return createClient(await loadConfig());
@@ -117,6 +135,18 @@ export const execute = async (taskId, opts) => (await configured()).execute(task
 export const approve = async (taskId) => (await configured()).approve(taskId);
 export const stop = async (taskId) => (await configured()).stop(taskId);
 export const shotUrl = async (task, n) => (await configured()).shotUrl(task, n);
+export const message = async (taskId, text) => (await configured()).message(taskId, text);
+export const liveUrl = async (task) => (await configured()).liveUrl(task);
+
+// With the default server nobody pressed Connect, so get a user on first use. No-op in direct mode or when this
+// browser already has a token for the server in use.
+export async function ensureConnected() {
+  const s = await chrome.storage.local.get(["backendUrl", "backendToken", "backendTokenUrl"]);
+  const baseUrl = resolveBaseUrl(s.backendUrl);
+  if (!baseUrl) return null;
+  if (s.backendToken && s.backendTokenUrl === normalizeBaseUrl(baseUrl)) return null;
+  return connect(baseUrl);
+}
 
 // Saves the server URL. The first time a URL is saved this browser gets a user (POST /v1/users) and keeps its token.
 // A token is reused when the same URL is saved again, so a WhatsApp link survives switching back and forth.
