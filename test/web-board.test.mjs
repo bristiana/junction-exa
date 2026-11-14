@@ -89,3 +89,11 @@ test("watches join their errand, newest update first, and say when they last cha
   const [fromTask] = watchesOf(null, [wa, watchTask]);
   assert.deepEqual([fromTask.id, fromTask.criteria, fromTask.live], ["w1", "new HSL ticket prices", true]);
 });
+
+test('a stopped booking reads Stopped even when the research had asked something', async () => {
+  const { errandStatus } = await import('../web/model.js');
+  const task = { research: { status: 'completed', question: { text: 'Which day?', answer: null }, output: { structured: { status: 'needs_info' } } },
+                 execution: { status: 'stopped' } };
+  assert.equal(errandStatus(task).word, 'Stopped');
+  assert.equal(errandStatus({ ...task, execution: null }).word, 'Needs your answer');
+});

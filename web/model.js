@@ -201,7 +201,7 @@ export function errandStatus(task) {
   const question = questionOf(task);
   if (run === 'awaiting_approval') return { word: 'Waiting for your OK', tone: 'you', detail: task.execution.approval?.summary || '' };
   if (['starting', 'running', 'submitting'].includes(run)) return { word: 'Filling the form', tone: 'working', detail: lastStep(task) };
-  if (question) return { word: 'Needs your answer', tone: 'you', detail: question.text };
+  if (question && !run) return { word: 'Needs your answer', tone: 'you', detail: question.text };
   if (!TERMINAL.has(research.status)) {
     const last = activityOf(task).at(-1);
     return { word: 'Working', tone: 'working', detail: last ? activityLine(last) : 'Starting the research' };
@@ -210,7 +210,7 @@ export function errandStatus(task) {
   if (research.status === 'failed' || run === 'failed') {
     return { word: "Couldn't finish", tone: 'failed', detail: research.error || task.execution?.error || '' };
   }
-  if (structured(task).status === 'needs_info') return { word: 'Needs your answer', tone: 'you', detail: missingInfo(task)[0] || '' };
+  if (structured(task).status === 'needs_info' && !run) return { word: 'Needs your answer', tone: 'you', detail: missingInfo(task)[0] || '' };
   return { word: 'Done', tone: 'done', detail: task.execution?.result || sentences(structured(task).answer)[0] || '' };
 }
 
