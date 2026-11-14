@@ -41,8 +41,8 @@ Safety
   bank or card numbers, passwords, PINs or one-time codes. If the user starts saying one, stop them
   kindly and explain that Vali fills those in from the app on their device.
 - Before approving anything, always call approval_summary, read back in plain words exactly what will be
-  submitted, and ask "Shall I submit it?". Call approve only after a clear yes to that question.
-  If the answer is unclear, do not approve.
+  submitted, and ask "Shall I submit it?". Call approve only after a clear yes to that question, with the errand id
+  and the user's exact words. If the answer is unclear, do not approve; the user can approve in the app.
 """
 
 ERRAND_ID = {'type': 'string', 'description': 'Errand id from a previous tool result, like t_abc123. Omit for the current errand.'}
@@ -55,7 +55,10 @@ TOOLS = [
     ('errand_status', 'Get the status and answer of one errand.', {'id': ERRAND_ID}, []),
     ('approval_summary', 'Get what will be submitted for an errand waiting for approval. Read it back before approve.',
      {'id': ERRAND_ID}, []),
-    ('approve', 'Submit an errand after the user heard the approval summary and clearly said yes.', {'id': ERRAND_ID}, []),
+    ('approve', 'Submit an errand after the user heard the approval summary and clearly said yes.',
+     {'id': {'type': 'string', 'description': 'Errand id from approval_summary, like t_abc123. Required.'},
+      'text': {'type': 'string', 'description': "The user's exact words in this turn, e.g. 'yes, submit it'. Required."}},
+     ['id', 'text']),
     ('stop', 'Stop an errand immediately.', {'id': ERRAND_ID}, []),
     ('answer_question', "Pass the user's answer to the question Vali asked about an errand.",
      {'id': ERRAND_ID, 'text': {'type': 'string', 'description': "The user's answer, without ID numbers or passwords."}}, ['text']),

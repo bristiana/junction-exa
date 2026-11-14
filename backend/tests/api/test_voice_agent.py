@@ -126,13 +126,18 @@ def test_approval_needs_read_back_first(agent):
     (client, app, store, *_, user), _ = agent
     uid = user['user_id']
     task = client.post('/v1/tasks', json={'task': 'find cheapest café'}).json()
-    assert say(tool(client, 'approve', uid, {'id': task['id']})) == 'Nothing is waiting for your OK on that errand.'
+    yes = {'id': task['id'], 'text': 'yes, submit it'}
+    assert say(tool(client, 'approve', uid, yes)) == 'Nothing is waiting for your OK on that errand.'
     awaiting(store, task['id'])
-    assert 'Not approved yet' in say(tool(client, 'approve', uid, {'id': task['id']}))
+    assert 'Not approved yet' in say(tool(client, 'approve', uid, yes))
     assert store.get_task(task['id'])['execution']['approval_decision'] is None
     summary = say(tool(client, 'approval_summary', uid, {'id': task['id']}))
     assert 'EU261, 400 EUR' in summary and 'Full name: your name' in summary and '{{' not in summary
-    assert say(tool(client, 'approve', uid)) == 'Approved. Vali is submitting it now.'  # current errand by default
+    for unclear in [{'id': task['id']}, {'id': task['id'], 'text': 'no, wait'}, {'id': task['id'], 'text': 'yes?'},
+                    {'id': task['id'], 'text': 'what will it cost'}, {'text': 'yes'}]:
+        assert say(tool(client, 'approve', uid, unclear)).startswith('Approve it in the app')
+        assert store.get_task(task['id'])['execution']['approval_decision'] is None
+    assert say(tool(client, 'approve', uid, yes)) == 'Approved. Vali is submitting it now.'
     assert store.get_task(task['id'])['execution']['approval_decision'] == 'approved'
 
 
@@ -142,7 +147,7 @@ def test_changed_approval_needs_new_read_back(agent):
     awaiting(store, task['id'])
     say(tool(client, 'approval_summary', user['user_id'], {'id': task['id']}))
     store.patch_execution(task['id'], {'approval': {'summary': 'Different amount', 'filled': []}})
-    assert 'Not approved yet' in say(tool(client, 'approve', user['user_id'], {'id': task['id']}))
+    assert 'Not approved yet' in say(tool(client, 'approve', user['user_id'], {'id': task['id'], 'text': 'yes'}))
 
 
 def test_stop_and_answer_question(agent):
@@ -171,11 +176,12 @@ def test_tools_never_touch_another_users_task(agent):
     say(tool(client, 'approval_summary', user['user_id'], {'id': task['id']}))
     before = store.get_task(task['id'])
     intruder = store.create_user()['user_id']
-    for name, body in [('errand_status', {}), ('approval_summary', {}), ('approve', {}), ('stop', {}),
+    for name, body in [('errand_status', {}), ('approval_summary', {}), ('approve', {'text': 'yes'}), ('stop', {}),
                        ('answer_question', {'text': 'yes'})]:
         assert say(tool(client, name, intruder, {'id': task['id'], **body})) == "I can't find that errand."
         # Without an id the intruder's own (empty) list is used, never someone else's errand.
-        assert say(tool(client, name, intruder, body)) == "I can't find that errand."
+        without_id = say(tool(client, name, intruder, body))
+        assert without_id == "I can't find that errand." or (name == 'approve' and without_id.startswith('Approve it in the app'))
     assert say(tool(client, 'list_errands', intruder)) == 'You have no errands yet.'
     assert store.get_task(task['id']) == before
     assert 'café' not in json.dumps([t['task'] for t in store.list_tasks(intruder)])

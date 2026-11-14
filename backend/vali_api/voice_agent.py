@@ -140,7 +140,23 @@ def approval_summary(errands, user, body):
     return 'Read this back before approving: ' + approval_text(execution['approval'])
 
 
+_YES = {'yes', 'yeah', 'yep', 'yup', 'sure', 'approve', 'approved', 'confirm', 'confirmed', 'submit', 'ok', 'okay',
+        'kyllä', 'joo', 'juu', 'ja', 'da', 'так', 'да', 'sí', 'oui'}
+_NOT_YES = {'no', 'not', "don't", 'dont', 'wait', 'stop', 'cancel', 'never', 'hold', 'later', 'maybe', 'ei', 'älä',
+            'nej', 'nu', 'ні', 'нет', 'nein', 'non'}
+IN_THE_APP = 'Approve it in the app. I can only approve by voice after a clear yes to this errand.'
+
+
+def clear_yes(words):
+    """The user's own words this turn: a short, unhedged yes with no no-word and no question."""
+    tokens = re.findall(r"[\w']+", (words or '').lower())
+    return (0 < len(tokens) <= 12 and '?' not in (words or '') and any(t in _YES for t in tokens)
+            and not any(t in _NOT_YES for t in tokens))
+
+
 def approve(errands, user, body):
+    if not body.id or not clear_yes(body.text):
+        return IN_THE_APP  # the errand must be named and the user's own yes passed along
     task = errands.pick(body, user)
     execution = task.get('execution') or {}
     if execution.get('status') != 'awaiting_approval' or not execution.get('approval'):
