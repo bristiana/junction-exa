@@ -26,9 +26,9 @@ def parse_command(text: str) -> Command:
     match = re.fullmatch(r"(?:link|linkki)\s+((?:[0-9]\s*){6})", normalized)
     if match:
         return Command("link", code=re.sub(r"\s", "", match[1]))
-    if normalized in {"yes", "ok", "approve", "kyllä", "joo", "👍", "👍🏻", "👍🏼", "👍🏽", "👍🏾", "👍🏿"}:
+    if normalized in {"da", "yes", "ok", "approve", "kyllä", "joo", "👍", "👍🏻", "👍🏼", "👍🏽", "👍🏾", "👍🏿"}:
         return Command("approve")
-    if normalized in {"stop", "no", "cancel", "ei", "lopeta"}:
+    if normalized in {"nu", "stop", "no", "cancel", "ei", "lopeta"}:
         return Command("stop")
     if re.fullmatch(r"[1-9]", normalized):
         return Command("choose", n=int(normalized))

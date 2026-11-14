@@ -25,7 +25,7 @@ from .store import make_store, now
 from hoida_wa.flow import WhatsAppFlow
 from hoida_wa.webhook import parse_webhook, verify_signature
 from hoida_wa.render import render_result, render_execution_update, render_error
-from .wa_channel import ChannelAPI, push_task
+from .wa_channel import ChannelAPI, push_task, log_failure, logger as whatsapp_logger
 
 TERMINAL = {'completed', 'failed', 'cancelled'}
 
@@ -186,6 +186,7 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
 
     def ask_user(question):
         store.patch_execution(task_id, {'question': {'text': question, 'at': now()}})
+        push_task(application, task_id, render_execution_update)
         deadline = time.monotonic() + 300
         try:
             while time.monotonic() < deadline and not should_stop():
@@ -391,13 +392,16 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(409, 'Execution is not awaiting approval')
         return application.state.store.get_task(tid)
 
-    @application.post('/v1/tasks/{tid}/messages')
-    def message(tid: str, body: MessageBody, user=Depends(authenticate)):
+    def message_for_user(tid, body, user, source='extension'):
         task = owned(tid, user)
         if not task['execution'] or task['execution']['status'] not in ACTIVE_EXECUTION:
             raise HTTPException(409, 'No running execution')
-        application.state.store.patch_execution(tid, message={'at': now(), 'text': body.text, 'source': 'extension'})
+        application.state.store.patch_execution(tid, message={'at': now(), 'text': body.text, 'source': source})
         return application.state.store.get_task(tid)
+
+    @application.post('/v1/tasks/{tid}/messages')
+    def message(tid: str, body: MessageBody, user=Depends(authenticate)):
+        return message_for_user(tid, body, user)
 
     def stop_for_user(tid, user, notify=True):
         task = owned(tid, user)
@@ -482,6 +486,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         link_number=lambda code, number: application.state.store.link_number(code, number),
         create_task=create_whatsapp_task,
         get_active_task=active_task,
+        message=lambda tid, text: message_for_user(tid, MessageBody(text=text), sender.get(), 'whatsapp'),
         execute=lambda tid, index: execute_for_user(tid, ExecuteBody(action_index=index), sender.get(), 'whatsapp'),
         approve=lambda tid: approve(tid, sender.get()), stop=lambda tid: stop_for_user(tid, sender.get(), notify=False),
         transcribe=transcribe if config.elevenlabs_api_key else None,
@@ -497,13 +502,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                     continue
                 try:
                     await application.state.whatsapp_flow.handle(message)
-                except Exception:
+                except Exception as exc:
+                    log_failure('message processing failed', exc, message_id=message.message_id)
                     # Never expose provider responses or private message contents.
                     try:
                         for body in render_error('Could not process this message. Please try again.'):
                             await application.state.whatsapp_api.send_text(message.from_number, body)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log_failure('error reply failed', exc, message_id=message.message_id)
         asyncio.run(process())
 
     @application.post('/webhooks/whatsapp')
@@ -518,8 +524,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(400, 'Invalid JSON')
         if not isinstance(payload, dict):
             raise HTTPException(400, 'Expected an object')
-        messages = parse_webhook(payload).messages
-        background_tasks.add_task(process_messages, messages)
+        parsed = parse_webhook(payload)
+        for status in parsed.statuses:
+            # Deliberately exclude recipient_id and provider details/URLs.
+            whatsapp_logger.info('delivery status=%s message_id=%s errors=%s',
+                                 status.status, status.message_id,
+                                 [{'code': error.get('code'), 'title': error.get('title')}
+                                  for error in status.errors])
+        background_tasks.add_task(process_messages, parsed.messages)
         return {'ok': True}
 
     @application.post('/webhooks/exa')

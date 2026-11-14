@@ -1,7 +1,19 @@
 """Graph client lifetime and best-effort worker notifications for Vali."""
 import asyncio
+import logging
 
-from hoida_wa.api import GraphAPIClient
+from hoida_wa.api import GraphAPIClient, GraphAPIError
+from hoida_wa.render import split_messages
+
+logger = logging.getLogger("vali.whatsapp")
+
+
+def log_failure(operation, exc, *, task_id=None, message_id=None):
+    # Exception strings and tracebacks can contain provider bodies or credentials.
+    logger.warning("%s task_id=%s message_id=%s error_type=%s status_code=%s code=%s",
+                   operation, task_id, message_id, type(exc).__name__,
+                   exc.status_code if isinstance(exc, GraphAPIError) else None,
+                   exc.code if isinstance(exc, GraphAPIError) else None)
 
 
 class ChannelAPI:
@@ -18,11 +30,21 @@ class ChannelAPI:
     async def send_text(self, to, body, reply_to=None):
         return await self._call('send_text', to, body, reply_to=reply_to)
 
+    async def upload_media(self, data, mime_type='image/jpeg'):
+        return await self._call('upload_media', data, mime_type)
+
+    async def send_image(self, to, link=None, caption=None, *, media_id=None):
+        return await self._call('send_image', to, link, caption, media_id=media_id)
+
+    async def send_buttons(self, to, body, buttons):
+        return await self._call('send_buttons', to, body, buttons)
+
     async def mark_read(self, message_id):
         # A failed receipt must never discard an errand.
         try:
             return await self._call('mark_read', message_id)
-        except Exception:
+        except Exception as exc:
+            log_failure("read receipt failed", exc, message_id=message_id)
             return None
 
     async def get_media_url(self, media_id):
@@ -43,8 +65,41 @@ def push_task(application, task_id, renderer):
             return
 
         async def send():
-            for body in renderer(task):
-                await application.state.whatsapp_api.send_text(user['wa_number'], body)
+            api, number = application.state.whatsapp_api, user['wa_number']
+            execution = task.get('execution') or {}
+            question = execution.get('question') if execution.get('status') in {'starting', 'running'} else None
+            text = question.get('text', '') if isinstance(question, dict) else str(question or '')
+            if text and text != execution.get('wa_question_sent'):
+                for body in split_messages(text):
+                    await api.send_text(number, body)
+                application.state.store.patch_execution(task_id, {'wa_question_sent': text})
+                return
+            if question:
+                return
+            bodies = renderer(task)
+            if execution.get('status') == 'awaiting_approval':
+                if hasattr(api, 'upload_media') and hasattr(api, 'send_image'):
+                    try:
+                        jpeg = application.state.store.get_live_frame(task_id)
+                        if jpeg:
+                            media_id = await api.upload_media(jpeg, 'image/jpeg')
+                            if media_id:
+                                caption = '\n'.join(bodies)
+                                await api.send_image(number, media_id=media_id, caption=caption[:1024])
+                                bodies = split_messages(caption[1024:])
+                    except Exception as exc:
+                        log_failure('approval image failed', exc, task_id=task_id)
+                for body in bodies:
+                    await api.send_text(number, body)
+                if hasattr(api, 'send_buttons'):
+                    try:
+                        await api.send_buttons(number, 'Submit this errand?',
+                                               [(f'approve:{task_id}', 'Approve'), (f'stop:{task_id}', 'Stop')])
+                    except Exception as exc:
+                        log_failure('approval buttons failed', exc, task_id=task_id)
+                return
+            for body in bodies:
+                await api.send_text(number, body)
         asyncio.run(send())
-    except Exception:
-        pass
+    except Exception as exc:
+        log_failure("task notification failed", exc, task_id=task_id)
