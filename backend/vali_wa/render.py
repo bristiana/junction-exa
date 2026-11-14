@@ -259,7 +259,7 @@ def render_execution_update(task, profile=None):
 
 
 def render_help():
-    return ["*Vali* takes care of your errands in Finland.\nTo pair, open Vali on the web (WhatsApp button) or in the extension and send the *link 123456* code it shows.\nThen just tell me what you need. Tap a button to choose, *yes* to approve, *stop* to stop."]
+    return ["*Vali* is your valet in Finland. Documents, money, transport, bookings, housing: tell me what you need and I handle it.\nTo pair, send the *link 123456* code from Vali on the web or the extension.\nTap a button to choose, *yes* to approve, *stop* to stop."]
 
 
 def render_linked():
