@@ -161,8 +161,8 @@
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .yes { background: var(--accent); color: #fff; }
   .no { background: var(--accent-soft); color: var(--accent); }
-  .face { width: 40px; height: 40px; border-radius: 12px; flex: none; display: block;
-    box-shadow: 0 6px 18px rgba(20,20,40,.28); }
+  .face { width: 100px; height: 100px; flex: none; display: block; margin: 0 -16px -8px -18px;
+    filter: drop-shadow(0 4px 10px rgba(20,20,40,.22)); }
   @media (prefers-reduced-motion: reduce) { .wrap { transition: opacity .15s linear; transform: none; } }
   @media print { .wrap { display: none; } }`;
 
@@ -201,9 +201,9 @@
     const face = document.createElement("img");
     face.className = "face";
     face.alt = "";
-    face.width = 40;
-    face.height = 40;
-    face.src = ext.runtime.getURL("icons/icon-48.png");
+    face.width = 100;
+    face.height = 100;
+    face.src = ext.runtime.getURL("mascot/needs_approval.svg"); // Vali bowing with a card on a tray
     wrap.append(bubble, face);
     root.appendChild(wrap);
 

@@ -9,8 +9,11 @@
 <body>
   <header class="top">
     <div class="brand">
-      <img src="../icons/icon-48.png" alt="" width="24" height="24" />
-      <span>Vali</span>
+      <div id="mascot" class="mascot" aria-hidden="true"></div>
+      <div class="brand-text">
+        <span class="name">Vali</span>
+        <span id="mascotSays" class="says">At your service</span>
+      </div>
     </div>
     <button id="settingsBtn" class="icon-btn" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
@@ -74,12 +77,16 @@
     </form>
 
     <section id="list" class="list" aria-live="polite"></section>
-    <p id="empty" class="empty muted">Hand off an errand. Vali researches it in the background, shows where every fact comes from and prepares the next step for you to approve.</p>
+    <div id="empty" class="empty">
+      <img src="../mascot/idle.svg" alt="" width="144" height="144" />
+      <p class="muted">Hand off an errand. Vali researches it in the background, shows where every fact comes from and prepares the next step for you to approve.</p>
+    </div>
   </main>
 
   <template id="cardTpl">
     <article class="card">
       <button class="card-head">
+        <img class="still" alt="" width="52" height="52" />
         <span class="pill"></span>
         <span class="task-text"></span>
         <span class="meta muted"></span>
@@ -88,6 +95,7 @@
     </article>
   </template>
 
+  <script src="../lib/butler.js"></script>
   <script type="module" src="panel.js"></script>
 </body>
 </html>

@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="-10 -20 220 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Butler, your assistant">
+  <defs>
+    <linearGradient id="body-b27" x1="0" y1="0" x2=".3" y2="1">
+      <stop offset="0" stop-color="#d6c8f7"></stop><stop offset=".55" stop-color="#f4c7e4"></stop><stop offset="1" stop-color="#c3d4f9"></stop>
+    </linearGradient>
+    <linearGradient id="crest-b27" x1="0" y1="0" x2=".5" y2="1">
+      <stop offset="0" stop-color="#bccff9"></stop><stop offset=".5" stop-color="#d8c4f4"></stop><stop offset="1" stop-color="#f1c4e6"></stop>
+    </linearGradient>
+    <linearGradient id="rim-b27" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#bff0ff"></stop><stop offset=".5" stop-color="#ffc4ea"></stop><stop offset="1" stop-color="#fff2b0"></stop>
+    </linearGradient>
+    <linearGradient id="coat-b27" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#43466a"></stop><stop offset="1" stop-color="#23253b"></stop>
+    </linearGradient>
+    <linearGradient id="tie-b27" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f27aa5"></stop><stop offset="1" stop-color="#d9558a"></stop>
+    </linearGradient>
+    <linearGradient id="gold-b27" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff1b8"></stop><stop offset=".5" stop-color="#e6b54a"></stop><stop offset="1" stop-color="#fbe3a0"></stop>
+    </linearGradient>
+    <radialGradient id="glove-b27" cx=".35" cy=".3" r=".8">
+      <stop offset="0" stop-color="#ffffff"></stop><stop offset="1" stop-color="#e6e1f4"></stop>
+    </radialGradient>
+    <linearGradient id="silver-b27" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6f7fc"></stop><stop offset="1" stop-color="#c5cbe0"></stop>
+    </linearGradient>
+    <filter id="blur6-b27" x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="5"></feGaussianBlur></filter>
+    <filter id="blur2-b27" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"></feGaussianBlur></filter>
+    <clipPath id="bodyClip-b27"><circle cx="100" cy="112" r="50"></circle></clipPath>
+    <clipPath id="dome-b27"><path d="M-18 -1 A18 17 0 0 1 18 -1 Z"></path></clipPath>
+    <clipPath id="lapClip-b27"><rect x="-20" y="-28" width="40" height="19"></rect></clipPath>
+  </defs>
+
+  <ellipse data-p="shadow" cx="100" cy="196" rx="40" ry="7" fill="#b3a2da" filter="url(#blur6-b27)" transform="translate(100 196) scale(0.93 0.95) translate(-100 -196)" opacity="0.49"></ellipse>
+
+  <g data-p="float" transform="translate(0 -5.00)"><g data-p="lean" transform="rotate(0.00 100 162)"><g data-p="body" transform="translate(100 162) skewX(0.00) scale(1.00 1.00) translate(-100 -162)">
+    <path d="M68 150 Q58 164 56 175 Q68 171 80 160 Z" fill="url(#coat-b27)"></path>
+    <path d="M132 150 Q142 164 144 175 Q132 171 120 160 Z" fill="url(#coat-b27)"></path>
+
+    <circle cx="100" cy="112" r="50" fill="url(#body-b27)"></circle>
+    <g clip-path="url(#bodyClip-b27)">
+      <!-- bounce light from the floor -->
+      <ellipse cx="100" cy="160" rx="34" ry="9" fill="#bff0ff" opacity=".55" filter="url(#blur2-b27)"></ellipse>
+      <path d="M40 133 Q66 124 88 128 L100 153 L112 128 Q134 124 160 133 L160 175 L40 175 Z" fill="url(#coat-b27)"></path>
+      <path d="M88 128 Q100 125 112 128 L100 153 Z" fill="#ffffff"></path>
+      <path d="M88 128 L100 153 L112 128" fill="none" stroke="#565a86" stroke-width="2.5" stroke-linejoin="round"></path>
+      <ellipse cx="72" cy="146" rx="14" ry="5" fill="#fff" opacity=".14" transform="rotate(-20 72 146)"></ellipse>
+      <!-- pocket square -->
+      <path d="M120 136 L126 131 L129 137 L132 133 L133 140 L120 140 Z" fill="#ffd36e"></path>
+    </g>
+    <!-- iridescent rim -->
+    <circle cx="100" cy="112" r="48.6" fill="none" stroke="url(#rim-b27)" stroke-width="3" opacity=".7"></circle>
+    <circle cx="100" cy="141" r="1.8" fill="#23253b"></circle>
+    <circle cx="100" cy="147" r="1.8" fill="#23253b"></circle>
+    <ellipse cx="66" cy="114" rx="5" ry="13" fill="#fff" opacity=".45" filter="url(#blur2-b27)"></ellipse>
+    <rect x="61" y="99" width="7" height="3.2" rx="1.6" fill="#fff" opacity=".95" transform="rotate(-62 64 100)"></rect>
+    <circle cx="68" cy="94" r="1.6" fill="#fff"></circle>
+    <ellipse cx="100" cy="94" rx="38" ry="6" fill="#b3a2da" opacity=".35" filter="url(#blur2-b27)"></ellipse>
+
+    <g data-p="crest" transform="translate(0.00 0.00) rotate(0.00 100 90)">
+      <g data-p="earL" transform="rotate(-18.00 82 92)"><ellipse cx="72" cy="70" rx="22" ry="27" fill="url(#crest-b27)"></ellipse></g>
+      <g data-p="earR" transform="rotate(18.00 118 92)"><ellipse cx="128" cy="70" rx="22" ry="27" fill="url(#crest-b27)"></ellipse></g>
+      <circle cx="100" cy="68" r="27" fill="url(#crest-b27)"></circle>
+      <path d="M58 82 A27 27 0 0 1 60 52" fill="none" stroke="url(#rim-b27)" stroke-width="2.5" stroke-linecap="round" opacity=".8"></path>
+      <ellipse cx="82" cy="54" rx="12" ry="5.5" fill="#fff" opacity=".9" transform="rotate(-28 82 54)" filter="url(#blur2-b27)"></ellipse>
+      <circle cx="74" cy="64" r="2.2" fill="#fff" opacity=".95"></circle>
+      <path d="M0 -6 Q1 -1 6 0 Q1 1 0 6 Q-1 1 -6 0 Q-1 -1 0 -6 Z" fill="#fff" opacity=".9" transform="translate(88 50) scale(.45)"></path>
+      <ellipse cx="132" cy="58" rx="6" ry="3" fill="#fff" opacity=".5" transform="rotate(25 132 58)" filter="url(#blur2-b27)"></ellipse>
+      <g data-p="hat" transform="translate(0.00 5.00) rotate(-8.00 100 42) rotate(0.00 100 31)">
+        <!-- jaunty feather tucked in the band -->
+        <path d="M107 38 Q121 26 119 10 Q113 22 104 34 Z" fill="#ffd36e" stroke="#fff" stroke-width="1" stroke-linejoin="round"></path>
+        <path d="M106 35 Q114 26 117 15" fill="none" stroke="#fff" stroke-width="1" stroke-linecap="round" opacity=".8"></path>
+        <path d="M90.5 42 L89 20 Q100 17 111 20 L109.5 42 Z" fill="url(#coat-b27)"></path>
+        <path d="M90 36 L110 36 L109.7 40.5 L90.3 40.5 Z" fill="#f27aa5"></path>
+        <path d="M93.5 23 L94 33" stroke="#6a6e9c" stroke-width="2.4" stroke-linecap="round"></path>
+        <ellipse cx="100" cy="42" rx="17" ry="3.8" fill="url(#coat-b27)"></ellipse>
+      </g>
+    </g>
+
+    <g data-p="face" transform="translate(0.00 2.00)">
+      <ellipse cx="70" cy="117" rx="7.5" ry="4.5" data-p="blushL" fill="#ff9cc2" filter="url(#blur2-b27)" opacity="0.55"></ellipse>
+      <ellipse cx="130" cy="117" rx="7.5" ry="4.5" data-p="blushR" fill="#ff9cc2" filter="url(#blur2-b27)" opacity="0.55"></ellipse>
+      <g data-p="eyeL" transform="translate(84 104) scale(1 0.85) translate(-84 -104)" opacity="1.00"><ellipse cx="84" cy="104" rx="6.5" ry="7.5" fill="#1f2035"></ellipse><circle cx="82" cy="101" r="2.4" fill="#fff"></circle><circle cx="86.2" cy="106.6" r="1" fill="#fff"></circle><circle cx="86" cy="100" r=".7" fill="#bff0ff"></circle></g>
+      <g data-p="eyeR" transform="translate(116 104) scale(1 0.85) translate(-116 -104)" opacity="1.00"><ellipse cx="116" cy="104" rx="6.5" ry="7.5" fill="#1f2035"></ellipse><circle cx="114" cy="101" r="2.4" fill="#fff"></circle><circle cx="118.2" cy="106.6" r="1" fill="#fff"></circle><circle cx="118" cy="100" r=".7" fill="#bff0ff"></circle></g>
+      <path data-p="happy" d="M77 106 Q84 98 91 106 M109 106 Q116 98 123 106" fill="none" stroke="#1f2035" stroke-width="3.2" stroke-linecap="round" opacity="0.00"></path>
+      <path data-p="squint" d="M79 99 L88 104 L79 109 M121 99 L112 104 L121 109" fill="none" stroke="#1f2035" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.00"></path>
+      <path data-p="browL" d="M79 91 L89 91" stroke="#8273b8" stroke-width="2.6" stroke-linecap="round" opacity=".75" transform="translate(0 1.00) rotate(-8.80 84 91)"></path>
+      <path data-p="browR" d="M111 91 L121 91" stroke="#8273b8" stroke-width="2.6" stroke-linecap="round" opacity=".75" transform="translate(0 1.00) rotate(8.80 116 91)"></path>
+      <path d="M96.5 111 Q100 109.5 103.5 111 Q101 116 100 116 Q99 116 96.5 111 Z" fill="#ffb18e" stroke="#ffb18e" stroke-width="1.5" stroke-linejoin="round"></path>
+      <path data-p="smile" d="M95 119.5 Q100 123.5 105 119.5" fill="none" stroke="#1f2035" stroke-width="2.4" stroke-linecap="round" opacity="0.00"></path>
+      <path data-p="mouthO" d="M100 118 m-2.6 0 a2.6 3.2 0 1 0 5.2 0 a2.6 3.2 0 1 0 -5.2 0" fill="#1f2035" opacity="0.00"></path>
+      <path data-p="sweat" d="M136 86 Q141 94 136 98 Q131 94 136 86 Z" fill="#a9d6f2" opacity="0.90" transform="translate(0 0.00)"></path>
+      <!-- monocle on a chain (pops off on error) -->
+      <g data-p="monocle" transform="translate(-4.00 20.00) rotate(28.00 116 104)">
+        <path d="M126 108 Q130 122 114 130" fill="none" stroke="url(#gold-b27)" stroke-width="1.4" stroke-dasharray="2 1.6" stroke-linecap="round"></path>
+        <circle cx="116" cy="104" r="10.5" fill="#fff" fill-opacity=".16" stroke="url(#gold-b27)" stroke-width="2.4"></circle>
+        <path d="M109.5 99 A8 8 0 0 1 116 95.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".9"></path>
+      </g>
+    </g>
+
+    <g data-p="tie" transform="rotate(11.75 100 130)">
+      <path d="M100 130 L89 124 Q87 130 89 136 Z" fill="url(#tie-b27)" stroke="#d9558a" stroke-width="1.5" stroke-linejoin="round"></path>
+      <path d="M100 130 L111 124 Q113 130 111 136 Z" fill="url(#tie-b27)" stroke="#d9558a" stroke-width="1.5" stroke-linejoin="round"></path>
+      <rect x="96.6" y="126.6" width="6.8" height="6.8" rx="2.4" fill="#d9558a"></rect>
+      <circle cx="92" cy="128" r="1" fill="#fff" opacity=".8"></circle><circle cx="92.5" cy="132" r=".9" fill="#fff" opacity=".7"></circle>
+      <circle cx="108" cy="128" r="1" fill="#fff" opacity=".8"></circle><circle cx="107.5" cy="132" r=".9" fill="#fff" opacity=".7"></circle>
+    </g>
+
+    <g data-p="trayC" opacity="0.00" transform="translate(91.00 122.00) rotate(0.00) scale(0.60)"><g>
+      <ellipse cx="0" cy="0" rx="24" ry="4.5" fill="#b9c0d8"></ellipse>
+      <ellipse cx="0" cy="-1.5" rx="23" ry="3.6" fill="#f3f5fb"></ellipse>
+      <path d="M-18 -1 A18 17 0 0 1 18 -1 Z" fill="url(#silver-b27)"></path>
+      <g clip-path="url(#dome-b27)"><rect data-p="shimmer" x="-60.00" y="-20" width="7" height="22" fill="#fff" opacity=".95" transform="skewX(-20)"></rect></g>
+      <path d="M-11 -6 A12 11 0 0 1 -4 -13" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"></path>
+      <circle cx="0" cy="-19" r="3.2" fill="#ffd36e"></circle>
+    </g></g>
+    <g data-p="trayK" opacity="0.00" transform="translate(91.00 122.00) rotate(0.00) scale(0.60)"><g>
+      <ellipse cx="0" cy="0" rx="24" ry="4.5" fill="#b9c0d8"></ellipse>
+      <ellipse cx="0" cy="-1.5" rx="23" ry="3.6" fill="#f3f5fb"></ellipse>
+      <g transform="rotate(-8)">
+        <rect x="-11" y="-17" width="22" height="14" rx="2" fill="#fffaf5" stroke="#eadff0" stroke-width="1"></rect>
+        <rect x="-7" y="-13" width="10" height="1.8" rx=".9" fill="#d6cde3"></rect>
+        <rect x="-7" y="-9.5" width="7" height="1.8" rx=".9" fill="#d6cde3"></rect>
+        <path d="M0 4 C-7 -1 -5 -8 0 -4.5 C5 -8 7 -1 0 4 Z" fill="#f27aa5" transform="translate(6 -7) scale(.55)"></path>
+      </g>
+    </g></g>
+    <g data-p="glass" opacity="0.00" transform="translate(109.00 131.00) rotate(0.00) scale(0.60)">
+      <path d="M0 0 L7 -9" stroke="#43466a" stroke-width="4.5" stroke-linecap="round"></path>
+      <circle cx="12" cy="-16" r="9" fill="#e3f1fb" fill-opacity=".85" stroke="url(#gold-b27)" stroke-width="3.5"></circle>
+      <path d="M7 -18.5 A6 6 0 0 1 12 -22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"></path>
+    </g>
+
+    <!-- WORK: floating laptop (code scrolls, progress fills) -->
+    <g data-p="lap" opacity="0.00" transform="translate(168 166.00) scale(0.60)">
+      <path d="M-27 0 L27 0 L31 6 Q31 8 29 8 L-29 8 Q-31 8 -31 6 Z" fill="url(#silver-b27)" stroke="#b9c0d8" stroke-width="1"></path>
+      <path d="M-9 4 L9 4" stroke="#b9c0d8" stroke-width="1.6" stroke-linecap="round"></path>
+      <rect x="-23" y="-31" width="46" height="31" rx="3.5" fill="#23253b" stroke="#565a86" stroke-width="1.5"></rect>
+      <g clip-path="url(#lapClip-b27)"><g data-p="code" transform="translate(0 0.00)">
+        <rect x="-17" y="-26" width="22" height="2" rx="1" fill="#bff0ff" opacity=".9"></rect><rect x="-13" y="-22" width="14" height="2" rx="1" fill="#ffc4ea" opacity=".9"></rect><rect x="-13" y="-18" width="28" height="2" rx="1" fill="#ffd36e" opacity=".9"></rect><rect x="-9" y="-14" width="18" height="2" rx="1" fill="#fff2b0" opacity=".9"></rect><rect x="-13" y="-10" width="10" height="2" rx="1" fill="#ffc4ea" opacity=".9"></rect><rect x="-17" y="-6" width="24" height="2" rx="1" fill="#bff0ff" opacity=".9"></rect><rect x="-17" y="-2" width="22" height="2" rx="1" fill="#bff0ff" opacity=".9"></rect><rect x="-13" y="2" width="14" height="2" rx="1" fill="#ffc4ea" opacity=".9"></rect><rect x="-13" y="6" width="28" height="2" rx="1" fill="#ffd36e" opacity=".9"></rect><rect x="-9" y="10" width="18" height="2" rx="1" fill="#fff2b0" opacity=".9"></rect><rect x="-13" y="14" width="10" height="2" rx="1" fill="#ffc4ea" opacity=".9"></rect><rect x="-17" y="18" width="24" height="2" rx="1" fill="#bff0ff" opacity=".9"></rect>
+      </g></g>
+      <rect x="-18" y="-6" width="36" height="2.4" rx="1.2" fill="#3a3d5c"></rect>
+      <rect data-p="prog" x="-18" y="-6" width="0.00" height="2.4" rx="1.2" fill="#f27aa5"></rect>
+      <path d="M-20 -29 L-4 -29" stroke="#fff" stroke-width="1.2" stroke-linecap="round" opacity=".25"></path>
+    </g>
+
+    <!-- TEACH: floating app window he walks you through -->
+    <g data-p="scr" opacity="0.00" transform="translate(176 18.00) scale(0.60)">
+      <rect x="-26" y="-20" width="52" height="40" rx="5" fill="#fff" stroke="#ffc4ea" stroke-width="1.6"></rect>
+      <path d="M-26 -15 A5 5 0 0 1 -21 -20 L21 -20 A5 5 0 0 1 26 -15 L26 -13 L-26 -13 Z" fill="#d8c4f4"></path>
+      <circle cx="-21.5" cy="-16.5" r="1.3" fill="#ff8f8f"></circle><circle cx="-17.5" cy="-16.5" r="1.3" fill="#ffd36e"></circle><circle cx="-13.5" cy="-16.5" r="1.3" fill="#7fd8a4"></circle>
+      
+        <rect x="-21" y="-5.75" width="22" height="3.5" rx="1.75" fill="#e4e0f0"></rect>
+        <rect x="6" y="-6.5" width="15" height="5" rx="2.5" fill="#d8c4f4"></rect>
+        <rect x="-21" y="3.25" width="16" height="3.5" rx="1.75" fill="#e4e0f0"></rect>
+        <rect x="6" y="2.5" width="15" height="5" rx="2.5" fill="#d8c4f4"></rect>
+        <rect x="-21" y="12.25" width="19" height="3.5" rx="1.75" fill="#e4e0f0"></rect>
+        <rect x="6" y="11.5" width="15" height="5" rx="2.5" fill="#d8c4f4"></rect>
+      <rect data-p="hilite" x="4.5" y="-8" width="18" height="8" rx="4" fill="none" stroke="#f27aa5" stroke-width="1.6" opacity="0"></rect>
+      <circle data-p="ripple" r="2" fill="none" stroke="#f27aa5" stroke-width="1.4" opacity="0"></circle>
+      <path data-p="cursor" d="M0 0 L0 9 L2.6 6.6 L4.6 10.6 L6.2 9.8 L4.3 6 L7.6 5.8 Z" fill="#1f2035" stroke="#fff" stroke-width="1" stroke-linejoin="round" opacity="0"></path>
+      <g data-p="check" opacity="0.00" transform="scale(0.60)">
+        <circle r="12" fill="#e7f8ef" stroke="#3fb27f" stroke-width="1.5"></circle>
+        <path data-p="checkPath" d="M-6 0 L-1.5 4.5 L6.5 -4.5" fill="none" stroke="#2f9a6a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="20" stroke-dashoffset="20.00"></path>
+      </g>
+      <g data-p="dots" opacity="0.00">
+        <circle data-p="dot0" cx="-6" cy="25" r="2" fill="#f27aa5"></circle>
+        <circle data-p="dot1" cx="0" cy="25" r="2" fill="#f27aa5"></circle>
+        <circle data-p="dot2" cx="6" cy="25" r="2" fill="#f27aa5"></circle>
+      </g>
+    </g>
+
+    <!-- LISTEN: note pad with lines that write themselves -->
+    <g data-p="pad" opacity="0.00" transform="translate(107.00 128.00) rotate(-8) scale(0.60)">
+      <rect x="-10" y="-26" width="20" height="24" rx="2.5" fill="#fffdf6" stroke="#e6dcc8" stroke-width="1"></rect>
+      <path d="M-6 -26 v-2 M-2 -26 v-2 M2 -26 v-2 M6 -26 v-2" stroke="#b9c0d8" stroke-width="1.4" stroke-linecap="round"></path>
+      <rect data-p="padL0" x="-7" y="-20" width="0.00" height="1.8" rx=".9" fill="#8273b8"></rect>
+      <rect data-p="padL1" x="-7" y="-15" width="0.00" height="1.8" rx=".9" fill="#8273b8"></rect>
+      <rect data-p="padL2" x="-7" y="-10" width="0.00" height="1.8" rx=".9" fill="#8273b8"></rect>
+      <g data-p="pencil" transform="translate(-7.00 -18.50)"><path d="M0 0 L4 -10 L6.5 -9 L2.5 1 Z" fill="#ffd36e"></path><path d="M0 0 L2.5 1 L0.6 2.6 Z" fill="#1f2035"></path><path d="M4 -10 L6.5 -9 L7.2 -10.8 L4.7 -11.8 Z" fill="#ff9cc2"></path></g>
+    </g>
+
+    <!-- TEACH: pointer baton -->
+    <g data-p="baton" opacity="0.00" transform="translate(109.00 131.00) rotate(26.57)">
+      <path d="M0 0 L0 -28" stroke="#43466a" stroke-width="2.6" stroke-linecap="round"></path>
+      <circle cy="-29" r="2.6" fill="#ffd36e" stroke="#fff" stroke-width="1"></circle>
+    </g>
+
+    <g data-p="napkin" transform="translate(109.00 136.00)" opacity="1.00">
+      <path d="M-9 0 L9 0 L10.5 17 Q5 13.5 0 18 Q-5 13.5 -10.5 17 Z" fill="#fff" stroke="#e6e0f2" stroke-width="1.2" stroke-linejoin="round"></path>
+      <path d="M-2.5 1 L-3.5 14" stroke="#ebe6f4" stroke-width="1.5" stroke-linecap="round"></path>
+    </g>
+
+    <g data-p="gloveR" transform="translate(91.00 131.00)"><circle cx="-5.5" cy="-4" r="3.8" fill="url(#glove-b27)" stroke="#dcd5ee" stroke-width="1"></circle>
+      <circle r="8.5" fill="url(#glove-b27)" stroke="#dcd5ee" stroke-width="1"></circle>
+      <ellipse cx="-2.5" cy="-3.5" rx="3" ry="2" fill="#fff" opacity=".9"></ellipse></g>
+    <g data-p="gloveL" transform="translate(109.00 131.00)"><circle cx="5.5" cy="-4" r="3.8" fill="url(#glove-b27)" stroke="#dcd5ee" stroke-width="1"></circle>
+      <circle r="8.5" fill="url(#glove-b27)" stroke="#dcd5ee" stroke-width="1"></circle>
+      <ellipse cx="-2.5" cy="-3.5" rx="3" ry="2" fill="#fff" opacity=".9"></ellipse></g>
+
+    <path data-p="spark1" d="M0 -6 Q1 -1 6 0 Q1 1 0 6 Q-1 1 -6 0 Q-1 -1 0 -6 Z" fill="#ffd36e" opacity="0.00" transform="translate(134 18.00) scale(0.40)"></path>
+    <path data-p="spark2" d="M0 -6 Q1 -1 6 0 Q1 1 0 6 Q-1 1 -6 0 Q-1 -1 0 -6 Z" fill="#f27aa5" opacity="0.00" transform="translate(150 40.00) scale(0.30)"></path>
+  </g></g></g>
+
+  <!-- free-floating fx (not squashed with the body) -->
+  <g data-p="think">
+    <circle data-p="think0" cx="148" cy="62" r="3" fill="#fff" stroke="#ffc4ea" stroke-width="1.2" opacity="0.00" transform="translate(0.00 -5.00)"></circle>
+    <circle data-p="think1" cx="158" cy="48" r="4.5" fill="#fff" stroke="#ffc4ea" stroke-width="1.2" opacity="0.00" transform="translate(0.00 -5.00)"></circle>
+    <circle data-p="think2" cx="172" cy="30" r="7" fill="#fff" stroke="#ffc4ea" stroke-width="1.2" opacity="0.00" transform="translate(0.00 -5.00)"></circle>
+  </g>
+  <rect data-p="conf0" x="-2.5" y="-4" width="5" height="8" rx="1.5" fill="#f27aa5" opacity="0"></rect><rect data-p="conf1" x="-2.5" y="-4" width="5" height="8" rx="1.5" fill="#ffd36e" opacity="0"></rect><rect data-p="conf2" x="-2.5" y="-4" width="5" height="8" rx="1.5" fill="#bff0ff" opacity="0"></rect><rect data-p="conf3" x="-2.5" y="-4" width="5" height="8" rx="1.5" fill="#ffc4ea" opacity="0"></rect><rect data-p="conf4" x="-2.5" y="-4" width="5" height="8" rx="1.5" fill="#ff9cc2" opacity="0"></rect><rect data-p="conf5" x="-2.5" y="-4" width="5" height="8" rx="1.5" fill="#d9558a" opacity="0"></rect>
+  <path data-p="heart0" d="M0 4 C-7 -1 -5 -8 0 -4.5 C5 -8 7 -1 0 4 Z" fill="#ff9cc2" opacity="0"></path>
+  <path data-p="heart1" d="M0 4 C-7 -1 -5 -8 0 -4.5 C5 -8 7 -1 0 4 Z" fill="#f27aa5" opacity="0"></path>
+  <path data-p="heart2" d="M0 4 C-7 -1 -5 -8 0 -4.5 C5 -8 7 -1 0 4 Z" fill="#ffd36e" opacity="0"></path>
+</svg>
