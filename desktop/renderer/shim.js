@@ -9,8 +9,14 @@ const storage = area => ({
 window.chrome = {
   storage: { local: storage('local'), session: storage('session'), onChanged: { addListener: fn => listeners.add(fn) } },
   runtime: { sendMessage: msg => window.vali.call('message', msg) },
-  tabs: { query: async () => [], create: ({ url }) => window.vali.call('external', url), onActivated: { addListener() {} }, onUpdated: { addListener() {} } }
+  // The browser tab in front of Vali (Chrome or Safari) stands in for the extension's active tab: "Use this page".
+  tabs: {
+    query: async () => { const tab = await window.vali.call('frontTab').catch(() => null); return tab ? [{ id: 'front', url: tab.url, title: tab.title }] : []; },
+    create: ({ url }) => window.vali.call('external', url), onActivated: { addListener: fn => tabListeners.add(fn) }, onUpdated: { addListener() {} }
+  }
 };
+const tabListeners = new Set();
+window.addEventListener('focus', () => { for (const fn of tabListeners) fn({}); });
 window.fetch = async (url, options = {}) => {
   const response = await window.vali.call('request', { url: String(url), method: options.method || 'GET', body: options.body });
   const body = response.base64 ? Uint8Array.from(atob(response.base64), c => c.charCodeAt(0)) : response.body;

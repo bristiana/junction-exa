@@ -10,17 +10,48 @@
     "prepare": "node scripts/prepare.mjs",
     "prestart": "npm run prepare",
     "start": "electron .",
+    "pretest": "npm run prepare",
     "test": "node --test test/*.test.mjs",
-    "prepack": "npm run prepare",
-    "pack": "npm run prepare && electron-builder --dir",
-    "dist": "npm run prepare && electron-builder --mac dmg"
+    "icon": "node scripts/icon.mjs",
+    "live-check": "npm run prepare && node scripts/live-check.mjs",
+    "pack": "npm run prepare && electron-builder --mac dir",
+    "dist": "npm run prepare && npm run icon && electron-builder --mac dmg"
   },
-  "devDependencies": { "electron": "latest", "electron-builder": "latest" },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
   "build": {
     "appId": "fi.vali.desktop",
     "productName": "Vali",
-    "directories": { "output": "dist" },
-    "files": ["main.mjs", "bridge.cjs", "logic.mjs", "renderer/**/*", "vendor/**/*"],
-    "mac": { "category": "public.app-category.productivity", "target": ["dmg"] }
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.mjs",
+      "api.mjs",
+      "mac.mjs",
+      "logic.mjs",
+      "bridge.cjs",
+      "renderer/**/*",
+      "vendor/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.icns",
+      "identity": null,
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Vali listens while you hold the talk shortcut or press the microphone, so you can say your errand.",
+        "NSAppleEventsUsageDescription": "Vali reads the title and address of the browser tab in front, and copies the text you select when you press Ask Vali about this."
+      }
+    },
+    "dmg": {
+      "title": "Vali"
+    }
   }
 }

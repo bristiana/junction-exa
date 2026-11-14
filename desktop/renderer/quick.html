@@ -1,1 +1,14 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'"><title>Ask Vali</title><link rel="stylesheet" href="quick.css"></head><body><form><label for="errand">What should I take care of?</label><input id="errand" placeholder="Book a sauna in Helsinki…" autofocus maxlength="12000" required><div><span>Enter to send · Esc to close</span><button>Send</button></div><p id="error" role="alert"></p></form><script src="quick.js"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:"><title>Ask Vali</title><link rel="stylesheet" href="quick.css"></head>
+<body><div id="box" class="box">
+  <form id="form" autocomplete="off">
+    <img class="face" src="../vendor/mascot/idle.svg" alt="" width="40" height="40">
+    <input id="errand" placeholder="What should I take care of?" aria-label="What should I take care of?" maxlength="12000" autofocus>
+    <button id="mic" type="button" class="mic" aria-label="Talk to Vali" title="Talk (hold ⌥⇧Space)"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-5a3.5 3.5 0 0 0-7 0v5A3.5 3.5 0 0 0 12 15Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.9V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.6a6 6 0 0 0 5-5.9Z"/></svg></button>
+  </form>
+  <div id="level" class="level" hidden><i></i></div>
+  <div id="chips" class="chips" hidden></div>
+  <ul id="suggestions" class="suggestions" role="listbox" aria-label="Suggestions"></ul>
+  <p id="note" class="note" role="status" hidden></p>
+  <footer><span>↵ Send</span><span>⌥⇧Space Talk</span><span>Drop a letter here</span><span>Esc Close</span></footer>
+  <div id="drop" class="drop" hidden>Drop the letter to send it to Vali</div>
+</div><script type="module" src="quick.js"></script></body></html>
