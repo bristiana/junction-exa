@@ -1,6 +1,6 @@
 # Vali: demo
 
-The story: Bogdan, a master's student from Romania, lands in Helsinki on Friday for Junction. He has no Finnish ID, no HSL app and no idea where anything is. He messages Vali on WhatsApp and Vali handles the rest.
+The story: Bogdan is a master's student from Romania at Aalto, a few weeks into life in Espoo. He is still fighting the newcomer errands (bank, EU registration, a cheaper flat, the HSL student price) and this weekend he is also at Junction (what to submit, what to bring, a sauna after). He messages Vali on WhatsApp and Vali handles both.
 
 Judging (20% each): use of Exa, usefulness, clarity of sources, originality, works on live queries. Tech challenges: Modal, Aiven, ElevenLabs, Codex.
 
@@ -10,8 +10,9 @@ Every scenario runs on production with the demo account. Times are measured on p
 
 | # | Bogdan sends (WhatsApp unless noted) | What Vali does | Ends at | Time |
 |---|---|---|---|---|
-| 1 | `I land at Helsinki Airport on Friday for the Junction hackathon at Dipoli in Otaniemi. How do I get there and which HSL ticket do I buy?` | Exa search, reads HSL pages | Train and metro or light rail 15, ABC ticket, HSL link | about 20 s |
+| 1 | `I study my master's at Aalto. How do I get the HSL student discount on my travel card?` | Exa Agent research on HSL and Aalto pages | Steps for the student status in the HSL app, documents, links | about 35 s |
 | 2 | `How can I open a bank account without a Finnish personal ID?` | Exa Agent research, every sentence checked on the page | Basic account first, documents to bring, Danske, Nordea, DVV links | about 35 s |
+| 2b | `I'm going to the Junction hackathon at Dipoli this weekend. What should I bring and can I sleep there?` | Exa reads the Junction pages | What to bring, sleeping rules, link | about 30 s |
 | 3 | `I am a Romanian student moving to Espoo. What do I have to register as an EU citizen, and where?` | Exa Agent research on Migri and DVV | Register the EU right of residence at Migri, then the address at DVV, with links | about 40 s |
 | 3b | `Pharmacy open on Sunday near Otaniemi` | Exa search | Otaniemi pharmacy closed Sunday, Aino Apteekki in Tapiola 12-18 | about 15 s |
 | 4 | `Book me a public sauna for Sunday at 17:30 after the hackathon` then tap **Book it** | Cloud browser on Modal fills the real Kulttuurisauna form, asks once for name and email | Picture of the filled form with Approve and Stop | about 60 s |
@@ -20,13 +21,13 @@ Every scenario runs on production with the demo account. Times are measured on p
 | 7 | Web dashboard (demo link) | Everything from WhatsApp is already there | Errands, Exa searches, pages read, facts confirmed, cost; click an errand to see the chat, what Vali opened and where it stands | live |
 | 8 | Chrome, on the Junction submission form: ask the Vali in the corner `What is the limit for the punchline?` | Exa reads the page and the rules | The answer next to the field | about 10 s |
 
-Real booking (scenario 4, only in the recording): Sunday 15 Nov 17:30 at Kulttuurisauna, pay €17 on site. Bogdan taps Approve himself, then shows the confirmation email. In every other run, tap Stop.
+Real booking (scenario 4, only in the recording): Sunday 15 Nov 17:30 at Kulttuurisauna, pay €17 on site. Claude taps Approve on this one booking (allowed by Bogdan), then shows the confirmation email. In every other run, tap Stop.
 
 ## 2-minute video
 
 | Time | Shot | Say |
 |---|---|---|
-| 0:00-0:10 | WhatsApp, phone format: Bogdan's first message (1) | "Bogdan just landed from Romania for Junction. No Finnish ID, no HSL app." |
+| 0:00-0:10 | WhatsApp, phone format: Bogdan's first message (1) | "Bogdan studies at Aalto. Still no Finnish ID, still paying full price on HSL, and this weekend: Junction." |
 | 0:10-0:25 | Vali reacts 👀, answers in one sentence with the HSL link | "Vali reads the live web with Exa and answers with the exact source." |
 | 0:25-0:40 | Bank question (2): answer with Danske, Nordea, DVV | "Every sentence is checked against a quote on the page." |
 | 0:40-1:05 | Sauna (4): Book it, the question, the filled-form picture, Approve | "A cloud browser on Modal fills the real form. Nothing is sent until he taps Approve." |

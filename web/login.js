@@ -48,7 +48,7 @@ export function renderLogin(next = '#/dashboard') {
 
   const others = [];
   if (session.hasDemo()) {
-    others.push(choice('Open the demo account', 'Bogdan, a student from Romania, just landed for Junction. See what Vali did for him.', () => { session.useDemo(); go(); }, true));
+    others.push(choice('Open the demo account', 'Bogdan, a master’s student at Aalto, settling in and at Junction. See what Vali did for him.', () => { session.useDemo(); go(); }, true));
   } else if (session.hasAccount()) {
     others.push(choice('Continue on this browser', 'Your errands so far, no sign-in needed.', go));
   }
