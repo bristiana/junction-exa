@@ -127,8 +127,8 @@ test("the server gets redacted page text and no typed field values", () => {
 
 test("server URLs are normalized", () => {
   assert.equal(normalizeBaseUrl(" 127.0.0.1:8787/ "), "http://127.0.0.1:8787");
-  assert.equal(normalizeBaseUrl("hoida.example.modal.run"), "https://hoida.example.modal.run");
-  assert.equal(normalizeBaseUrl("https://api.example.com/hoida/"), "https://api.example.com/hoida");
+  assert.equal(normalizeBaseUrl("vali.example.modal.run"), "https://vali.example.modal.run");
+  assert.equal(normalizeBaseUrl("https://api.example.com/vali/"), "https://api.example.com/vali");
   assert.equal(normalizeBaseUrl(""), "");
   assert.throws(() => normalizeBaseUrl("ftp://example.com"));
 });

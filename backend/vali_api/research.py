@@ -190,7 +190,7 @@ def build_query(task, page=None, profile=None):
 
 def build_run_request(task, page=None, profile=None, effort='low'):
     return dict(query=build_query(task, page, profile), systemPrompt=SYSTEM_PROMPT,
-                effort=effort, outputSchema=output_schema(bool((page or {}).get('fields'))), metadata={'app': 'hoida'})
+                effort=effort, outputSchema=output_schema(bool((page or {}).get('fields'))), metadata={'app': 'vali'})
 
 
 FIND_SCHEMA = {'type': 'object', 'properties': {

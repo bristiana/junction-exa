@@ -20,7 +20,7 @@ class AgentHooks:
 
 
 class ConsoleHooks(AgentHooks):
-    def __init__(self, folder: str = 'hoida-shots'):
+    def __init__(self, folder: str = 'vali-shots'):
         self.folder = Path(folder)
         self.count = 0
         super().__init__(self._step, self._approve, lambda: False, ask_user=self._ask)

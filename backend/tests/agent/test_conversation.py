@@ -1,6 +1,6 @@
 from types import SimpleNamespace as NS
 import pytest
-from hoida_agent import AgentHooks, run_browser_agent
+from vali_agent import AgentHooks, run_browser_agent
 
 
 class Responses:

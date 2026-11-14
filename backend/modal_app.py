@@ -2,20 +2,20 @@
 from pathlib import Path
 import modal
 
-app = modal.App('hoida')
+app = modal.App('vali')
 image = (
     modal.Image.debian_slim(python_version='3.13')
     .pip_install_from_requirements(str(Path(__file__).with_name('requirements.txt')))
     .run_commands('playwright install --with-deps chromium')
-    .add_local_python_source('hoida_api', 'hoida_agent', 'hoida_media', 'hoida_wa')
+    .add_local_python_source('vali_api', 'vali_agent', 'vali_media', 'vali_wa')
 )
-secret = modal.Secret.from_name('hoida')
+secret = modal.Secret.from_name('vali')
 
 
 def worker_app():
-    from hoida_api.app import create_app
-    from hoida_api.config import Config
-    from hoida_api.store import make_store
+    from vali_api.app import create_app
+    from vali_api.config import Config
+    from vali_api.store import make_store
     config = Config()
     if not config.database_url:
         raise RuntimeError('DATABASE_URL is required for shared Modal worker state')
@@ -25,10 +25,10 @@ def worker_app():
 
 
 def spawn_browser_session(tid, goal, url, profile):
-    # The sandbox is its own app ("hoida-sandbox", modal_sandbox.py) so the two deploy independently.
+    # The sandbox is its own app ("vali-sandbox", modal_sandbox.py) so the two deploy independently.
     # Falls back to this app's copy while the sandbox app is not deployed.
     try:
-        return modal.Function.from_name('hoida-sandbox', 'browser_session').spawn(tid, goal, url, profile)
+        return modal.Function.from_name('vali-sandbox', 'browser_session').spawn(tid, goal, url, profile)
     except modal.exception.NotFoundError:
         return browser_session.spawn(tid, goal, url, profile)
 
@@ -45,7 +45,7 @@ def web():
 
 @app.function(image=image, secrets=[secret], timeout=900)
 def research_poller(task_id: str):
-    from hoida_api.app import research_poller_loop
+    from vali_api.app import research_poller_loop
     application = worker_app()
     try:
         research_poller_loop(task_id, application)
@@ -56,7 +56,7 @@ def research_poller(task_id: str):
 
 @app.function(image=image, secrets=[secret], timeout=900, cpu=2, memory=4096)
 def browser_session(task_id: str, goal: str, start_url: str, profile: dict):
-    from hoida_api.app import run_browser_session
+    from vali_api.app import run_browser_session
     application = worker_app()
     try:
         # The shared runner imports the browser agent lazily and persists its hooks.

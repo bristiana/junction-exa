@@ -2,8 +2,8 @@ import json
 
 import httpx
 
-from hoida_api.jev import JEV_URL, MODES, JevClient
-from hoida_api.router import route
+from vali_api.jev import JEV_URL, MODES, JevClient
+from vali_api.router import route
 
 
 def client(handler):

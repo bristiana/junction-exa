@@ -217,13 +217,13 @@ export function capturePage(mode) {
       seenRadio.add(key);
       const group = el.name ? [...document.querySelectorAll(`input[type=radio][name="${CSS.escape(el.name)}"]`)] : [el];
       const id = "h" + ++n;
-      group.forEach((r) => r.setAttribute("data-hoida-id", id));
+      group.forEach((r) => r.setAttribute("data-vali-id", id));
       const legend = el.closest("fieldset")?.querySelector("legend")?.innerText;
       fields.push({ id, type: "radio", label: clip(legend || el.name, 120), options: group.map((r) => clip(labelOf(r) || r.value, 60)), required: el.required });
       continue;
     }
     const id = "h" + ++n;
-    el.setAttribute("data-hoida-id", id);
+    el.setAttribute("data-vali-id", id);
     const f = { id, type, label: clip(labelOf(el), 120), required: !!el.required };
     if (el.localName === "select") f.options = [...el.options].map((o) => clip(o.text, 60)).filter(Boolean);
     if (el.value && type !== "checkbox") f.current = clip(el.value, 60);
@@ -259,13 +259,13 @@ export function fillPage(values) {
     el.style.outline = "2px solid #6d5dfc";
     el.style.outlineOffset = "2px";
     el.style.backgroundColor = "rgba(109, 93, 252, 0.08)";
-    el.setAttribute("data-hoida-filled", "1");
+    el.setAttribute("data-vali-filled", "1");
   };
 
   let filled = 0;
   const skipped = [];
   for (const { field_id, value } of values || []) {
-    const els = [...document.querySelectorAll(`[data-hoida-id="${CSS.escape(field_id)}"]`)];
+    const els = [...document.querySelectorAll(`[data-vali-id="${CSS.escape(field_id)}"]`)];
     const el = els[0];
     if (!el || value == null) { skipped.push(field_id); continue; }
     const v = String(value);
@@ -292,7 +292,7 @@ export function fillPage(values) {
     }
     filled++;
   }
-  const first = document.querySelector("[data-hoida-filled]");
+  const first = document.querySelector("[data-vali-filled]");
   first?.scrollIntoView({ behavior: "smooth", block: "center" });
   return { filled, skipped };
 }

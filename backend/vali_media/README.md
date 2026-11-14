@@ -1,7 +1,7 @@
 # Vali media helpers
 
 Import `upload_screenshot`, `thumbnail_url`, `transcribe`, `speak` and
-`read_letter` from `hoida_media`. These synchronous helpers have no application,
+`read_letter` from `vali_media`. These synchronous helpers have no application,
 store or deployment dependencies. Call them in a worker when serving async
 requests. Voice functions accept a keyword-only `transport` for offline tests.
 
@@ -19,7 +19,7 @@ Configuration:
 - `ELEVENLABS_VOICE_ID`: optional default voice, overridable by `speak`'s
   `voice_id`; otherwise uses the public documentation's example voice.
 - `ANTHROPIC_API_KEY`: used by the official SDK for letter reading.
-  `HOIDA_MODEL` defaults to `claude-opus-5-5`.
+  `VALI_MODEL` defaults to `claude-opus-5-5`.
 
 ## API verification
 

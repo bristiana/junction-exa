@@ -2,8 +2,8 @@ import hashlib
 import hmac
 import pytest
 
-from hoida_wa.parse import parse_command
-from hoida_wa.webhook import parse_webhook, verify_challenge, verify_signature
+from vali_wa.parse import parse_command
+from vali_wa.webhook import parse_webhook, verify_challenge, verify_signature
 
 
 def test_webhook(webhook_payload):

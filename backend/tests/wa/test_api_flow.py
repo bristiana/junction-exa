@@ -5,10 +5,10 @@ import secrets
 import httpx
 import pytest
 
-from hoida_wa.api import GraphAPIClient, GraphAPIError, GraphAPITransportError
-from hoida_wa.flow import WhatsAppFlow
-from hoida_wa.render import render_help, render_linked, render_link_failed, render_result
-from hoida_wa.webhook import IncomingMessage
+from vali_wa.api import GraphAPIClient, GraphAPIError, GraphAPITransportError
+from vali_wa.flow import WhatsAppFlow
+from vali_wa.render import render_help, render_linked, render_link_failed, render_result
+from vali_wa.webhook import IncomingMessage
 
 
 NUMBER = "+358401234567"
@@ -261,8 +261,8 @@ def test_upload_and_send_image_by_id():
 
 
 def test_channel_receipt_failure_logs_safely(caplog):
-    from hoida_api.wa_channel import ChannelAPI
-    from hoida_api.config import Config
+    from vali_api.wa_channel import ChannelAPI
+    from vali_api.config import Config
     api = ChannelAPI(Config(whatsapp_token='test', whatsapp_phone_number_id='phone'))
     async def fail(*args, **kwargs):
         raise GraphAPIError(400, 99)

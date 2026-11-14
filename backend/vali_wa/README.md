@@ -1,6 +1,6 @@
 # Vali WhatsApp channel
 
-Requires Python 3.13 and `httpx`. Import `hoida_wa` from the backend directory.
+Requires Python 3.13 and `httpx`. Import `vali_wa` from the backend directory.
 This package has no dependency on the application or media packages.
 
 `parse_webhook(payload)` returns a `ParsedWebhook` with `messages` and `statuses`.

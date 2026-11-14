@@ -19,7 +19,7 @@ const host = (u) => {
 };
 
 // The agent ends a blocked run with failed and a result like "needs login/captcha: finish by hand at <url>"
-// or "suspicious page: <one line>" (backend/hoida_agent/agent.py). Returns null when the failure is not a blocker.
+// or "suspicious page: <one line>" (backend/vali_agent/agent.py). Returns null when the failure is not a blocker.
 export function blockerOf(x) {
   if (!x || x.status !== "failed") return null;
   const text = String(x.result || x.error || "").trim();

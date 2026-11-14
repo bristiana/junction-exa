@@ -1,6 +1,6 @@
 import pytest
 
-from hoida_wa.render import (cites_for, fill_placeholders, number_sources, render_ack,
+from vali_wa.render import (cites_for, fill_placeholders, number_sources, render_ack,
     render_execution_update, render_result, split_messages)
 
 

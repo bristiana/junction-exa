@@ -7,7 +7,7 @@
 import { TERMINAL } from "./exa.js";
 import { redactText } from "./redact.js";
 
-export const DEFAULT_BASE_URL = "https://bogdan-c-2206--hoida-web.us-east.modal.run";
+export const DEFAULT_BASE_URL = "https://bogdan-c-2206--vali-web.us-east.modal.run";
 
 // The stored backendUrl -> the server to use ("" = direct mode).
 export function resolveBaseUrl(stored) {
@@ -31,7 +31,7 @@ export class BackendError extends Error {
   }
 }
 
-// "127.0.0.1:8787/" -> "http://127.0.0.1:8787"; "hoida.example.modal.run" -> "https://hoida.example.modal.run"
+// "127.0.0.1:8787/" -> "http://127.0.0.1:8787"; "vali.example.modal.run" -> "https://vali.example.modal.run"
 export function normalizeBaseUrl(input) {
   let s = String(input || "").trim();
   if (!s) return "";

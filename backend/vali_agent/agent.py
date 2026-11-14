@@ -3,6 +3,7 @@ import base64
 import re
 from dataclasses import dataclass
 from typing import Literal
+from vali_api.config import vali_env
 from .browser import Browser
 from .guard import is_final_submit, is_navigation
 from .hooks import AgentHooks
@@ -87,15 +88,15 @@ def _validate(value, schema):
 # Reading the page, looking things up and asking do not change the page; they do not count as actions.
 _FREE = {'read_page', 'look', 'exa_search', 'exa_read', 'ask_user', 'request_approval', 'finish', 'fail'}
 _USAGE_KEYS = ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')
-# USD per million tokens (claude-opus-5-5 list price; cache writes at 1.25x input). Override with HOIDA_PRICES=in,out,read,write.
+# USD per million tokens (claude-opus-5-5 list price; cache writes at 1.25x input). Override with VALI_PRICES=in,out,read,write.
 _PRICES = dict(zip(_USAGE_KEYS, (4.0, 20.0, 0.20, 5.0)))
 
 
 def _cost(usage):
-    import os
     prices = _PRICES
-    if os.environ.get('HOIDA_PRICES'):
-        prices = dict(zip(_USAGE_KEYS, (float(x) for x in os.environ['HOIDA_PRICES'].split(','))))
+    override = vali_env('VALI_PRICES')
+    if override:
+        prices = dict(zip(_USAGE_KEYS, (float(x) for x in override.split(','))))
     return round(sum(usage.get(k, 0) * prices[k] for k in _USAGE_KEYS) / 1_000_000, 4)
 
 

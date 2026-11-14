@@ -2,7 +2,7 @@
 
 Goal for the morning: a stable base on every front. WhatsApp works end to end, errands go to the sandbox correctly, and Vali sits on the desktop.
 
-Rules for the loop: every item is verified live, not only with tests. Commits as Bogdan-ca, pushed as PRs to main, merged with rebase when CI is green. Deploy straight to the `hoida` / `vali` app. The sandbox gets a redeploy after any change in `hoida_agent/`. Never mention the old extension in commits.
+Rules for the loop: every item is verified live, not only with tests. Commits as Bogdan-ca, pushed as PRs to main, merged with rebase when CI is green. Deploy straight to the `vali` app. The sandbox gets a redeploy after any change in `vali_agent/`. Never mention the old extension in commits.
 
 ## A. WhatsApp
 - [ ] A1 Live run from WhatsApp Web (Vali chat only): help text when not paired, pair with a code, a find errand returns a result, a claim errand gets research, then "do it", the sandbox, the approval message, approve, done. Fix whatever breaks.
@@ -12,7 +12,7 @@ Rules for the loop: every item is verified live, not only with tests. Commits as
 - [x] A5 Voice notes: ElevenLabs speech-to-text becomes an errand. Check what already exists first.
 
 ## B. Sandbox dispatch
-- [x] B1 Deploy the merged API. Check that /execute from the API and from WhatsApp spawns hoida-sandbox and that steps, live.jpg and approval come back.
+- [x] B1 Deploy the merged API. Check that /execute from the API and from WhatsApp spawns vali-sandbox and that steps, live.jpg and approval come back.
 - [x] B2 scripts/golden.py runs three errands live against the deployed API (find; claim research; execute on a demo form until approval) and prints pass/fail, time and cost. Run it every iteration.
 
 ## C. Desktop app (Electron, desktop/)
@@ -26,7 +26,7 @@ Rules for the loop: every item is verified live, not only with tests. Commits as
 - [x] D2 Default API URL = the deployed Modal URL; settings still allow localhost.
 
 ## E. Rename to Vali (after A-D are stable)
-- [ ] E1 Packages hoida_* to vali_*, env HOIDA_* to VALI_*, Modal apps vali / vali-sandbox, Modal secret vali. Update the Meta webhook callback to the new URL, plus the extension and desktop defaults. Re-verify WhatsApp live.
+- [ ] E1 Use vali_* packages and VALI_* env names with legacy env fallback; Modal apps vali / vali-sandbox, Modal secret vali. Update the Meta webhook callback to the new URL, plus the extension and desktop defaults. Re-verify WhatsApp live.
 
 ## F. Demo
 - [ ] F1 docs/DEMO.md: a 3-minute script with the exact errands that work.

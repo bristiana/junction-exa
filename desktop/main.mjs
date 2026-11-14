@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient, normalizeBaseUrl, toLocalTask, isActive } from './vendor/lib/backend.js';
 import { mascotState, notificationEvents } from './logic.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_URL = 'https://bogdan-c-2206--hoida-web.us-east.modal.run';
+const DEFAULT_URL = 'https://bogdan-c-2206--vali-web.us-east.modal.run';
 const smoke = process.argv.includes('--smoke');
 // Smoke never touches the user's account or credentials.
 if (smoke) app.setPath('userData', path.join(app.getPath('temp'), `vali-smoke-${process.pid}`));

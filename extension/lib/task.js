@@ -144,6 +144,6 @@ export function buildRunRequest(task, page, profile, { effort = "low" } = {}) {
     systemPrompt: SYSTEM_PROMPT,
     effort,
     outputSchema: outputSchema({ hasForm }),
-    metadata: { app: "hoida" },
+    metadata: { app: "vali" },
   };
 }

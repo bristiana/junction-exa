@@ -5,7 +5,7 @@ from email.parser import BytesParser
 import httpx
 import pytest
 
-from hoida_media import voice
+from vali_media import voice
 
 
 def test_missing_key_skips_network():

@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-DEFAULT_API = 'https://bogdan-c-2206--hoida-web.us-east.modal.run'
+DEFAULT_API = 'https://bogdan-c-2206--vali-web.us-east.modal.run'
 TIMEOUT = 240
 POLL = 3
 TERMINAL = {'completed', 'failed', 'cancelled'}

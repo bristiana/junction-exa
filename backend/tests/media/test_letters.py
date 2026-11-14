@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hoida_media import letters
+from vali_media import letters
 
 
 def fake_client(monkeypatch, text, stop_reason="end_turn", extra_blocks=()):
@@ -56,7 +56,7 @@ def test_exact_vision_request(monkeypatch):
 
 
 def test_configured_model(monkeypatch):
-    monkeypatch.setenv("HOIDA_MODEL", "test-model")
+    monkeypatch.setenv("VALI_MODEL", "test-model")
     calls = fake_client(monkeypatch, envelope())
     letters.read_letter(b"image", "image/png")
     assert calls[0]["model"] == "test-model"

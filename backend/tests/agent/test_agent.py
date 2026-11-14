@@ -1,11 +1,11 @@
 import copy
 from types import SimpleNamespace as NS
 import pytest
-from hoida_agent import AgentHooks, run_browser_agent
-from hoida_agent.browser import Browser
-from hoida_agent.guard import is_final_submit
-from hoida_agent.privacy import mask, substitute
-from hoida_agent.agent import TOOLS
+from vali_agent import AgentHooks, run_browser_agent
+from vali_agent.browser import Browser
+from vali_agent.guard import is_final_submit
+from vali_agent.privacy import mask, substitute
+from vali_agent.agent import TOOLS
 
 PROFILE = {'name': 'Test Person', 'email': 'test@example.com', 'phone': '+358401234567'}
 
@@ -42,7 +42,7 @@ def test_claim_privacy_and_approval(local_site, monkeypatch):
             self.checked = self.page.locator('[name=terms]').is_checked()
             self.radio = self.page.locator('[name=contact]:checked').input_value()
             super().close()
-    monkeypatch.setattr('hoida_agent.agent.Browser', InspectBrowser)
+    monkeypatch.setattr('vali_agent.agent.Browser', InspectBrowser)
     calls = [
         ('type_text', {'ref': 'e1', 'text': '{{name}}'}),
         ('type_text', {'ref': 'e2', 'text': '{{email}}'}),
@@ -179,7 +179,7 @@ def test_image_redaction(local_site, monkeypatch):
         original = browser.page.screenshot
         seen = []
         def capture(**kwargs):
-            seen.append(browser.page.locator('[name=name]').get_attribute('data-hoida-private'))
+            seen.append(browser.page.locator('[name=name]').get_attribute('data-vali-private'))
             assert kwargs['mask']
             return original(**kwargs)
         monkeypatch.setattr(browser.page, 'screenshot', capture)
@@ -187,7 +187,7 @@ def test_image_redaction(local_site, monkeypatch):
         assert jpeg.startswith(b'\xff\xd8')
         assert seen == ['1']
         assert browser.page.locator('[name=name]').input_value() == PROFILE['name']
-        assert browser.page.locator('[data-hoida-private]').count() == 0
+        assert browser.page.locator('[data-vali-private]').count() == 0
     finally:
         browser.close()
 

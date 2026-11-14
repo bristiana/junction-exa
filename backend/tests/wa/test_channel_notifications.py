@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, Mock
 import httpx
 import pytest
 
-from hoida_api.wa_channel import ChannelAPI, push_task
-from hoida_wa.api import GraphAPIClient, GraphAPIError
-from hoida_wa.render import render_execution_update
+from vali_api.wa_channel import ChannelAPI, push_task
+from vali_wa.api import GraphAPIClient, GraphAPIError
+from vali_wa.render import render_execution_update
 
 
 @pytest.fixture

@@ -38,9 +38,9 @@ def upload_screenshot(jpeg_bytes: bytes, task_id: str, n: int) -> str | None:
             # after module import; pass credentials per request, not globally.
             config = cloudinary.Config()
             result = cloudinary.uploader.upload(
-                io.BytesIO(jpeg_bytes), folder=f"hoida/{task_id}",
+                io.BytesIO(jpeg_bytes), folder=f"vali/{task_id}",
                 public_id=f"step-{n:03d}", overwrite=True,
-                resource_type="image", tags=["hoida", task_id],
+                resource_type="image", tags=["vali", task_id],
                 timeout=UPLOAD_TIMEOUT,
                 cloud_name=config.cloud_name, api_key=config.api_key,
                 api_secret=config.api_secret,
@@ -54,7 +54,7 @@ def upload_screenshot(jpeg_bytes: bytes, task_id: str, n: int) -> str | None:
             _slots.release()
 
     try:
-        threading.Thread(target=upload, daemon=True, name="hoida-upload").start()
+        threading.Thread(target=upload, daemon=True, name="vali-upload").start()
     except Exception:
         _slots.release()
         logger.warning("Vali screenshot upload failed")

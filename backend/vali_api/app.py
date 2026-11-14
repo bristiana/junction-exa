@@ -22,9 +22,9 @@ from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request
 from .jev import JevClient
 from .router import route
 from .store import make_store, now
-from hoida_wa.flow import WhatsAppFlow
-from hoida_wa.webhook import parse_webhook, verify_signature
-from hoida_wa.render import render_result, render_execution_update, render_error
+from vali_wa.flow import WhatsAppFlow
+from vali_wa.webhook import parse_webhook, verify_signature
+from vali_wa.render import render_result, render_execution_update, render_error
 from .wa_channel import ChannelAPI, push_task, log_failure, logger as whatsapp_logger
 
 TERMINAL = {'completed', 'failed', 'cancelled'}
@@ -65,7 +65,7 @@ def research_from_run(run, kind='agent'):
 def create_monitor(config, query):
     """Monitor provisioning is intentionally stubbed until webhook delivery is implemented."""
     if not config.public_url:
-        raise NotImplementedError('HOIDA_PUBLIC_URL is required for monitors')
+        raise NotImplementedError('VALI_PUBLIC_URL is required for monitors')
     return None
 
 
@@ -123,7 +123,7 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
         return execution
 
     try:
-        from hoida_agent import run_browser_agent, AgentHooks
+        from vali_agent import run_browser_agent, AgentHooks
     except ImportError:
         patch_execution(task_id, {'status': 'failed', 'error': 'Browser sandbox only on Modal.'})
         return
@@ -471,11 +471,11 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                           and not task.get('execution')), tasks[0] if tasks else None))
 
     def transcribe(data, mime):
-        from hoida_media.voice import transcribe
+        from vali_media.voice import transcribe
         return transcribe(data, mime or 'audio/ogg')
 
     def read_letter(data, mime, caption):
-        from hoida_media.letters import read_letter
+        from vali_media.letters import read_letter
         return read_letter(data, mime or 'image/jpeg', caption)
 
     async def create_whatsapp_task(user, text, source):

@@ -37,8 +37,8 @@ async function findTask(id) {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "hoida-selection", title: "Vali: take care of this", contexts: ["selection"] });
-    chrome.contextMenus.create({ id: "hoida-page", title: "Vali: help with this page", contexts: ["page", "link"] });
+    chrome.contextMenus.create({ id: "vali-selection", title: "Vali: take care of this", contexts: ["selection"] });
+    chrome.contextMenus.create({ id: "vali-page", title: "Vali: help with this page", contexts: ["page", "link"] });
   });
   schedulePoll();
 });
@@ -182,7 +182,7 @@ async function pollAll() {
     const { tasks = [] } = await chrome.storage.local.get("tasks");
     const active = tasks.filter((t) => !t.backend && !TERMINAL.has(t.status));
     if (!active.length) {
-      if (!backendUrl) chrome.alarms.clear("hoida-poll");
+      if (!backendUrl) chrome.alarms.clear("vali-poll");
       return;
     }
     for (const t of active) {
@@ -243,9 +243,9 @@ chrome.notifications.onClicked.addListener(async (id) => {
 });
 
 function schedulePoll() {
-  chrome.alarms.create("hoida-poll", { periodInMinutes: 0.5, delayInMinutes: 0.1 });
+  chrome.alarms.create("vali-poll", { periodInMinutes: 0.5, delayInMinutes: 0.1 });
 }
-chrome.alarms.onAlarm.addListener((a) => { if (a.name === "hoida-poll") pollAll(); });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === "vali-poll") pollAll(); });
 
 // ---------- approve: fill the form on the page ----------
 async function fillForm(taskId) {

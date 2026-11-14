@@ -7,7 +7,7 @@ import vm from "node:vm";
 const src = readFileSync(new URL("../extension/content/presence.js", import.meta.url), "utf8");
 const ctx = vm.createContext({});
 vm.runInContext(src, ctx);
-const { blockedHost, formWords } = ctx.__hoidaPresence;
+const { blockedHost, formWords } = ctx.__valiPresence;
 
 test("never on search, mail, chat, payment or bank sites", () => {
   for (const h of ["www.google.com", "google.com", "mail.google.com", "docs.google.com", "www.google.fi", "chromewebstore.google.com",
