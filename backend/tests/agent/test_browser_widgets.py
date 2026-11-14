@@ -1,7 +1,7 @@
 import re
 import pytest
-from hoida_agent.browser import Browser
-from hoida_agent.guard import is_final_submit
+from vali_agent.browser import Browser
+from vali_agent.guard import is_final_submit
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def test_existing_claim_refs(browser, local_site):
     browser.goto(local_site+'/claim.html')
     snapshot = browser.snapshot()
     fields = browser.page.locator('input,select,textarea,button')
-    assert fields.evaluate_all('(els)=>els.map(el=>el.getAttribute("data-hoida-ref"))') == [f'e{i}' for i in range(1,10)]
+    assert fields.evaluate_all('(els)=>els.map(el=>el.getAttribute("data-vali-ref"))') == [f'e{i}' for i in range(1,10)]
     browser.type('e1', 'Test passenger')
     browser.type('e2', 'test@example.com')
     browser.select('e4', 'Refund')
@@ -43,7 +43,7 @@ def test_frames(browser, local_site):
         browser.select(ref(snapshot, prefix+' choice'), 'Two')
         assert frame.locator('input').input_value() == 'Test passenger'
         assert frame.locator('select').input_value() == 'Two'
-        confirm = frame.locator('button[type=submit]').get_attribute('data-hoida-ref')
+        confirm = frame.locator('button[type=submit]').get_attribute('data-vali-ref')
         assert is_final_submit(browser.element_text(confirm))
         browser.click(ref(snapshot, prefix+' action'))
         assert frame.locator('button').first.inner_text() == prefix+' clicked'
@@ -109,7 +109,7 @@ def test_special_input_types(browser, local_site, kind, value, hint):
     browser.goto(local_site+'/widget_dates.html')
     browser.snapshot()
     field = browser.page.locator(f'input[type="{kind}"]')
-    target = field.get_attribute('data-hoida-ref')
+    target = field.get_attribute('data-vali-ref')
     browser.type(target, value)
     assert field.input_value() == value
     with pytest.raises(ValueError, match=hint):

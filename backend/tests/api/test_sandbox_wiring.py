@@ -7,12 +7,12 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from hoida_agent.hooks import AgentHooks
-from hoida_api import app as module
-from hoida_api.app import create_app
-from hoida_api.config import Config
-from hoida_api.exa import ExaClient
-from hoida_api.store import SQLiteStore
+from vali_agent.hooks import AgentHooks
+from vali_api import app as module
+from vali_api.app import create_app
+from vali_api.config import Config
+from vali_api.exa import ExaClient
+from vali_api.store import SQLiteStore
 
 
 @pytest.fixture
@@ -78,7 +78,7 @@ def test_live_frame_usage_inbox_and_question(api, monkeypatch):
         return {'status': 'done', 'result': 'Booked slot prepared', 'final_url': start_url,
                 'usage': {'input_tokens': 1200, 'output_tokens': 80}, 'sources': [{'url': 'https://example.com/rules'}]}
 
-    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(run_browser_agent=fake_agent, AgentHooks=AgentHooks))
+    monkeypatch.setitem(sys.modules, 'vali_agent', types.SimpleNamespace(run_browser_agent=fake_agent, AgentHooks=AgentHooks))
     monkeypatch.setattr(module.time, 'sleep', lambda s: None)
     module.run_browser_session(tid, 'goal', 'https://example.com/book', {}, application)
     assert store.get_live_frame(tid) == b'frame-1'
@@ -101,7 +101,7 @@ def test_ask_user_times_out(api, monkeypatch):
         assert hooks.ask_user('Which slot?') is None
         return {'status': 'failed', 'result': 'No answer', 'final_url': start_url}
 
-    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(run_browser_agent=fake_agent, AgentHooks=AgentHooks))
+    monkeypatch.setitem(sys.modules, 'vali_agent', types.SimpleNamespace(run_browser_agent=fake_agent, AgentHooks=AgentHooks))
     monkeypatch.setattr(module.time, 'sleep', lambda s: None)
     monkeypatch.setattr(module.time, 'monotonic', lambda: next(clock))
     module.run_browser_session(tid, 'goal', 'https://example.com/book', {}, application)

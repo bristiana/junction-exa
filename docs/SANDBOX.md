@@ -6,15 +6,15 @@ The sandbox opens the real website in a cloud browser on Modal, fills the form o
 
 ```
 POST /v1/tasks/{id}/execute ─> browser_session.spawn() (Modal, 2 CPU, 4 GB, 15 min)
-   └─ run_browser_session (hoida_api/app.py) wires hooks to the store
-        └─ run_browser_agent (hoida_agent/agent.py): Claude tool loop over a Playwright Chromium page
+   └─ run_browser_session (vali_api/app.py) wires hooks to the store
+        └─ run_browser_agent (vali_agent/agent.py): Claude tool loop over a Playwright Chromium page
              ├─ page tools: open_url, read_page, click, type_text, select_option, set_checkbox, press_key, scroll, look
              ├─ Exa tools:  exa_search, exa_read (live web, without leaving the form)
              ├─ ask_user:   one question to the user, answered from the extension or WhatsApp
              └─ request_approval / finish / fail
 ```
 
-- **Model.** `claude-opus-5-5` (`HOIDA_MODEL`), effort `low`, prompt caching on, server-side fallback on refusals. Max 30 actions per run.
+- **Model.** `claude-opus-5-5` (`VALI_MODEL`), effort `low`, prompt caching on, server-side fallback on refusals. Max 30 actions per run.
 - **Jev finds what to click.** `click` takes a ref and a short target ("19:30 Suvi slot"). When the ref is null or the page re-rendered, Jev picks the element for the target among the 25 best-matching snapshot lines (about 0.2 s, no extra model turn; 13/13 right on the fixtures, `backend/scripts/jev_bench.py`). The submit guard still checks whatever Jev picks.
 - **Page snapshots.** Compact text lists of interactive elements with refs (`[e12] button "Jatka" type=submit`) across iframes, open shadow DOM and ARIA widgets (comboboxes, listboxes, role=checkbox/switch, tabs), plus 2500 characters of visible text. `look` sends a redacted screenshot only when the text is not enough.
 - **Exa in the loop.** The agent looks up what it needs while the form stays open: rules and amounts (EU261, VR compensation), deadlines, the right form, opening hours or slots. `exa_search` uses `type: auto`, `userLocation: FI` and query highlights; `exa_read` uses `/contents` with `maxAgeHours: 6` so pages are fresh. Every result is shown as untrusted data with its URL and date. Each value in `approval.filled` can carry the `source` URL it came from; all URLs end up in `execution.sources`.
@@ -31,7 +31,7 @@ POST /v1/tasks/{id}/execute ─> browser_session.spawn() (Modal, 2 CPU, 4 GB, 15
 
 ## Cost and time
 
-`execution.usage` has `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `model_calls`, `claude_cost_usd` (list price, `HOIDA_PRICES` to override), `exa_cost_usd`, `jev_calls`.
+`execution.usage` has `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `model_calls`, `claude_cost_usd` (list price, `VALI_PRICES` to override), `exa_cost_usd`, `jev_calls`.
 
 Measured on Modal (2 CPU, 4 GB), `claude-opus-5-5` at effort `low`, 14 Nov 2026:
 
@@ -46,7 +46,7 @@ About 70% of the Claude cost is cache writes of the new page snapshot on each st
 
 ## End to end through the API (deployed)
 
-Deployed as its own Modal app (`modal deploy backend/modal_app.py --name hoida-sandbox`, never over the main `hoida` app), 14 Nov 2026:
+Deployed as its own Modal app (`modal deploy backend/modal_app.py --name vali-sandbox`, never over the main `vali` app), 14 Nov 2026:
 
 - `t_55bba48cb5b340688960e4f4fe7f1a4d`: test order form (httpbin.org/forms/post, an echo service). Task, Exa research (28 s, $0.025), execute, 9 steps with screenshots, 20 live frames read through `live.jpg`, approval, `POST /approve`, one final click, `done` with the echoed order. 89 s, Claude $0.07.
 - `t_52f39a2debb14f5088d5835678965b05`: Helsinki "Report a problem" (real site). Task, Exa research (22 s), execute, 24 steps (one click re-found by Jev after the page re-rendered), approval with every value, `POST /stop`, `stopped`. 105 s, Claude $0.25, 10 Jev calls.
@@ -73,12 +73,12 @@ backend/.venv/bin/modal run backend/modal_smoke.py                  # on Modal: 
 backend/.venv/bin/modal run backend/modal_smoke.py --scenario wizard
 backend/.venv/bin/modal run backend/modal_smoke.py --url https://... --goal "..."   # real site, always stops at approval
 backend/.venv/bin/modal run backend/modal_smoke.py --batch runs.json              # several real sites in parallel
-python -m hoida_agent --url ... --goal ... --headful                # locally, approval in the terminal
+python -m vali_agent --url ... --goal ... --headful                # locally, approval in the terminal
 ```
 
-`modal_smoke.py` uses its own ephemeral app and an in-container SQLite store, so it never touches the deployed `hoida` app.
+`modal_smoke.py` uses its own ephemeral app and an in-container SQLite store, so it never touches the deployed `vali` app.
 
-**Deploying.** The sandbox is its own Modal app: `modal deploy backend/modal_sandbox.py` (app `hoida-sandbox`, function `browser_session`, no warm container). The API (`modal_app.py`, app `hoida`) spawns it by name and falls back to its own copy when the sandbox app is not deployed. Never deploy the sandbox branch's `modal_app.py` over `hoida`.
+**Deploying.** The sandbox is its own Modal app: `modal deploy backend/modal_sandbox.py` (app `vali-sandbox`, function `browser_session`, no warm container). The API (`modal_app.py`, app `vali`) spawns it by name and falls back to its own copy when the sandbox app is not deployed. Never deploy the sandbox branch's `modal_app.py` over `vali`.
 
 ## Known limits
 

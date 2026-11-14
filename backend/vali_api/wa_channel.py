@@ -2,8 +2,8 @@
 import asyncio
 import logging
 
-from hoida_wa.api import GraphAPIClient, GraphAPIError
-from hoida_wa.render import split_messages
+from vali_wa.api import GraphAPIClient, GraphAPIError
+from vali_wa.render import split_messages
 
 logger = logging.getLogger("vali.whatsapp")
 

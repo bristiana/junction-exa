@@ -7,7 +7,7 @@ every personal detail was detected. Never log the response or redaction map.
 
 import base64
 import json
-import os
+from vali_api.config import vali_env
 import re
 
 import anthropic
@@ -81,7 +81,7 @@ def read_letter(image_bytes: bytes, mime_type: str, caption: str | None = None) 
     try:
         with anthropic.Anthropic() as client:
             response = client.messages.create(
-                model=os.environ.get("HOIDA_MODEL", "claude-opus-5-5"),
+                model=vali_env("VALI_MODEL", "claude-opus-5-5"),
                 max_tokens=4000, output_config={"effort": "low"},
                 messages=[{"role": "user", "content": [
                     {"type": "image", "source": {

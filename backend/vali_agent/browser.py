@@ -16,7 +16,7 @@ _CAPTURE = r'''({start, limit}) => {
  const label = el => (el.labels?.[0] && labelText(el.labels[0])) || el.getAttribute('aria-label') ||
    (el.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>el.getRootNode().getElementById(id)?.textContent||'').join(' ').trim() ||
    el.innerText || el.placeholder || el.closest('fieldset')?.querySelector('legend')?.innerText || el.name || el.id || '';
- all.forEach(el=>el.removeAttribute('data-hoida-ref'));
+ all.forEach(el=>el.removeAttribute('data-vali-ref'));
  const selector='a,button,input,select,textarea,[role="button"],[role="link"],[role="tab"],[role="checkbox"],[role="radio"],[role="option"],[role="combobox"],[role="menuitem"],[role="switch"],[contenteditable="true"],[tabindex]';
  const optionCounts=new Map(), optionSeen=new Map(), reportedGroups=new Set();
  const optionGroup=el=>el.closest('[role="listbox"]') || el.parentElement;
@@ -41,7 +41,7 @@ _CAPTURE = r'''({start, limit}) => {
    return true;
  }).slice(0,limit);
  const lines=elements.map((el,i)=>{
-   const ref='e'+(start+i); el.setAttribute('data-hoida-ref',ref);
+   const ref='e'+(start+i); el.setAttribute('data-vali-ref',ref);
    let kind=el.localName==='input' ? 'input['+el.type+']' : el.localName;
    if(el.getAttribute('role')) kind+='[role='+el.getAttribute('role')+']';
    let line='['+ref+'] '+kind+' '+JSON.stringify(clip(label(el)));
@@ -136,7 +136,7 @@ class Browser:
         frame = self._refs.get(ref)
         if frame is None or frame.is_detached():
             raise ValueError('Unknown element reference; call read_page')
-        return frame.locator(f'[data-hoida-ref="{ref}"]')
+        return frame.locator(f'[data-vali-ref="{ref}"]')
 
     def goto(self, url):
         if not re.match(r'^https?://', url, re.I):
@@ -346,14 +346,14 @@ class Browser:
             return self.page.screenshot(type='jpeg', quality=quality)
         # Cover profile-bearing DOM regions so image tools cannot reveal typed values.
         self.page.evaluate('''values => {
-          document.querySelectorAll('[data-hoida-private]').forEach(el=>el.removeAttribute('data-hoida-private'));
+          document.querySelectorAll('[data-vali-private]').forEach(el=>el.removeAttribute('data-vali-private'));
           const privateText=s=>values.some(v=>String(s||'').toLowerCase().includes(v.toLowerCase()));
           for(const el of document.querySelectorAll('body *')) {
-            if(privateText(el.value) || [...el.childNodes].some(n=>n.nodeType===3 && privateText(n.textContent)) || [...el.attributes].some(a=>privateText(a.value))) el.setAttribute('data-hoida-private','1');
+            if(privateText(el.value) || [...el.childNodes].some(n=>n.nodeType===3 && privateText(n.textContent)) || [...el.attributes].some(a=>privateText(a.value))) el.setAttribute('data-vali-private','1');
           }
-          if(document.querySelector('canvas')) document.body.setAttribute('data-hoida-private','1');
+          if(document.querySelector('canvas')) document.body.setAttribute('data-vali-private','1');
         }''', [str(v) for v in profile.values() if v])
         try:
-            return self.page.screenshot(type='jpeg', quality=quality, mask=[self.page.locator('[data-hoida-private]')])
+            return self.page.screenshot(type='jpeg', quality=quality, mask=[self.page.locator('[data-vali-private]')])
         finally:
-            self.page.evaluate("() => document.querySelectorAll('[data-hoida-private]').forEach(el=>el.removeAttribute('data-hoida-private'))")
+            self.page.evaluate("() => document.querySelectorAll('[data-vali-private]').forEach(el=>el.removeAttribute('data-vali-private'))")

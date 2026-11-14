@@ -18,24 +18,24 @@ WhatsApp (Meta) ──┘     │  Postgres (Aiven)     └─ browser sandbox (
 | Path | What |
 |---|---|
 | `extension/` | Chrome MV3 extension (side panel). Works directly against Exa when no backend is set ("direct mode"). |
-| `backend/hoida_api/` | FastAPI app, store, Exa research, WhatsApp channel. Deployed with `modal deploy backend/modal_app.py`. |
-| `backend/hoida_agent/` | The browser agent: Playwright wrapper + Claude tool loop. No Modal import, runs locally too. |
+| `backend/vali_api/` | FastAPI app, store, Exa research, WhatsApp channel. Deployed with `modal deploy backend/modal_app.py`. |
+| `backend/vali_agent/` | The browser agent: Playwright wrapper + Claude tool loop. No Modal import, runs locally too. |
 | `backend/modal_app.py` | Modal app: image, secrets, web endpoint, `research_poller` and `browser_session` functions. |
 | `backend/tests/` | pytest, all offline (fake Exa, fake LLM, local HTML fixtures). |
 
-## Environment (`.env`, never committed; on Modal: `modal secret create hoida --from-dotenv .env`)
+## Environment (`.env`, never committed; on Modal: `modal secret create vali --from-dotenv .env`)
 
 | Variable | Used for | Required |
 |---|---|---|
 | `EXA_API_KEY` | research | yes |
 | `ANTHROPIC_API_KEY` | browser agent | yes for "do it" |
-| `HOIDA_MODEL` | Claude model for the browser agent, default `claude-opus-5-5` | no |
+| `VALI_MODEL` | Claude model for the browser agent, default `claude-opus-5-5` | no |
 | `JEV_API_KEY` | errand routing with Jev; without it keyword rules route | no |
-| `DATABASE_URL` | Postgres (Aiven). Without it: SQLite at `HOIDA_SQLITE_PATH` (default `hoida.db`) | no |
+| `DATABASE_URL` | Postgres (Aiven). Without it: SQLite at `VALI_SQLITE_PATH` (default `vali.db`) | no |
 | `CLOUDINARY_URL` | screenshot hosting. Without it: screenshots served by the API from the store | no |
 | `ELEVENLABS_API_KEY` | WhatsApp voice notes to text | no |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | WhatsApp Cloud API | no |
-| `HOIDA_PUBLIC_URL` | public base URL of the API (links in WhatsApp messages) | no |
+| `VALI_PUBLIC_URL` | public base URL of the API (links in WhatsApp messages) | no |
 
 ## Identity and shared context
 
@@ -44,7 +44,9 @@ WhatsApp is linked by a pairing code: the extension calls `POST /v1/pair`, shows
 
 Personal details (name, email, address, ...) live in the extension. The LLMs only ever see placeholders like `{{name}}`; real values are substituted inside the sandbox at typing time and masked back to placeholders in every page snapshot the LLM sees. A user may opt in to `PUT /v1/profile` so tasks started from WhatsApp can fill forms too; that copy is stored in Postgres and only read by the sandbox.
 
-## API (all JSON, base `HOIDA_PUBLIC_URL`)
+All `VALI_*` settings also accept the legacy `HOIDA_*` name when the new name is unset. An explicitly empty new value takes precedence. This includes `VALI_EFFORT` and `VALI_PRICES`.
+
+## API (all JSON, base `VALI_PUBLIC_URL`)
 
 | Method and path | Body | Returns |
 |---|---|---|
@@ -88,19 +90,19 @@ Personal details (name, email, address, ...) live in the extension. The LLMs onl
 
 ### Modes and research kinds
 
-`POST /v1/tasks` first routes the errand (`backend/hoida_api/router.py`): Jev (TypeSafe AI, a typed decision model, ~0.3 s) picks the mode, with each choice asked twice in reversed order; keyword rules take over when Jev is not configured, fails or is unsure. The task gets `"mode": "find | check | claim | book | watch | write"` and `research.kind`:
+`POST /v1/tasks` first routes the errand (`backend/vali_api/router.py`): Jev (TypeSafe AI, a typed decision model, ~0.3 s) picks the mode, with each choice asked twice in reversed order; keyword rules take over when Jev is not configured, fails or is unsure. The task gets `"mode": "find | check | claim | book | watch | write"` and `research.kind`:
 
 | kind | Exa call | Used for | Latency |
 |---|---|---|---|
 | `search` | `POST /search` with `type: "auto"`, `contents.highlights`, `outputSchema` (find schema, max 10 properties, 2 levels) | find and compare | ~3 s, answered inline in the POST response |
 | `agent` | `POST /agent/runs` with the full schema, polled by `research_poller` | check, claim, book, write | 10-90 s |
-| `monitor` | `POST /monitors` with webhook `HOIDA_PUBLIC_URL/webhooks/exa` | watch | recurring |
+| `monitor` | `POST /monitors` with webhook `VALI_PUBLIC_URL/webhooks/exa` | watch | recurring |
 
 Both search and agent outputs carry the same `grounding` shape (`[{field, citations: [{url, title}], confidence}]`), so the clients render them the same way. The find schema returns `{answer, options: [{name, detail, price, url}], next_step}`; it is mapped into the common structured shape (`answer`, `key_facts`, `actions` with one `open_link` per option) before it is stored.
 
 Extra endpoints for watches: `GET /v1/watches`, `DELETE /v1/watches/{id}`, `POST /webhooks/exa` (Exa Monitors delivery; new items become a task update with `source: "monitor"` and a WhatsApp/extension notification).
 
-`research.output.structured` follows the schema in `extension/lib/task.js` (`answer`, `status`, `key_facts`, `steps`, `actions`, `missing_info`, `form_fill`). The Python port lives in `backend/hoida_api/research.py` and must stay identical (same system prompt, same schema).
+`research.output.structured` follows the schema in `extension/lib/task.js` (`answer`, `status`, `key_facts`, `steps`, `actions`, `missing_info`, `form_fill`). The Python port lives in `backend/vali_api/research.py` and must stay identical (same system prompt, same schema).
 
 `execution` once "do it" starts:
 
@@ -117,7 +119,7 @@ Extra endpoints for watches: `GET /v1/watches`, `DELETE /v1/watches/{id}`, `POST
 
 The store keeps `research` and `execution` in separate columns so the research poller and the sandbox never overwrite each other.
 
-## Browser agent interface (`backend/hoida_agent`)
+## Browser agent interface (`backend/vali_agent`)
 
 ```python
 def run_browser_agent(
@@ -125,7 +127,7 @@ def run_browser_agent(
     start_url: str,
     profile: dict[str, str],   # real personal values, used only for {{placeholder}} substitution
     hooks: AgentHooks,         # on_step(text, jpeg_bytes|None) ; wait_for_approval(summary, filled) -> bool ; should_stop() -> bool
-    llm: LLM | None = None,    # defaults to Claude (HOIDA_MODEL); tests pass a scripted fake
+    llm: LLM | None = None,    # defaults to Claude (VALI_MODEL); tests pass a scripted fake
     max_steps: int = 30,
     headless: bool = True,
 ) -> AgentResult               # status: "done" | "failed" | "stopped" ; result text ; final_url

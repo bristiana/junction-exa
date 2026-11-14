@@ -6,7 +6,7 @@
 // Classic content script: no imports. The badge lives in a closed shadow root so page CSS cannot reach it.
 (function () {
   "use strict";
-  if (globalThis.__hoidaPresence) return;
+  if (globalThis.__valiPresence) return;
 
   // ---------- rules (pure; test/presence.test.mjs loads this file to check them) ----------
   const BLOCKED = [
@@ -39,7 +39,7 @@
     const s = String(text || "");
     return FORM_WORDS_EN.test(s) || FORM_WORDS_FI.test(s);
   }
-  globalThis.__hoidaPresence = { blockedHost, formWords, siteOf };
+  globalThis.__valiPresence = { blockedHost, formWords, siteOf };
 
   // ---------- only on ordinary top-level pages ----------
   if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -170,7 +170,7 @@
 
   function mount() {
     if (ui.host) return;
-    const host = document.createElement("hoida-presence");
+    const host = document.createElement("vali-presence");
     host.style.cssText = "all:initial;position:fixed;right:0;bottom:0;width:0;height:0;z-index:2147483646;";
     const root = host.attachShadow({ mode: "closed" });
     try { const sheet = new CSSStyleSheet(); sheet.replaceSync(CSS); root.adoptedStyleSheets = [sheet]; }

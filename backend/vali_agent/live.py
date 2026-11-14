@@ -5,18 +5,18 @@ import threading
 import time
 
 # Fields holding real profile values are blurred in every frame and screenshot that leaves the sandbox.
-_BLUR_STYLE = '[data-hoida-private]{filter:blur(7px)!important}'
+_BLUR_STYLE = '[data-vali-private]{filter:blur(7px)!important}'
 _MARK = r'''(values) => {
   const hit = s => values.some(v => String(s || '').toLowerCase().includes(v));
-  if (!document.getElementById('hoida-private-style')) {
-    const st = document.createElement('style'); st.id = 'hoida-private-style'; st.textContent = STYLE;
+  if (!document.getElementById('vali-private-style')) {
+    const st = document.createElement('style'); st.id = 'vali-private-style'; st.textContent = STYLE;
     (document.head || document.documentElement).appendChild(st);
   }
   const walk = root => {
     for (const el of root.querySelectorAll('*')) {
       if (el.shadowRoot) walk(el.shadowRoot);
       if (('value' in el && hit(el.value)) || [...el.childNodes].some(n => n.nodeType === 3 && hit(n.textContent)))
-        el.setAttribute('data-hoida-private', '1');
+        el.setAttribute('data-vali-private', '1');
     }
   };
   walk(document);
@@ -114,7 +114,7 @@ _CANDIDATES = r'''() => {
       if (!label || label.length > 60 || !visible(el)) continue;
       let box = el, around = '';
       for (let i = 0; i < 6 && box; i++, box = box.parentElement) around = box.innerText || around;
-      el.setAttribute('data-hoida-consent', String(out.length));
+      el.setAttribute('data-vali-consent', String(out.length));
       out.push({label, around: (around + ' ' + (el.closest('[id],[class]')?.id || '') + ' ' + (el.closest('[class]')?.className || '')).slice(0, 3000)});
     }
     for (const el of root.querySelectorAll('*')) if (el.shadowRoot) walk(el.shadowRoot);
@@ -130,7 +130,7 @@ def dismiss_cookie_banner(page):
         try:
             for i, c in enumerate(frame.evaluate(_CANDIDATES)):
                 if _MINIMAL.search(c['label']) and not _ACCEPT_ALL.search(c['label']) and _BANNER.search(str(c['around'])):
-                    frame.locator(f'[data-hoida-consent="{i}"]').first.click(timeout=2000)
+                    frame.locator(f'[data-vali-consent="{i}"]').first.click(timeout=2000)
                     page.wait_for_timeout(400)
                     return c['label']
         except Exception:

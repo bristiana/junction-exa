@@ -1,5 +1,5 @@
 """Model interface and official SDK adapter."""
-import os
+from vali_api.config import vali_env
 import time
 from typing import Any, Protocol
 import anthropic
@@ -14,9 +14,9 @@ class ClaudeLLM:
         self.client = anthropic.Anthropic()
 
     def next(self, system, tools, messages):
-        kwargs = dict(model=os.environ.get('HOIDA_MODEL', 'claude-opus-5-5'),
+        kwargs = dict(model=vali_env('VALI_MODEL', 'claude-opus-5-5'),
                       max_tokens=16000, system=system, tools=tools, messages=messages,
-                      output_config={'effort': os.environ.get('HOIDA_EFFORT', 'low')},
+                      output_config={'effort': vali_env('VALI_EFFORT', 'low')},
                       cache_control={'type': 'ephemeral'},
                       betas=['server-side-fallback-2026-07-01'], fallbacks='default')
         retries = 0

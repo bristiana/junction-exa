@@ -5,11 +5,11 @@ from types import SimpleNamespace as NS
 
 import httpx
 
-from hoida_agent import AgentHooks, run_browser_agent
-from hoida_agent.browser import Browser
-from hoida_agent.jev import Jev, final_submit_probability
-from hoida_agent.live import Screencast, dismiss_cookie_banner, mark_private
-from hoida_agent.web import ExaTools
+from vali_agent import AgentHooks, run_browser_agent
+from vali_agent.browser import Browser
+from vali_agent.jev import Jev, final_submit_probability
+from vali_agent.live import Screencast, dismiss_cookie_banner, mark_private
+from vali_agent.web import ExaTools
 
 PROFILE = {'name': 'Test Person', 'email': 'test@example.com', 'phone': '+358401234567'}
 
@@ -165,7 +165,7 @@ def test_private_values_blurred_and_screencast(local_site):
         browser.goto(local_site + '/claim.html')
         browser.page.locator('[name=name]').fill('Test Person')
         mark_private(browser.page, PROFILE)
-        assert browser.page.locator('[name=name]').get_attribute('data-hoida-private') == '1'
+        assert browser.page.locator('[name=name]').get_attribute('data-vali-private') == '1'
         assert 'blur' in browser.page.locator('[name=name]').evaluate('e => getComputedStyle(e).filter')
         for _ in range(10):
             browser.page.mouse.wheel(0, 50)
@@ -186,7 +186,7 @@ def test_forms_that_only_mention_identification_or_recaptcha_are_not_blocked(loc
 
 
 import pytest
-from hoida_agent.guard import is_final_submit
+from vali_agent.guard import is_final_submit
 
 
 @pytest.mark.parametrize('label,final', [
@@ -207,8 +207,8 @@ def test_filled_values_kept_for_handoff(local_site):
     assert result.filled == [{'label': 'Full name', 'value': '{{name}}'}, {'label': 'Claim type', 'value': 'Refund'}]
 
 
-from hoida_agent.guard import is_navigation
-from hoida_agent.live import _MINIMAL, _ACCEPT_ALL
+from vali_agent.guard import is_navigation
+from vali_agent.live import _MINIMAL, _ACCEPT_ALL
 
 
 def test_landing_page_links_are_not_final_but_paying_links_are():

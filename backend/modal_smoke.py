@@ -12,16 +12,16 @@ from pathlib import Path
 
 import modal
 
-app = modal.App('hoida-sandbox-smoke')
+app = modal.App('vali-sandbox-smoke')
 # Same image as modal_app.py, plus the local fixtures.
 smoke_image = (
     modal.Image.debian_slim(python_version='3.13')
     .pip_install_from_requirements(str(Path(__file__).with_name('requirements.txt')))
     .run_commands('playwright install --with-deps chromium')
-    .add_local_python_source('hoida_api', 'hoida_agent')
+    .add_local_python_source('vali_api', 'vali_agent', 'vali_media', 'vali_wa')
     .add_local_dir(str(Path(__file__).parent / 'tests' / 'agent' / 'fixtures'), '/fixtures')
 )
-secret = modal.Secret.from_name('hoida')
+secret = modal.Secret.from_name('vali')
 
 SCENARIOS = {
     'claim': ('claim.html', 'File a refund claim for flight AY123 (Helsinki-Berlin, 2026-11-10, arrived 4 hours late). '
@@ -40,10 +40,10 @@ def smoke(scenario: str = 'claim', url: str = '', goal: str = '', approve: bool 
     import functools
     import http.server
     import threading
-    from hoida_api.app import create_app, run_browser_session
-    from hoida_api.config import Config
-    from hoida_api.exa import ExaClient
-    from hoida_api.store import SQLiteStore
+    from vali_api.app import create_app, run_browser_session
+    from vali_api.config import Config
+    from vali_api.exa import ExaClient
+    from vali_api.store import SQLiteStore
 
     if url:
         approve = False  # never submit on a real site

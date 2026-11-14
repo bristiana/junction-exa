@@ -2,20 +2,20 @@ from types import SimpleNamespace as NS
 import anthropic
 import httpx
 import pytest
-from hoida_agent.llm import ClaudeLLM
+from vali_agent.llm import ClaudeLLM
 
 
 def adapter(monkeypatch, create):
     monkeypatch.setattr(anthropic, 'Anthropic', lambda: NS(beta=NS(messages=NS(create=create))))
-    monkeypatch.setattr('hoida_agent.llm.time.sleep', lambda _:None)
+    monkeypatch.setattr('vali_agent.llm.time.sleep', lambda _:None)
     return ClaudeLLM()
 
 
 def test_exact_api_arguments(monkeypatch):
     seen = []
     model = adapter(monkeypatch, lambda **kwargs: seen.append(kwargs) or 'response')
-    monkeypatch.delenv('HOIDA_MODEL', raising=False)
-    monkeypatch.delenv('HOIDA_EFFORT', raising=False)
+    for key in ('VALI_MODEL', 'VALI_EFFORT', 'HOIDA_MODEL', 'HOIDA_EFFORT'):
+        monkeypatch.delenv(key, raising=False)
     assert model.next('system', [], []) == 'response'
     assert seen == [dict(model='claude-opus-5-5', max_tokens=16000, system='system', tools=[], messages=[],
                          output_config={'effort':'low'},cache_control={'type':'ephemeral'},

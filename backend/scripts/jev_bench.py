@@ -13,8 +13,8 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hoida_agent.browser import Browser  # noqa: E402
-from hoida_agent.jev import Jev  # noqa: E402
+from vali_agent.browser import Browser  # noqa: E402
+from vali_agent.jev import Jev  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'tests' / 'agent' / 'fixtures'
 CASES = [  # (fixture, intent, regex the chosen line must match)

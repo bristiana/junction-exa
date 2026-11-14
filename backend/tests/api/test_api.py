@@ -11,13 +11,13 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from hoida_api.app import create_app, poll_research_once, create_monitor
-from hoida_api.config import Config
-from hoida_api.exa import ExaClient, ExaError
-from hoida_api.research import SYSTEM_PROMPT, output_schema, build_query, build_run_request, FIND_SCHEMA, progress_from_events
-from hoida_api.router import route
-from hoida_api.store import SQLiteStore
-from hoida_wa.api import GraphAPIClient
+from vali_api.app import create_app, poll_research_once, create_monitor
+from vali_api.config import Config
+from vali_api.exa import ExaClient, ExaError
+from vali_api.research import SYSTEM_PROMPT, output_schema, build_query, build_run_request, FIND_SCHEMA, progress_from_events
+from vali_api.router import route
+from vali_api.store import SQLiteStore
+from vali_wa.api import GraphAPIClient
 import asyncio
 
 
@@ -268,7 +268,7 @@ def test_browser_hooks_offline(api, monkeypatch):
     import sys
     import types
     from dataclasses import dataclass
-    module = importlib.import_module('hoida_api.app')
+    module = importlib.import_module('vali_api.app')
     client, application, store, *_ = api
     task = client.post('/v1/tasks', json={'task': 'find café'}).json()
     tid = task['id']
@@ -291,7 +291,7 @@ def test_browser_hooks_offline(api, monkeypatch):
     def approve_on_sleep(seconds):
         assert seconds == 2
         assert client.post(f'/v1/tasks/{tid}/approve').status_code == 200
-    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(run_browser_agent=fake_agent, AgentHooks=FakeHooks))
+    monkeypatch.setitem(sys.modules, 'vali_agent', types.SimpleNamespace(run_browser_agent=fake_agent, AgentHooks=FakeHooks))
     monkeypatch.setattr(module.time, 'sleep', approve_on_sleep)
     module.run_browser_session(tid, 'goal', 'https://example.com', {}, application)
     execution = store.get_task(tid)['execution']
@@ -331,9 +331,9 @@ def test_spend_aggregation_boundaries(api):
 
 def test_live_frame_is_served_to_the_owner_only(tmp_path):
     from fastapi.testclient import TestClient
-    from hoida_api.app import create_app
-    from hoida_api.config import Config
-    from hoida_api.store import SQLiteStore
+    from vali_api.app import create_app
+    from vali_api.config import Config
+    from vali_api.store import SQLiteStore
     store = SQLiteStore(':memory:')
     application = create_app(config=Config(), store=store)
     with TestClient(application) as client:
@@ -523,7 +523,7 @@ def test_whatsapp_response_is_sent_before_processing(wa):
 def test_whatsapp_browser_terminal_push(wa, monkeypatch, status):
     import sys
     import types
-    from hoida_api.app import run_browser_session
+    from vali_api.app import run_browser_session
     api, graph, deliver = wa
     client, application, store, *_ = api
     pair_whatsapp(api, deliver)
@@ -533,7 +533,7 @@ def test_whatsapp_browser_terminal_push(wa, monkeypatch, status):
     graph.sent.clear()
     def agent(**kwargs):
         return {'status': status, 'error': 'Fake failure', 'result': '', 'final_url': 'https://example.com'}
-    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(
+    monkeypatch.setitem(sys.modules, 'vali_agent', types.SimpleNamespace(
         run_browser_agent=agent, AgentHooks=lambda **kwargs: kwargs))
     run_browser_session(task['id'], 'goal', 'https://example.com', {}, application)
     assert len(graph.sent) == 1
@@ -611,8 +611,8 @@ def test_whatsapp_approval_aliases(wa, reply, decision):
 
 
 def test_whatsapp_question_once_and_live_approval(wa):
-    from hoida_api.wa_channel import push_task
-    from hoida_wa.render import render_execution_update
+    from vali_api.wa_channel import push_task
+    from vali_wa.render import render_execution_update
     api, graph, deliver = wa
     client, application, store, *_, user = api
     pair_whatsapp(api, deliver)
@@ -647,7 +647,7 @@ def test_whatsapp_question_once_and_live_approval(wa):
 
 
 def test_whatsapp_failures_logged_without_private_data(wa, caplog):
-    from hoida_wa.api import GraphAPIError
+    from vali_wa.api import GraphAPIError
     api, graph, deliver = wa
     pair_whatsapp(api, deliver)
     async def broken(*args, **kwargs):
@@ -661,7 +661,7 @@ def test_whatsapp_failures_logged_without_private_data(wa, caplog):
 
 
 def test_whatsapp_existing_elevenlabs_voice_wiring(wa, monkeypatch):
-    import hoida_media.voice as voice
+    import vali_media.voice as voice
     api, graph, deliver = wa
     client, application, store, *_, user = api
     pair_whatsapp(api, deliver)
@@ -688,8 +688,8 @@ def test_whatsapp_existing_elevenlabs_voice_wiring(wa, monkeypatch):
 def test_whatsapp_agent_question_is_pushed_and_answered(wa, monkeypatch):
     import sys
     import types
-    from hoida_agent.hooks import AgentHooks
-    from hoida_api.app import run_browser_session
+    from vali_agent.hooks import AgentHooks
+    from vali_api.app import run_browser_session
     api, graph, deliver = wa
     client, application, store, *_, user = api
     pair_whatsapp(api, deliver)
@@ -707,16 +707,16 @@ def test_whatsapp_agent_question_is_pushed_and_answered(wa, monkeypatch):
         assert kwargs['hooks'].ask_user('Which slot?') == '19:30'
         assert kwargs['hooks'].pending_messages() == []
         return {'status': 'done', 'result': 'Done'}
-    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(run_browser_agent=agent, AgentHooks=AgentHooks))
+    monkeypatch.setitem(sys.modules, 'vali_agent', types.SimpleNamespace(run_browser_agent=agent, AgentHooks=AgentHooks))
     run_browser_session(tid, 'goal', 'https://example.com', {}, application)
     assert store.get_task(tid)['execution']['question'] is None
     assert [body for _, body, _ in graph.sent].count('Which slot?') == 1
 
 
 def test_whatsapp_image_failure_falls_back_to_text_and_buttons(wa, caplog):
-    from hoida_api.wa_channel import push_task
-    from hoida_wa.api import GraphAPIError
-    from hoida_wa.render import render_execution_update
+    from vali_api.wa_channel import push_task
+    from vali_wa.api import GraphAPIError
+    from vali_wa.render import render_execution_update
     api, graph, deliver = wa
     client, application, store, *_, user = api
     pair_whatsapp(api, deliver)
@@ -810,7 +810,7 @@ def test_whatsapp_approval_text_fallback(wa, reply):
 
 
 def test_whatsapp_processing_failures_are_private_and_do_not_abort_batch(wa, caplog):
-    from hoida_wa.api import GraphAPIError
+    from vali_wa.api import GraphAPIError
     api, graph, deliver = wa
     client, application, *_ = api
     seen = []
@@ -834,7 +834,7 @@ def test_whatsapp_processing_failures_are_private_and_do_not_abort_batch(wa, cap
 
 
 def test_whatsapp_voice_graph_to_elevenlabs_to_task(wa, monkeypatch):
-    from hoida_media import voice
+    from vali_media import voice
     api, graph, deliver = wa
     client, application, *_ = api
     # The existing media helper reads the same environment key as Config.
@@ -877,7 +877,7 @@ def test_whatsapp_voice_graph_to_elevenlabs_to_task(wa, monkeypatch):
 def test_whatsapp_agent_question_is_delivered_and_answered(wa, monkeypatch):
     import sys
     import types
-    from hoida_api import app as module
+    from vali_api import app as module
     api, graph, deliver = wa
     client, application, store, *_ = api
     pair_whatsapp(api, deliver)
@@ -891,7 +891,7 @@ def test_whatsapp_agent_question_is_delivered_and_answered(wa, monkeypatch):
     def answer(seconds):
         assert any(body == 'Is the later time OK?' for _, body, _ in graph.sent)
         deliver('no', mid='question-answer')
-    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(
+    monkeypatch.setitem(sys.modules, 'vali_agent', types.SimpleNamespace(
         run_browser_agent=fake_agent, AgentHooks=lambda **kwargs: types.SimpleNamespace(**kwargs)))
     monkeypatch.setattr(module.time, 'sleep', answer)
     module.run_browser_session(tid, 'goal', 'https://example.com/form', {}, application)

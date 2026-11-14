@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import cloudinary.uploader
 import pytest
 
-from hoida_media import screenshots
+from vali_media import screenshots
 
 
 def test_missing_config_never_uploads(monkeypatch):
@@ -18,15 +18,15 @@ def test_missing_config_never_uploads(monkeypatch):
 
 def test_upload_through_sdk(monkeypatch):
     monkeypatch.setenv("CLOUDINARY_URL", "cloudinary://test-key:test-secret@test-cloud")
-    url = "https://res.cloudinary.com/test-cloud/image/upload/v1/hoida/task-test/step-007.jpg"
+    url = "https://res.cloudinary.com/test-cloud/image/upload/v1/vali/task-test/step-007.jpg"
     calls = []
 
     def request(**kwargs):
         calls.append(kwargs)
         fields = dict(kwargs["fields"])
-        assert fields["folder"] == "hoida/task-test"
+        assert fields["folder"] == "vali/task-test"
         assert fields["public_id"] == "step-007"
-        assert fields["tags"] == "hoida,task-test"
+        assert fields["tags"] == "vali,task-test"
         assert fields["overwrite"] == "1"  # SDK serialization of overwrite=True
         assert fields["file"][1] == b"synthetic-jpeg"
         assert "/image/upload" in kwargs["url"]
@@ -76,7 +76,7 @@ def test_hard_deadline_even_if_sdk_blocks(monkeypatch, caplog):
 
 
 def test_thumbnail_preserves_version_path_and_query():
-    url = "https://res.cloudinary.com/demo/image/upload/v3/hoida/t/step-001.jpg?x=y"
+    url = "https://res.cloudinary.com/demo/image/upload/v3/vali/t/step-001.jpg?x=y"
     assert screenshots.thumbnail_url(url, 480) == url.replace(
         "/upload/", "/upload/c_limit,w_480,q_auto,f_auto/",
     )

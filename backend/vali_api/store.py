@@ -195,7 +195,7 @@ class Store:
 
 
 class SQLiteStore(Store):
-    def __init__(self, path='hoida.db'):
+    def __init__(self, path='vali.db'):
         conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         conn.row_factory = sqlite3.Row
         super().__init__(conn)
