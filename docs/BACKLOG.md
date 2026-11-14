@@ -26,15 +26,28 @@ Rules for the loop: every item is verified live, not only with tests. Commits as
 - [x] D2 Default API URL = the deployed Modal URL; settings still allow localhost.
 
 ## E. Rename to Vali (after A-D are stable)
-- [ ] E1 Use vali_* packages and VALI_* env names with legacy env fallback; Modal apps vali / vali-sandbox, Modal secret vali. Update the Meta webhook callback to the new URL, plus the extension and desktop defaults. Re-verify WhatsApp live.
+- [x] E1 Use vali_* packages and VALI_* env names with legacy env fallback; Modal apps vali / vali-sandbox, Modal secret vali. Update the Meta webhook callback to the new URL, plus the extension and desktop defaults. Re-verify WhatsApp live.
 
 ## F. Demo
-- [ ] F1 docs/DEMO.md: a 3-minute script with the exact errands that work.
-- [ ] F2 README: what Vali is, setup, partners used (Exa, Modal, Aiven, Jev, ElevenLabs, Codex).
+- [x] F1 docs/DEMO.md: a 3-minute script with the exact errands that work.
+- [x] F2 README: what Vali is, setup, partners used (Exa, Modal, Aiven, Jev, ElevenLabs, Codex).
+
+## G. Focus from 05:10: backend + Mac app (WhatsApp parked)
+WhatsApp is parked: Meta blocks sending from unverified business portfolios (131031). The code stays; it is not on the demo path.
+- [ ] K1 Backend endpoints for easy input: POST /v1/voice (audio upload -> ElevenLabs STT -> text, optional create task) and POST /v1/letters (image or PDF -> read_letter -> task with the letter as context). Reuse vali_media. Tests.
+- [ ] K2 Device linking: the desktop app and the extension share one account. POST /v1/link/code (signed in device gets a 6-digit code) and POST /v1/link (other device trades the code for the same user token). Tests.
+- [ ] K3 Golden stays green every tick; add a fourth golden errand that goes through /v1/letters with a sample letter image in scripts/fixtures/.
+- [ ] M1 Mac app against the live API: first run creates or links an account, Alt+Space task, find / claim / execute to approval, live view, approve. Fix what breaks.
+- [ ] M2 Easiest input: Spotlight-style quick box; hold a key or click the mic to talk (records audio -> /v1/voice); drop a letter photo or PDF on the mascot (-> /v1/letters); "Ask Vali about this" on selected text via a shortcut that reads the clipboard; the frontmost Chrome/Safari tab URL and title as page context.
+- [ ] M3 Link with the extension through K2 (show a code in one, type it in the other).
+- [ ] M4 Profile on the Mac: name, address, ID numbers kept locally and filled into placeholders only at execute time, same as the extension.
+- [ ] M5 `npm run dist` builds an unsigned .dmg with the mascot icon; README updated.
 
 ## Needs Bogdan
-- Meta rejects every outbound message with 131031 "Business Account locked". In WhatsApp Manager, check why the account is locked and request a review. Until then Vali receives messages but cannot reply (A1, plus a live check of A3-A5).
+- PR merges: the auto mode classifier blocks `gh pr merge`. Merge PR #1 yourself, or allow it in settings.
+- WhatsApp (parked): Meta rejects every outbound message with 131031 "Business Account locked". In WhatsApp Manager, check why the account is locked and request a review. Until then Vali receives messages but cannot reply (A1, plus a live check of A3-A5).
 
 ## Log
 - 04:40 Merged the sandbox. Golden 3/3 live. WhatsApp hardening (305 tests) and extension live view, approval and blockers (42 tests) committed. CI added, PR #1 open. Desktop app in progress.
 - 04:55 Desktop app (Electron) built: mascot window, tray, Alt+Space quick task, shared panel, notifications. 6 tests, smoke screenshots checked.
+- 05:10 Rename to vali deployed (apps vali, vali-sandbox); golden 3/3 on the new URL. Docs written. WhatsApp parked after research: unverified portfolios cannot send. Focus moves to backend + Mac app.
