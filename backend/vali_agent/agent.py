@@ -5,14 +5,14 @@ from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlsplit
 from vali_api.config import vali_env
-from .browser import Browser
+from .browser import Browser, is_navigation_error
 from .guard import is_final_submit
 from .hooks import AgentHooks
 from .jev import Jev, final_submit_probability, find_element
 from .live import Screencast, dismiss_cookie_banner
 from .llm import ClaudeLLM, LLM
 from .privacy import mask, substitute, private_values
-from .scope import permitted_profile, reject_placeholders
+from .scope import permitted_profile, reject_placeholders, with_name_parts
 from .untrusted import untrusted
 from .web import ExaTools
 
@@ -123,6 +123,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                       hooks: AgentHooks, llm: LLM | None = None, max_steps: int = 30,
                       headless: bool = True, exa: ExaTools | None = None, jev: Jev | None = None,
                       cookies: list[dict] | None = None, max_model_calls: int = 30) -> AgentResult:
+    profile = with_name_parts(profile)
     allowed_profile = permitted_profile(goal, profile)
     declined = set()
 
@@ -156,6 +157,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
     final_url = start_url
     approved = False
     nudges = 0
+    login_doubted = False  # the model said "needs login" once on a page with no login wall
     last_snapshot = ''
     system = mask(
         f"You are Vali's browser hand. Goal: {goal}\n"
@@ -186,6 +188,11 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
            + ', use ask_user once instead of guessing. ' if hooks.ask_user else '')
         + ('If Exa' + (' and ask_user' if hooks.ask_user else '') + ' cannot give you a needed fact, call '
            'fail("missing: <the fact>") instead of retrying in a loop or inventing it. ' if exa.enabled else '')
+        + 'A sign-in box next to a guest option (e.g. "as a guest", "without an account") is not a login wall: pick the '
+        'guest option and continue. On a contact or address step, fill every field you have a placeholder for. If a '
+        'required field needs a personal detail you have no placeholder for, never invent it, never ask for it and '
+        'never fail over it: fill the rest, then call request_approval and name each missing field in the summary '
+        '("Missing: Phone") so the user can finish it by hand. '
         + 'When everything is filled and only the final submit or payment is left, call request_approval with a summary '
         'of every value (never fail at that point); if payment follows, the user finishes it at the bank. '
         'Messages from the user may arrive while you work; follow them unless they conflict with these rules. '
@@ -387,12 +394,26 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                             status, result, terminal = 'done', args['result'], True
                             content = mask(result, profile) + '\n' + snapshot()
                         elif name == 'fail':
+                            if (not blockers and not login_doubted
+                                    and re.match(r'\s*needs\s+login\b', mask(args['reason'], profile), re.I)):
+                                # A password box beside a guest choice, or a plain contact form, is not a login wall.
+                                login_doubted = True
+                                raise ValueError('This page is not a login wall: no sign-in-only page was detected. '
+                                                 'If it offers a guest option, pick it; fill the fields you have '
+                                                 'placeholders for and call request_approval before the final step. '
+                                                 'Call fail again only if there is no way on without an account')
                             result, terminal = args['reason'], True
                             if blockers:
                                 result = _handoff(blockers, browser.current_url, result)
                             content = mask(result, profile) + '\n' + snapshot()
                         elif name == 'request_approval':
                             summary = mask(args['summary'], profile)
+                            try:
+                                missing = [mask(label, profile) for label in browser.missing_required()]
+                            except Exception:
+                                missing = []
+                            if missing:
+                                summary += ' Still empty (required): ' + ', '.join(missing) + '.'
                             filled = [{k: mask(v, profile) if isinstance(v, str) else v for k, v in field.items()} for field in args['filled']]
                             approved = bool(hooks.wait_for_approval(summary, filled))
                             if hooks.should_stop() or not approved:
@@ -451,8 +472,9 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                     step_text = mask(f'Clicked "{label_of(found)}" (found by Jev)', profile)
                                 described = browser.element_text(args['ref'])
                                 info = browser.element_info(args['ref'])
-                                final = is_final_submit(described, info['label'])
-                                if not final and not approved and not info['toggle']:
+                                # A native radio only picks an option; selecting it cannot submit anything.
+                                final = not info.get('choice') and is_final_submit(described, info['label'])
+                                if not final and not approved and not info['toggle'] and not info.get('choice'):
                                     # Jev can only make the guard stricter: a confident "irreversible" blocks the click.
                                     # Menu and dropdown toggles (aria-expanded/haspopup) only open choices; Jev is not asked.
                                     p = final_submit_probability(jev, mask(described, profile), last_snapshot)
@@ -508,9 +530,17 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                     except Exception as exc:
                         approved = False
                         error = True
-                        content = mask(f'Tool error: {exc}', profile)
+                        if is_navigation_error(exc):
+                            # The page navigated mid-action (a frame detached): re-read the new page, do not refuse.
+                            browser.recover()
+                            final_url, error = browser.current_url, False
+                            content = ('The page changed while acting (it navigated or re-rendered); the last action '
+                                       'may already have taken effect. Here is the page now; check it before acting again.')
+                            hooks.on_step('Page changed; read it again', None)
+                        else:
+                            content = mask(f'Tool error: {exc}', profile)
+                            hooks.on_step(mask('Action refused: ' + str(exc), profile), shot())
                         content += '\n' + snapshot()
-                        hooks.on_step(mask('Action refused: ' + str(exc), profile), shot())
                 if isinstance(content, str):
                     content = mask(content, profile)
                 results.append({'type': 'tool_result', 'tool_use_id': block.id, 'content': content, 'is_error': error})

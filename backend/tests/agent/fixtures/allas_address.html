@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Checkout — Contact details</title>
+<!-- Modeled on shop.allaspool.fi/en/shop/address: "Returning customer" is preselected, so a password box shows
+     until the guest option is picked. ?hidden=1 hides the radio inputs and shows only their labels. -->
+<style>.panel{display:none}.panel.on{display:block}.hidden-radio input[type=radio]{position:absolute;opacity:0;width:0;height:0}</style>
+<body>
+<h1>Customer details</h1><p>Choose how you want to continue with your order.</p>
+<div id="modes">
+<label><input type="radio" name="contact_mode" value="login" checked> Returning customer Log in to your customer account.</label>
+<div class="panel on" id="p-login"><form onsubmit="return false"><label>Email <input type="email" name="login" required></label>
+<label>Password <input type="password" name="password" required></label><button type="submit">Log in</button></form></div>
+<label><input type="radio" name="contact_mode" value="signup"> New customer Create a customer account to manage your purchases and details easily in one place.</label>
+<div class="panel" id="p-signup"><label>Password <input type="password" autocomplete="new-password" required></label></div>
+<label><input type="radio" name="contact_mode" value="guest"> As a guest I want to buy tickets without logging in or registering. Note! A booking bought as a guest cannot be viewed or changed afterwards.</label>
+<div class="panel" id="p-guest"><form id="guest" onsubmit="document.body.dataset.submitted='yes'; return false">
+<label>First name <input name="first_name" autocomplete="given-name" required></label>
+<label>Last name <input name="last_name" autocomplete="family-name" required></label>
+<label>Email <input type="email" name="email" autocomplete="email" required></label>
+<label>Phone <input type="tel" name="phone" autocomplete="tel" required></label>
+<button type="submit">Continue to payment method</button></form></div>
+</div>
+<script>
+if (new URLSearchParams(location.search).get('hidden')) document.getElementById('modes').className = 'hidden-radio';
+for (const radio of document.querySelectorAll('[name=contact_mode]'))
+  radio.addEventListener('change', () => document.querySelectorAll('.panel').forEach(p =>
+    p.classList.toggle('on', p.id === 'p-' + document.querySelector('[name=contact_mode]:checked').value)));
+</script>
+</body>
