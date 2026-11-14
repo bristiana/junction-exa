@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vali design system</title>
+  <link rel="stylesheet" href="tokens.css" />
+  <link rel="stylesheet" href="components.css" />
+  <style>
+    /* preview layout only */
+    body { margin: 0; }
+    .cols { display: flex; flex-wrap: wrap; }
+    .col { flex: 1 1 400px; padding: var(--v-s-5) var(--v-s-4) var(--v-s-6); display: flex; flex-direction: column; gap: var(--v-s-5); }
+    .col > h1 { margin: 0; font-size: var(--v-fs-xl); }
+    h2 { margin: 0 0 var(--v-s-2); font-size: var(--v-fs-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--v-muted); }
+    .wrap { display: flex; flex-wrap: wrap; gap: var(--v-s-2); align-items: center; }
+    .stack { display: flex; flex-direction: column; gap: var(--v-s-3); }
+    .head { display: flex; align-items: center; justify-content: space-between; padding: var(--v-s-3) var(--v-s-4); border-bottom: 1px solid var(--v-line); }
+    .head h3 { margin: 0; font-size: var(--v-fs-md); display: flex; gap: var(--v-s-2); align-items: center; }
+    .muted { color: var(--v-muted); margin: 0; }
+  </style>
+</head>
+<body>
+<div class="cols">
+  <section class="col v-app" id="a">
+    <h1 data-label>Vali</h1>
+
+    <div>
+      <h2>Bubble</h2>
+      <div class="v-speaker">
+        <img src="../extension/mascot/needs_approval.svg" alt="" />
+        <p class="v-bubble">Kela is waiting for your OK. Nothing is sent until you say so.</p>
+      </div>
+    </div>
+
+    <div>
+      <h2>Errands (row)</h2>
+      <div class="v-card v-card--flush">
+        <div class="head"><h3>Errands <span class="v-badge v-badge--count">2</span></h3><button class="v-btn v-btn--quiet v-btn--sm">Clear done</button></div>
+        <div class="v-row" data-tone="warning">
+          <img class="v-row__lead" src="../extension/mascot/needs_approval.svg" alt="" />
+          <div class="v-row__main"><a class="v-row__link v-row__title" href="#">Kela housing allowance</a><p class="v-row__status"><b>Waiting for your OK</b> · form filled, nothing sent</p></div>
+          <div class="v-row__actions"><button class="v-btn v-btn--sm">Approve</button><button class="v-btn v-btn--quiet v-btn--sm">Review</button></div>
+        </div>
+        <div class="v-row" data-tone="warning">
+          <img class="v-row__lead" src="../extension/mascot/error.svg" alt="" />
+          <div class="v-row__main"><a class="v-row__link v-row__title" href="#">Suomi.fi tax card</a><p class="v-row__status"><b>Needs login</b> · sign in with your bank ID</p></div>
+          <div class="v-row__actions"><button class="v-btn v-btn--sm">Log in</button></div>
+        </div>
+        <div class="v-row">
+          <img class="v-row__lead" src="../extension/mascot/working.svg" alt="" />
+          <div class="v-row__main"><a class="v-row__link v-row__title is-focus" href="#">Finnair delay claim</a><p class="v-row__status"><b>Working</b> · step 3 of 5, adding your booking code</p></div>
+          <div class="v-row__actions"><button class="v-btn v-btn--quiet v-btn--sm">Stop</button></div>
+        </div>
+        <div class="v-row" data-tone="success">
+          <img class="v-row__lead" src="../extension/mascot/success.svg" alt="" />
+          <div class="v-row__main"><a class="v-row__link v-row__title" href="#">Find a sauna for Saturday</a><p class="v-row__status"><b>Done</b> · 3 options, Kotiharju has room at 18:00</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Live browser</h2>
+      <div class="stack">
+        <div class="v-live v-live--waiting"><span class="v-badge v-badge--warning v-badge--dot">Waiting for your OK</span><img class="v-live__shot" alt="Kela form, filled" data-shot="kela" /></div>
+        <div class="v-live"><span class="v-badge v-badge--dot v-badge--live">Working</span><img class="v-live__shot" alt="Delay claim form" data-shot="claim" /></div>
+        <div class="v-live" data-empty="Waiting for the first picture"><span class="v-badge v-badge--muted v-badge--dot">Starting</span><img class="v-live__shot" alt="" /></div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Card</h2>
+      <article class="v-card v-card--attention">
+        <h3 class="v-card__title">Kela housing allowance</h3>
+        <p class="muted">Form filled with your details. €412 a month from 1 December. Check it, then send.</p>
+        <div class="v-card__actions"><button class="v-btn">Approve and send</button><button class="v-btn v-btn--quiet">Edit</button><button class="v-btn v-btn--danger">Stop</button></div>
+      </article>
+    </div>
+
+    <div>
+      <h2>Badges</h2>
+      <div class="wrap">
+        <span class="v-badge v-badge--dot v-badge--live">Working</span>
+        <span class="v-badge v-badge--warning v-badge--dot">Waiting for your OK</span>
+        <span class="v-badge v-badge--warning v-badge--dot">Needs login</span>
+        <span class="v-badge v-badge--success v-badge--dot">Done</span>
+        <span class="v-badge v-badge--danger v-badge--dot">Couldn't finish</span>
+        <span class="v-badge v-badge--muted">Stopped</span>
+        <span class="v-badge v-badge--count">2</span>
+        <span class="v-badge v-badge--count">12</span>
+      </div>
+    </div>
+
+    <div>
+      <h2>Buttons</h2>
+      <div class="stack">
+        <div class="wrap"><button class="v-btn">Send</button><button class="v-btn v-btn--quiet">Edit</button><button class="v-btn v-btn--danger">Stop</button><button class="v-btn is-focus">Focused</button></div>
+        <div class="wrap"><button class="v-btn v-btn--sm">Small</button><button class="v-btn">Medium</button><button class="v-btn v-btn--lg">Large</button><button class="v-btn" disabled>Disabled</button></div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Fields</h2>
+      <div class="stack">
+        <div><label class="v-label" for="t">Errand</label><textarea class="v-textarea" id="t" placeholder="What should I take care of?"></textarea></div>
+        <div><label class="v-label" for="c">Booking code</label><input class="v-input is-focus" id="c" value="K7Q2ZP" /></div>
+        <div><label class="v-label" for="h">Henkilötunnus</label><input class="v-input" id="h" value="010190-12" aria-invalid="true" /><p class="v-hint">That looks too short. It has 11 characters.</p></div>
+      </div>
+    </div>
+
+    <div>
+      <h2>Empty</h2>
+      <div class="v-card v-empty">
+        <img src="../extension/mascot/idle.svg" alt="" />
+        <p class="v-empty__title">No errands yet</p>
+        <p class="v-empty__text">Hand one off. Vali does the legwork and asks before anything is sent.</p>
+        <button class="v-btn">Start an errand</button>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+  // Fake screenshots (generic pages, no real branding), then a second column in the other theme.
+  const page = (title, rows, note) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400"><rect width="640" height="400" fill="#fbfbfd"/><rect width="640" height="44" fill="#e9eaf0"/><circle cx="22" cy="22" r="6" fill="#c9cbd6"/><rect x="40" y="14" width="360" height="16" rx="8" fill="#fff"/><text x="40" y="92" font-family="sans-serif" font-size="24" font-weight="700" fill="#22242e">${title}</text>${rows.map((r, i) => `<text x="40" y="${140 + i * 56}" font-family="sans-serif" font-size="13" fill="#6b6e7c">${r[0]}</text><rect x="40" y="${148 + i * 56}" width="400" height="30" rx="6" fill="#fff" stroke="#d4d6e0"/><text x="52" y="${168 + i * 56}" font-family="sans-serif" font-size="14" fill="#22242e">${r[1]}</text>`).join('')}<rect x="40" y="${150 + rows.length * 56}" width="140" height="36" rx="8" fill="#3d4f8f"/><text x="62" y="${173 + rows.length * 56}" font-family="sans-serif" font-size="14" fill="#fff">${note}</text></svg>`);
+  const shots = {
+    kela: page('Housing allowance', [['Applicant', 'A. Virtanen'], ['Monthly rent', '€890'], ['Start date', '1.12.2026']], 'Send application'),
+    claim: page('Delay compensation', [['Flight', 'AY1432 HEL to BCN'], ['Delay', '4 h 10 min'], ['Booking code', 'K7Q2Z…']], 'Continue')
+  };
+  const a = document.getElementById('a');
+  const b = a.cloneNode(true);
+  b.id = 'b';
+  a.after(b);
+  document.querySelectorAll('[data-shot]').forEach((img) => (img.src = shots[img.dataset.shot]));
+  const sysDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  b.dataset.theme = sysDark ? 'light' : 'dark';
+  a.querySelector('[data-label]').textContent = `Vali · system (${sysDark ? 'dark' : 'light'})`;
+  b.querySelector('[data-label]').textContent = `Vali · data-theme="${b.dataset.theme}"`;
+  b.querySelectorAll('[id]').forEach((el) => (el.id += '-b'));
+  b.querySelectorAll('label[for]').forEach((el) => (el.htmlFor += '-b'));
+</script>
+</body>
+</html>
