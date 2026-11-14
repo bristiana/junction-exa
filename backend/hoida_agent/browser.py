@@ -142,7 +142,13 @@ class Browser:
         if not re.match(r'^https?://', url, re.I):
             raise ValueError('Only http and https URLs are supported')
         self._refs = {}
-        self.page.goto(url, wait_until='domcontentloaded', timeout=5000)
+        try:
+            # Public-sector sites can take well over 5 s to load.
+            self.page.goto(url, wait_until='domcontentloaded', timeout=20000)
+        except BrowserTimeout:
+            # Keep going if the page has content; a slow tracker should not end the run.
+            if not self.page.evaluate("() => (document.body?.innerText || '').trim().length > 50"):
+                raise ValueError(f'The page did not load in 20 s: {url}')
         self._settle()
 
     def snapshot(self):
