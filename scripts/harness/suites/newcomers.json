@@ -1,0 +1,18 @@
+{"persona": "an international student or newcomer who just arrived in Finland", "cases": [
+ {"phrase": "how do I get a Finnish personal identity code as a foreigner", "must_mention": ["DVV"]},
+ {"phrase": "open a bank account in Finland without a Finnish personal identity code"},
+ {"phrase": "which benefits can an international student in Finland get", "must_mention": ["Kela"]},
+ {"phrase": "can I work more than 30 hours with a student residence permit", "must_mention": ["Migri"]},
+ {"phrase": "Migri residence permit extension student how long does it take", "must_mention": ["Migri"]},
+ {"phrase": "claim my Kela housing allowance step by step", "must_mention": ["Kela"]},
+ {"phrase": "is a 10% rent increase legal in Finland"},
+ {"phrase": "mitä maksaa HSL kuukausilippu opiskelijalle", "must_mention": ["HSL"]},
+ {"phrase": "get a tax card for a part time job", "must_mention": ["Vero"]},
+ {"phrase": "my VR train from Helsinki to Tampere was cancelled today, what can I get back", "expected_modes": ["claim", "check"]},
+ {"phrase": "cheapest way from Helsinki airport to Otaniemi at 1am"},
+ {"phrase": "where can I get a cheap winter jacket in Helsinki", "expected_modes": ["find"]},
+ {"phrase": "Aalto university tuition fees for non-EU students"},
+ {"phrase": "find a dentist in Helsinki that takes new patients and speaks English", "expected_modes": ["find"]},
+ {"phrase": "register with a health centre in Espoo as a student"},
+ {"phrase": "lost my residence permit card what do i do"}
+]}

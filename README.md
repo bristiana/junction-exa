@@ -69,6 +69,7 @@ Cloudinary support exists for screenshots (`vali_media/screenshots.py`) but is n
 | `backend/modal_smoke.py` | Ephemeral Modal runs of the sandbox on fixtures or real sites. |
 | `backend/tests/` | pytest, all offline (fake Exa, fake models, local HTML fixtures). |
 | `scripts/golden.py` | Live checks against the deployed API. |
+| `scripts/harness/run.py` | Phrase-suite harness: scores any phrase on the live API (`--suite video|judges|newcomers|all`, `--grade`), writes `latest.md`. |
 | `scripts/mock-backend.mjs` | Mock API with canned answers, no keys. |
 | `test/` | Node tests for the extension. |
 | `docs/` | Brief, architecture, sandbox, errand test set, demo sites, demo script. |
