@@ -19,11 +19,11 @@ class VoiceError(RuntimeError):
         self.status_code = status_code
 
 
-def _post(path: str, key: str, transport: httpx.BaseTransport | None, **kwargs) -> httpx.Response:
+def _request(method: str, path: str, key: str, transport: httpx.BaseTransport | None, **kwargs) -> httpx.Response:
     try:
         with httpx.Client(transport=transport, timeout=30.0) as client:
-            response = client.post(
-                f"{API_URL}/{path}", headers={"xi-api-key": key}, **kwargs,
+            response = client.request(
+                method, f"{API_URL}/{path}", headers={"xi-api-key": key}, **kwargs,
             )
             response.raise_for_status()
             return response
@@ -33,21 +33,58 @@ def _post(path: str, key: str, transport: httpx.BaseTransport | None, **kwargs) 
         raise VoiceError("Vali voice connection failed") from None
 
 
+def _post(path: str, key: str, transport: httpx.BaseTransport | None, **kwargs) -> httpx.Response:
+    return _request("POST", path, key, transport, **kwargs)
+
+
+# connection type -> (endpoint, response field, field the JS client takes)
+CONVERSATION_CREDENTIALS = {
+    "webrtc": ("convai/conversation/token", "token", "conversation_token"),
+    "websocket": ("convai/conversation/get-signed-url", "signed_url", "signed_url"),
+}
+
+
+def conversation_credentials(
+    agent_id: str, *, api_key: str, connection: str = "webrtc",
+    transport: httpx.BaseTransport | None = None,
+) -> dict:
+    """Short-lived start credentials for a private agent (WebRTC token or WebSocket signed URL)."""
+    path, field, name = CONVERSATION_CREDENTIALS[connection]
+    response = _request("GET", path, api_key, transport, params={"agent_id": agent_id})
+    try:
+        value = response.json()[field]
+        if not isinstance(value, str) or not value:
+            raise ValueError
+    except (ValueError, KeyError, TypeError):
+        raise VoiceError("Vali voice session response is invalid", response.status_code) from None
+    return {name: value}
+
+
+# Container names ElevenLabs recognises; Safari and macOS record .m4a or .caf.
+AUDIO_EXTENSIONS = {
+    "audio/webm": "webm", "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/wav": "wav",
+    "audio/x-wav": "wav", "audio/mp4": "m4a", "audio/m4a": "m4a", "audio/x-m4a": "m4a",
+    "audio/x-caf": "caf", "audio/caf": "caf",
+}
+
+
+def audio_filename(mime_type: str) -> str:
+    return "voice." + AUDIO_EXTENSIONS.get(mime_type.split(";")[0].strip().lower(), "bin")
+
+
 def transcribe(
     audio_bytes: bytes, mime_type: str, language_hint: str | None = None,
-    *, transport: httpx.BaseTransport | None = None,
+    *, api_key: str, transport: httpx.BaseTransport | None = None,
 ) -> str:
     """Transcribe original bytes, including Ogg/Opus, without transcoding."""
-    key = os.environ.get("ELEVENLABS_API_KEY")
-    if not key:
+    if not api_key:
         return ""
     data = {"model_id": STT_MODEL_ID}
     if language_hint:
         data["language_code"] = language_hint
-    extensions = {"audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/wav": "wav"}
-    filename = "voice." + extensions.get(mime_type.split(";")[0].strip(), "bin")
+    filename = audio_filename(mime_type)
     response = _post(
-        "speech-to-text", key, transport, data=data,
+        "speech-to-text", api_key, transport, data=data,
         files={"file": (filename, audio_bytes, mime_type)},
     )
     try:

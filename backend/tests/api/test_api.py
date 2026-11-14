@@ -672,8 +672,8 @@ def test_whatsapp_existing_elevenlabs_voice_wiring(wa, monkeypatch):
         assert b'fake audio' in request.content and b'scribe_v' in request.content
         return httpx.Response(200, json={'text': 'find a sauna'})
     original = voice.transcribe
-    def transcribe(data, mime):
-        return original(data, mime, transport=httpx.MockTransport(provider))
+    def transcribe(data, mime, **kwargs):
+        return original(data, mime, **kwargs, transport=httpx.MockTransport(provider))
     monkeypatch.setattr(voice, 'transcribe', transcribe)
     # Recreate to exercise the real app adapter, rather than a fake transcript callback.
     application.state.config.elevenlabs_api_key = 'test-stt-key'
