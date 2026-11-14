@@ -49,6 +49,18 @@ test("never touches passwords, cards, bank details, identity codes or what the u
   assert.deepEqual(planFill(fields, { profile: PROFILE, values: [{ label: "IBAN", value: "FI00 1234" }] }), []);
 });
 
+test("whole words only: no name into company name or filename, no address into email address", () => {
+  const fields = [
+    { id: "a", type: "text", label: "Company name" },
+    { id: "b", type: "text", label: "Maiden name" },
+    { id: "c", type: "text", label: "Filename" },
+    { id: "d", type: "text", label: "Address" },
+    { id: "e", type: "email", label: "Sähköpostiosoite" },
+  ];
+  const plan = planFill(fields, { profile: PROFILE, values: [{ label: "Email address", value: "other@example.org" }] });
+  assert.deepEqual(plan.map((p) => [p.field_id, p.value]), [["e", "test@example.com"]]);
+});
+
 test("splits the full name, uses autocomplete hints, skips placeholders it cannot fill", () => {
   const fields = [
     { id: "a", type: "text", label: "Etunimi" },

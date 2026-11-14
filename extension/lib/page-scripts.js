@@ -246,6 +246,11 @@ export function pageRedactor() {
   return capturePage("redactor");
 }
 
+// True when this document is the page the user chose (origin and path). Runs before capturePage() tags anything.
+export function isPage(expectedUrl) {
+  try { const u = new URL(expectedUrl); return location.origin + location.pathname === u.origin + u.pathname; } catch (_) { return false; }
+}
+
 // Fills the tagged fields with the approved values. It never submits the form. expectedUrl is the page the user chose:
 // if this document is another page (origin or path), nothing is filled.
 export function fillPage(values, expectedUrl) {
@@ -281,9 +286,8 @@ export function fillPage(values, expectedUrl) {
       target.click();
       mark(target.closest("label") || target);
     } else if (type === "checkbox") {
-      const want = /^(yes|true|1|checked|on|kyll)/i.test(v);
-      if (el.checked !== want) el.click();
-      mark(el);
+      skipped.push(field_id); // never ticked: checkboxes are consents and terms, the user decides
+      continue;
     } else if (el.localName === "select") {
       const opt = [...el.options].find((o) => norm(o.value) === norm(v) || norm(o.text) === norm(v)) || [...el.options].find((o) => norm(o.text).includes(norm(v)));
       if (!opt) { skipped.push(field_id); continue; }

@@ -5,7 +5,7 @@
 
 import { createRun, getRun, getRunEvents, cancelRun, TERMINAL } from "./lib/exa.js";
 import { buildRunRequest } from "./lib/task.js";
-import { capturePage, fillPage } from "./lib/page-scripts.js";
+import { capturePage, fillPage, isPage } from "./lib/page-scripts.js";
 import { fillPlaceholders } from "./lib/actions.js";
 import { redactText } from "./lib/redact.js";
 import * as backend from "./lib/backend.js";
@@ -266,13 +266,19 @@ async function fillForm(taskId) {
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
   const own = t.tabId ? await chrome.tabs.get(t.tabId).catch(() => null) : null;
   const tab = [active, own].find((x) => x?.id && samePage(x.url, want));
-  if (!tab) return { filled: 0, skipped: [], error: PAGE_CHANGED };
+  if (!tab || !(await showsPage(tab.id, want))) return { filled: 0, skipped: [], error: PAGE_CHANGED };
   // Re-tag the fields in case the page re-rendered since the errand started.
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage });
   const resolved = values.map((v) => ({ field_id: v.field_id, value: fillPlaceholders(v.value, profile) }));
   const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPage, args: [resolved, want] });
   return res?.result || { filled: 0, skipped: [] };
 }
+// Asks the document itself, before anything in it is read or tagged; fillPage() checks again.
+async function showsPage(tabId, url) {
+  const [res] = await chrome.scripting.executeScript({ target: { tabId }, func: isPage, args: [url] }).catch(() => []);
+  return res?.result === true;
+}
+
 // "Fill it here": the form on the tab the user is on, from this browser's details and the errand's values.
 // Never submits; passwords, cards and bank fields are left alone (lib/fill-here.js). Vali on the page says the rest.
 // tabId and url: the tab and page the panel showed when the user pressed it; refused if the tab has moved on since.
@@ -281,7 +287,7 @@ async function fillHere(taskId, tabId, url) {
   const t = taskId ? await findTask(taskId) : null;
   if (!tabId || !/^https?:/.test(url || "")) return { filled: 0, error: "Open the page with the form first." };
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (!tab || !samePage(tab.url, url)) return { filled: 0, error: PAGE_CHANGED };
+  if (!tab || !samePage(tab.url, url) || !(await showsPage(tab.id, url))) return { filled: 0, error: PAGE_CHANGED };
   const [cap] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage });
   const plan = planFill(cap?.result?.fields, { profile, values: errandValues(t) });
   if (!plan.length) return { filled: 0, error: "I found nothing here I can fill from your details. Check them in settings." };
@@ -352,15 +358,17 @@ function withTipCache(fn) {
 const askingTip = new Map(); // URL -> request in flight, so two tabs on one page ask once
 async function companionTip(raw, sender) {
   const { presence, backendUrl, companionCache = {} } = await chrome.storage.local.get(["presence", "backendUrl", "companionCache"]);
-  const payload = companionPayload({ ...raw, url: sender.url || raw?.url });
-  if (presence === false || !backend.resolveBaseUrl(backendUrl) || !payload || !helpfulPage(payload.url, payload.title)) return null;
-  const hit = cachedEntry(companionCache, payload.url);
+  const url = sender.url || raw?.url;
+  const key = cacheKey(url); // the full path, kept in this browser
+  const payload = companionPayload({ ...raw, url });
+  if (presence === false || !backend.resolveBaseUrl(backendUrl) || !payload || !helpfulPage(url, payload.title)) return null;
+  const hit = cachedEntry(companionCache, key);
   if (hit) return hit.seen ? null : hit.tip;
-  if (!askingTip.has(payload.url)) askingTip.set(payload.url, askTip(payload).finally(() => askingTip.delete(payload.url)));
-  return askingTip.get(payload.url);
+  if (!askingTip.has(key)) askingTip.set(key, askTip(payload, key).finally(() => askingTip.delete(key)));
+  return askingTip.get(key);
 }
 
-async function askTip(payload) {
+async function askTip(payload, key) {
   let entry;
   try {
     await backend.ensureConnected();
@@ -368,7 +376,7 @@ async function askTip(payload) {
   } catch (_) {
     entry = { tip: null, failed: true }; // no server or no endpoint yet: no tip, ask again later
   }
-  await withTipCache((cache) => remember(cache, payload.url, entry));
+  await withTipCache((cache) => remember(cache, key, entry));
   return entry.tip;
 }
 

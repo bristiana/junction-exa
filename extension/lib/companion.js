@@ -1,6 +1,6 @@
 // The page companion: which pages Vali offers a tip on, what it sends about them, and the per-URL cache.
-// Only the page's address, title, headings, language and the selected text are sent, redacted. Never form values,
-// inputs, cookies or the page body. Pure, so test/companion.test.mjs runs it in Node.
+// Only the site and first path segment, the title, headings and language are sent, redacted. Never the selection
+// (that goes only with an explicit "Ask Vali about this"), form values, inputs, cookies or the page body. Pure, so test/companion.test.mjs runs it in Node.
 
 import { redactText } from "./redact.js";
 
@@ -24,8 +24,9 @@ const HELPFUL_SITES = [
   "elisa.fi", "dna.fi", "telia.fi", "helen.fi", "if.fi", "lahitapiola.fi", "fennia.fi",
 ];
 const HELPFUL_HOST = /(\.gov(\.[a-z]{2})?$|\.edu$|\.ac\.[a-z]{2}$|yliopisto|university|ammattikorkeakoulu)/;
-// Any other page whose address or title names an errand.
-const ERRAND_WORDS = /(?<![a-z])(claim|refund|compensation|apply|application|booking|reservation|regist(?:er|ration)|complain|permit|visa|residence|tax|benefit|insurance|rent|lease|tenant|deposit|appointment|ticket|delivery|return)|hakemu|korvau|varau|ilmoittautu|muuttoilmoitu|palaut|oleskelulupa|vero|tuki|vuokra/i;
+// The allowlist above is the main gate. Beyond it, only an address or title that names a specific errand, as a whole
+// word (Finnish words may take endings): korvaushakemus, ilmoittautuminen, oleskeluluvan.
+const ERRAND_WORDS = /(?<![\p{L}\p{N}])(?:refunds?|compensation|complaints?|residence permits?|parking permits?|visa application|tenancy agreement|hakemus\p{L}*|korvaus\p{L}*|ilmoittautu\p{L}*|muuttoilmoitu\p{L}*|oleskelulu\p{L}*|vuokrasopimu\p{L}*)(?![\p{L}\p{N}])/iu;
 
 const siteOf = (host) => String(host || "").toLowerCase().replace(/^www\d?\./, "").replace(/\.$/, "");
 const clip = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
@@ -40,6 +41,14 @@ export function cacheKey(url) {
   }
 }
 
+// What the server sees of the address: the site and the first path segment (deeper paths can carry ids).
+export function sentUrl(url) {
+  const key = cacheKey(url);
+  if (!key) return "";
+  const u = new URL(key);
+  return u.origin + "/" + (u.pathname.split("/")[1] || "");
+}
+
 export function helpfulPage(url, title = "") {
   const key = cacheKey(url);
   if (!key) return false;
@@ -47,18 +56,16 @@ export function helpfulPage(url, title = "") {
   if (HELPFUL_SITES.some((d) => host === d || host.endsWith("." + d)) || HELPFUL_HOST.test(host)) return true;
   let path = new URL(key).pathname;
   try { path = decodeURIComponent(path); } catch (_) {}
-  return ERRAND_WORDS.test(`${path} ${title}`);
+  return ERRAND_WORDS.test(`${path.replace(/[-_/]+/g, " ")} ${title}`);
 }
 
-// What POST /v1/companion gets. raw comes from the content script; everything is clipped and redacted again here.
+// What POST /v1/companion gets. raw comes from the content script; everything is clipped and redacted again here,
+// and only these four fields are kept.
 export function companionPayload(raw) {
-  const url = cacheKey(raw?.url);
+  const url = sentUrl(raw?.url);
   if (!url) return null;
   const headings = (Array.isArray(raw.headings) ? raw.headings : []).map((h) => redactText(clip(h, 120))).filter(Boolean).slice(0, MAX_HEADINGS);
-  const out = { url, title: redactText(clip(raw.title, 200)), headings, lang: clip(raw.lang, 12).toLowerCase() };
-  const selection = redactText(clip(raw.selection, 1000));
-  if (selection) out.selection = selection;
-  return out;
+  return { url, title: redactText(clip(raw.title, 200)), headings, lang: clip(raw.lang, 12).toLowerCase() };
 }
 
 const httpUrl = (u) => { try { return /^https?:$/.test(new URL(u).protocol) ? new URL(u).href : ""; } catch (_) { return ""; } };
