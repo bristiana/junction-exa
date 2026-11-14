@@ -15,6 +15,7 @@ POST /v1/tasks/{id}/execute ─> browser_session.spawn() (Modal, 2 CPU, 4 GB, 15
 ```
 
 - **Model.** `claude-opus-5-5` (`HOIDA_MODEL`), effort `low`, prompt caching on, server-side fallback on refusals. Max 30 actions per run.
+- **Jev finds what to click.** `click` takes a ref and a short target ("19:30 Suvi slot"). When the ref is null or the page re-rendered, Jev picks the element for the target among the 25 best-matching snapshot lines (about 0.2 s, no extra model turn; 13/13 right on the fixtures, `backend/scripts/jev_bench.py`). The submit guard still checks whatever Jev picks.
 - **Page snapshots.** Compact text lists of interactive elements with refs (`[e12] button "Jatka" type=submit`) across iframes, open shadow DOM and ARIA widgets (comboboxes, listboxes, role=checkbox/switch, tabs), plus 2500 characters of visible text. `look` sends a redacted screenshot only when the text is not enough.
 - **Exa in the loop.** The agent looks up what it needs while the form stays open: rules and amounts (EU261, VR compensation), deadlines, the right form, opening hours or slots. `exa_search` uses `type: auto`, `userLocation: FI` and query highlights; `exa_read` uses `/contents` with `maxAgeHours: 6` so pages are fresh. Every result is shown as untrusted data with its URL and date. Each value in `approval.filled` can carry the `source` URL it came from; all URLs end up in `execution.sources`.
 - **Live view.** A Chrome DevTools Protocol screencast (`Page.startScreencast`, JPEG, quality 50, max width 1024) writes the newest frame to `store.put_live_frame` about twice a second while the browser works (`GET /v1/tasks/{id}/live.jpg`). Per-step screenshots stay as the history (`execution.steps`, `execution.shots`), with readable step text (`Filled "Email" with {{email}}`, `Clicked "Jatka"`).
@@ -42,6 +43,13 @@ Measured on Modal (2 CPU, 4 GB), `claude-opus-5-5` at effort `low`, 14 Nov 2026:
 | Löylykontti sauna for 8, real site | 48-61 s | 10-11 | $0.33-0.39 | at approval, 10 fields |
 
 About 70% of the Claude cost is cache writes of the new page snapshot on each step; cache reads are cheap. Exa lookups inside a run cost about $0.007 each. The live view averaged 0.9-1.3 frames per second over a run (the target was about 2; frames come from the browser when the page changes, so a page that sits still while the model thinks sends none, and the newest frame stays available).
+
+## End to end through the API (deployed)
+
+Deployed as its own Modal app (`modal deploy backend/modal_app.py --name hoida-sandbox`, never over the main `hoida` app), 14 Nov 2026:
+
+- `t_55bba48cb5b340688960e4f4fe7f1a4d`: test order form (httpbin.org/forms/post, an echo service). Task, Exa research (28 s, $0.025), execute, 9 steps with screenshots, 20 live frames read through `live.jpg`, approval, `POST /approve`, one final click, `done` with the echoed order. 89 s, Claude $0.07.
+- `t_52f39a2debb14f5088d5835678965b05`: Helsinki "Report a problem" (real site). Task, Exa research (22 s), execute, 24 steps (one click re-found by Jev after the page re-rendered), approval with every value, `POST /stop`, `stopped`. 105 s, Claude $0.25, 10 Jev calls.
 
 ## Demo flows
 
