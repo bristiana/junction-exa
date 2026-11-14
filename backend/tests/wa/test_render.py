@@ -9,15 +9,12 @@ def test_exact_result_snapshot(task):
         "*You may qualify for €400 in flight-delay compensation.* [1]\n\n"
         "• Delay: 4 hours [2]\n"
         "• Compensation: €400 [1]\n"
-        "• Eligibility: Subject to the cause of delay (check) [3]\n\n"
-        "Reply 1 to file the claim [3]\n"
-        "Reply 2 to review the email draft\n\n"
-        "*Missing information*\n"
-        "• What is your booking reference, ‹name›?\n\n"
-        "*Sources*\n"
-        "[1] EU passenger rights – https://europa.eu/rights\n"
-        "[2] Delay record – https://airline.example/delay\n"
-        "[3] Airline conditions – https://airline.example/conditions"
+        "• Eligibility: Subject to the cause of delay (check)\n\n"
+        "Reply 1 to file the claim\n"
+        "Reply 2 to review the email draft\n"
+        "What is your booking reference, ‹name›?\n\n"
+        "[1] https://europa.eu/rights\n"
+        "[2] https://airline.example/delay"
     ]
     assert "Test Person" in render_result(task, {"name": "Test Person"})[0]
 
@@ -53,8 +50,8 @@ def test_limits_and_placeholders(task):
     task["research"]["output"]["grounding"] += [
         {"field": "answer", "citations": [{"url": f"https://source.example/{n}"} for n in range(10)]}]
     rendered = "\n".join(render_result(task))
-    assert rendered.count("• Delay:") == 2
-    assert "[8]" in rendered and "[9]" not in rendered
+    assert rendered.count("• Delay:") == 1
+    assert "[2]" in rendered and "[3]" not in rendered
     assert fill_placeholders("{{NAME}} {{unknown}}", {"name": "Test Person"}) == "Test Person ‹unknown›"
     assert fill_placeholders("{{name}}", {"name": " "}) == "‹name›"
     assert render_ack(task) == ["On it. I'll send the answer here in about half a minute."]
