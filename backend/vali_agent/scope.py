@@ -1,15 +1,26 @@
 """User-approved sites and profile keys, independent of model instructions."""
-from functools import lru_cache
 from ipaddress import ip_address
-from pathlib import Path
 import re
 from urllib.parse import urlsplit
 
 
-@lru_cache(maxsize=1)
-def _suffix_rules():
-    return set(line.strip().encode('idna').decode('ascii') for line in Path(__file__).with_name('public_suffix_list.dat').read_text().splitlines()
-               if line and not line.startswith('//'))
+_MULTIPART_SUFFIXES = {
+    'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'com.au', 'net.au', 'org.au', 'gov.au',
+    'co.jp', 'co.nz', 'co.za', 'com.br', 'com.mx', 'com.ar', 'com.tr', 'com.cn',
+    'co.in', 'co.kr', 'com.hk', 'com.sg',
+}
+
+
+def registrable_domain(host):
+    """Approximate a registrable domain using common two-label public suffixes."""
+    host = host.rstrip('.').lower().encode('idna').decode('ascii')
+    try:
+        ip_address(host)
+        return host
+    except ValueError:
+        labels = host.split('.')
+        count = 3 if '.'.join(labels[-2:]) in _MULTIPART_SUFFIXES else 2
+        return '.'.join(labels[-count:])
 
 
 def site(url):
@@ -17,22 +28,7 @@ def site(url):
     host = (parsed.hostname or '').rstrip('.').lower().encode('idna').decode('ascii')
     if parsed.scheme not in ('http', 'https') or not host or parsed.username or parsed.password:
         raise ValueError('Use an http(s) URL without credentials')
-    try:
-        ip_address(host)
-        return host
-    except ValueError:
-        pass
-    labels = host.split('.')
-    rules = _suffix_rules()
-    suffix = 1
-    for i in range(len(labels)):
-        part = '.'.join(labels[i:])
-        if '!' + part in rules:
-            suffix = len(labels) - i - 1
-            break
-        if part in rules or (i + 1 < len(labels) and '*.' + '.'.join(labels[i + 1:]) in rules):
-            suffix = max(suffix, len(labels) - i)
-    return '.'.join(labels[-suffix - 1:])
+    return registrable_domain(host)
 
 
 def permitted_profile(goal, profile):

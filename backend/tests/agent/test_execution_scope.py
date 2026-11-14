@@ -3,16 +3,16 @@ from unittest.mock import Mock
 import pytest
 from vali_agent.browser import Browser
 from vali_agent.privacy import substitute
-from vali_agent.scope import site, permitted_profile, reject_placeholders
+from vali_agent.scope import registrable_domain, site, permitted_profile, reject_placeholders
 
 
 @pytest.mark.parametrize('url,expected', [
     ('https://shop.example.co.uk/path', 'example.co.uk'),
     ('https://other.co.uk', 'other.co.uk'),
-    ('https://alice.github.io', 'alice.github.io'),
+    ('https://alice.github.io', 'github.io'),
     ('https://a.example.com', 'example.com'),
-    ('https://www.city.kawasaki.jp', 'city.kawasaki.jp'),
-    ('https://a.b.ck', 'a.b.ck'), ('https://www.ck', 'www.ck'),
+    ('https://www.city.kawasaki.jp', 'kawasaki.jp'),
+    ('https://a.b.ck', 'b.ck'), ('https://www.ck', 'www.ck'),
     ('http://127.0.0.1:80', '127.0.0.1'),
 ])
 def test_registrable_site(url, expected):
@@ -80,3 +80,16 @@ def test_personal_fields_in_external_frames_are_rejected():
     browser._refs = {'e1': SimpleNamespace(url='https://evil.org')}
     with pytest.raises(ValueError, match='outside'):
         browser.personal_field('e1')
+
+
+@pytest.mark.parametrize('host,expected', [
+    ('example.com', 'example.com'),
+    ('www.example.co.uk', 'example.co.uk'),
+    ('a.b.example.fi', 'example.fi'),
+    ('127.0.0.1', '127.0.0.1'),
+    ('::1', '::1'),
+    ('localhost', 'localhost'),
+    ('a.example.co.zz', 'co.zz'),
+])
+def test_registrable_domain_uses_small_suffix_set(host, expected):
+    assert registrable_domain(host) == expected
