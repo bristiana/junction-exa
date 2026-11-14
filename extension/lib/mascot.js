@@ -2,11 +2,19 @@
 // (the animated one, following the errand that matters most). Pure, so it runs in Node tests too.
 // Poses are the states of lib/butler.js; the stills live in extension/mascot/<pose>.svg.
 
-export const POSES = ["idle", "listening", "thinking", "working", "needs_approval", "success", "error"];
-export const STILLS = ["idle", "thinking", "working", "needs_approval", "success", "error"]; // the ones a card can show
+export const POSES = ["idle", "listening", "thinking", "searching", "working", "needs_approval", "success", "error"];
+export const STILLS = ["idle", "searching", "working", "needs_approval", "success", "error"]; // the ones a card can show
 export const FLASH_MS = { success: 4000, error: 6000 };
-const BUSY = new Set(["thinking", "working"]);
+const BUSY = new Set(["searching", "working"]);
 const asks = (t) => !!t?.execution?.question?.text && ["starting", "running", "submitting"].includes(t.execution.status);
+
+// A finished answer is "ready_to_approve" even when there is nothing to approve. Only a prepared action or form, or a
+// claim / book / write errand whose next step is to do it, is a real next step; a plain answer is just done.
+const DO_IT = new Set(["claim", "book", "write"]);
+export function hasNextStep(t) {
+  const s = t.output?.structured;
+  return s?.status === "ready_to_approve" && !!(s.actions?.length || s.form_fill?.length || DO_IT.has(t.mode));
+}
 
 // One errand. The browser run (execution) comes after research, so once it exists it decides.
 export function taskMascot(t) {
@@ -22,7 +30,7 @@ export function taskMascot(t) {
   switch (t?.status) {
     case "completed": {
       const s = t.output?.structured?.status;
-      if (s === "ready_to_approve" || s === "needs_info") return "needs_approval";
+      if (s === "needs_info" || hasNextStep(t)) return "needs_approval";
       if (s === "not_possible") return "error";
       return "success";
     }
@@ -31,7 +39,7 @@ export function taskMascot(t) {
     case "cancelled":
       return "idle";
     default:
-      return "thinking"; // queued, running, and any other status Exa reports while a run is going
+      return "searching"; // queued, running, and any other status Exa reports: research searches the web with Exa
   }
 }
 
@@ -50,7 +58,7 @@ export function headerMascot(tasks = [], { focused = false, flash = null, now = 
   if (list.some(waits)) return "needs_approval";
   const poses = list.map(taskMascot);
   if (poses.includes("working")) return "working";
-  if (poses.includes("thinking")) return "thinking";
+  if (poses.includes("searching")) return "searching";
   return "idle";
 }
 

@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { errandStatus } from "../extension/lib/panel-state.js";
-import { panelStatus, hasNextStep } from "../extension/panel/errand-status.js";
+import { panelStatus } from "../extension/panel/errand-status.js";
+import { hasNextStep } from "../extension/lib/mascot.js";
 
 test("panel says Waiting for your OK only with something to approve", () => {
   const done = (extra, structured = {}) => ({ status: "completed", output: { structured: { status: "ready_to_approve", ...structured } }, ...extra });

@@ -10,12 +10,12 @@ const research = (status, result) => ({ id: status + (result || ""), status, out
 const exec = (status) => ({ id: "x" + status, status: "completed", output: { structured: { status: "ready_to_approve" } }, execution: { status } });
 
 test("each errand gets the pose for where it is", () => {
-  assert.equal(taskMascot(research("queued")), "thinking");
-  assert.equal(taskMascot(research("running")), "thinking");
-  assert.equal(taskMascot(research("pending")), "thinking");
+  assert.equal(taskMascot(research("queued")), "searching");
+  assert.equal(taskMascot(research("running")), "searching");
+  assert.equal(taskMascot(research("pending")), "searching");
   assert.equal(taskMascot(research("completed", "info_only")), "success");
   assert.equal(taskMascot(research("completed")), "success");
-  assert.equal(taskMascot(research("completed", "ready_to_approve")), "needs_approval");
+  assert.equal(taskMascot(research("completed", "ready_to_approve")), "success");
   assert.equal(taskMascot(research("completed", "needs_info")), "needs_approval");
   assert.equal(taskMascot(research("completed", "not_possible")), "error");
   assert.equal(taskMascot(research("failed")), "error");
@@ -34,21 +34,23 @@ test("the header follows the errand that matters most", () => {
   const done = research("completed", "info_only");
   assert.equal(headerMascot([]), "idle");
   assert.equal(headerMascot([done]), "idle");
-  assert.equal(headerMascot([done, running]), "thinking");
+  assert.equal(headerMascot([done, running]), "searching");
   assert.equal(headerMascot([running, browsing]), "working");
   assert.equal(headerMascot([running, browsing, waiting]), "needs_approval");
   assert.equal(headerMascot([waiting], { focused: true }), "listening");
   assert.equal(headerMascot([running], { flash: { state: "success", until: 2000 }, now: 1000 }), "success");
-  assert.equal(headerMascot([running], { flash: { state: "success", until: 2000 }, now: 3000 }), "thinking");
+  assert.equal(headerMascot([running], { flash: { state: "success", until: 2000 }, now: 3000 }), "searching");
   // a result to approve waits for the user only until they open it; a browser run on hold always does
   const result = { ...research("completed", "ready_to_approve"), seen: false };
-  assert.equal(headerMascot([result]), "needs_approval");
-  assert.equal(headerMascot([{ ...result, seen: true }]), "idle");
+  const step = { ...result, mode: "book" };
+  assert.equal(headerMascot([step]), "needs_approval");
+  assert.equal(headerMascot([{ ...step, seen: true }]), "idle");
+  assert.equal(headerMascot([result]), "idle"); // a plain answer waits for no one
   assert.equal(headerMascot([{ ...waiting, seen: true }]), "needs_approval");
 });
 
 test("a short flash when something finishes, never on first load", () => {
-  const before = new Map([["a", "thinking"], ["b", "working"]]);
+  const before = new Map([["a", "searching"], ["b", "working"]]);
   assert.equal(finishFlash(new Map(), [{ id: "a", status: "completed" }]), null);
   assert.equal(finishFlash(before, [{ id: "a", status: "completed" }]), "success");
   assert.equal(finishFlash(before, [{ id: "a", status: "completed", output: { structured: { status: "ready_to_approve" } } }]), "success");
@@ -58,16 +60,14 @@ test("a short flash when something finishes, never on first load", () => {
   assert.equal(finishFlash(before, [{ id: "a", status: "running" }]), null);
 });
 
-test("the panel shows research as searching and the browser run as serving", () => {
-  const src = readFileSync(new URL("../extension/panel/panel.js", import.meta.url), "utf8");
-  const map = vm.runInNewContext(`(${src.match(/const PANEL_POSE = (\{[^}]*\});/)[1]})`);
-  const shown = (t) => { const p = taskMascot(t); return map[p] || p; };
+test("research shows as searching and the browser run as serving", () => {
+  const shown = taskMascot;
   for (const s of ["queued", "pending", "running"]) assert.equal(shown(research(s)), "searching", s);
   for (const s of ["starting", "running", "submitting"]) assert.equal(shown(exec(s)), "working", s);
   assert.equal(shown(research("completed", "info_only")), "success");
   const ctx = vm.createContext({ window: {} });
   vm.runInContext(readFileSync(new URL("../extension/lib/butler.js", import.meta.url), "utf8"), ctx);
-  for (const p of Object.values(map)) {
+  for (const p of ["searching", "working"]) {
     assert.ok(ctx.window.Butler.STATES.includes(p), p);
     assert.ok(existsSync(new URL(`../extension/mascot/${p}.svg`, import.meta.url)), p);
   }
@@ -182,4 +182,13 @@ test("all states render finite attributes in every palette", () => {
     assert.doesNotMatch(mascot.snapshot(), /NaN|Infinity|undefined/, `${palette}/${state}`);
     mascot.api.destroy();
   }
+});
+
+test("a plain answer gets the done pose, a real next step the approval pose", () => {
+  const plain = { ...research("completed", "ready_to_approve"), mode: "find" };
+  assert.equal(taskMascot(plain), "success");
+  assert.equal(taskMascot({ ...plain, mode: "book" }), "needs_approval");
+  const action = { output: { structured: { status: "ready_to_approve", actions: [{ type: "email" }] } } };
+  assert.equal(taskMascot({ ...plain, ...action }), "needs_approval");
+  assert.equal(taskMascot({ ...plain, execution: { status: "awaiting_approval" } }), "needs_approval");
 });
