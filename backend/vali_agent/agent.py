@@ -12,7 +12,7 @@ from .jev import Jev, final_submit_probability, find_element
 from .live import Screencast, dismiss_cookie_banner
 from .llm import ClaudeLLM, LLM
 from .privacy import mask, substitute, private_values
-from .scope import _NAME_KEYS, permitted_profile, reject_placeholders, with_name_parts
+from .scope import _NAME_KEYS, permitted_profile, registrable_domain, reject_placeholders, with_name_parts
 from .untrusted import untrusted
 from .web import ExaTools
 
@@ -119,6 +119,18 @@ def _handoff(blockers, url, reason=''):
     return f'needs unavailable: {detail[:300]}; finish by hand later at {url}'
 
 
+_NEEDS_PAYMENT = re.compile(r'\s*needs\s+[a-z/]*payment\b', re.I)
+
+
+def site_cookies(context, url):
+    """The browser context's cookies for the registrable domain of url (the cart and session the user takes over)."""
+    host = urlsplit(url).hostname or ''
+    if not host:
+        return []
+    domain = registrable_domain(host)
+    return [c for c in context.cookies() if c.get('domain') and registrable_domain(c['domain'].lstrip('.')) == domain]
+
+
 def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                       hooks: AgentHooks, llm: LLM | None = None, max_steps: int = 30,
                       headless: bool = True, exa: ExaTools | None = None, jev: Jev | None = None,
@@ -206,6 +218,16 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         return AgentResult(status, mask(result, profile), final_url, steps, dict(usage) | {'exa_cost_usd': round(exa.cost_usd, 4),
                            'jev_calls': jev.calls}, list(exa.sources), [{'label': k, 'value': v} for k, v in filled_log.items()],
                            list(exa.calls), personal_visible)
+
+    def handoff():
+        # Hand the page and its cookies over so the user can finish (pay) in their own browser. Never logged.
+        if not hooks.on_handoff or browser is None:
+            return
+        try:
+            url = browser.current_url
+            hooks.on_handoff(url, site_cookies(browser.page.context, url))
+        except Exception:
+            pass
 
     def report_exa():
         if hooks.on_exa:
@@ -419,6 +441,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                             if missing:
                                 summary += ' Still empty (required): ' + ', '.join(missing) + '.'
                             filled = [{k: mask(v, profile) if isinstance(v, str) else v for k, v in field.items()} for field in args['filled']]
+                            handoff()
                             approved = bool(hooks.wait_for_approval(summary, filled))
                             if hooks.should_stop() or not approved:
                                 status, result, terminal = 'stopped', 'Stopped by the user', True
@@ -562,6 +585,8 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
             screencast.close()
         if browser is not None:
             final_url = browser.current_url
+            if status == 'failed' and _NEEDS_PAYMENT.match(result or ''):
+                handoff()
             browser.close()
         exa.close()
         jev.close()

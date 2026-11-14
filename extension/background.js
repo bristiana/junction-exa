@@ -13,6 +13,7 @@ import { isLinkSender, linkCodeInput } from "./lib/device-link.js";
 import { planFill, errandValues, samePage, PAGE_CHANGED } from "./lib/fill-here.js";
 import { cacheKey, helpfulPage, companionPayload, cleanTip, cachedEntry, remember } from "./lib/companion.js";
 import { askQuestion, askPage, askView } from "./lib/ask.js";
+import { continueInBrowser } from "./lib/handoff.js";
 
 const MAX_TASKS = 30;
 const MAX_HIDDEN = 200;
@@ -476,6 +477,15 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     }),
     approve: () => onServerTask(msg.taskId, (t) => backend.approve(t.remoteId)),
     stop: () => onServerTask(msg.taskId, (t) => backend.stop(t.remoteId)),
+    // The cloud browser's cart and session, set in this Chrome, then the same page in a new tab. Values never logged.
+    handoff: async () => {
+      const t = await findTask(msg.taskId);
+      if (!t?.backend) throw new Error("This needs a Vali server (settings).");
+      const done = await continueInBrowser(await backend.handoff(t.remoteId),
+        { setCookie: (details) => chrome.cookies.set(details), openTab: (opts) => chrome.tabs.create(opts) });
+      await pollBackend().catch(() => {});
+      return done;
+    },
     message: () => onServerTask(msg.taskId, (t) => backend.message(t.remoteId, msg.text)),
     remove: async () => {
       const t = await findTask(msg.taskId);

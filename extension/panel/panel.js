@@ -661,13 +661,15 @@ function renderExecution(t) {
     box.append(h("h4", { text: "Ready to send" }));
     if (v.summary) box.append(h("p", { class: "exec-summary", text: v.summary }));
     if (v.approval.length) box.append(filledList(v.approval));
-    box.append(h("div", { class: "btns row end exec-actions" }, stop,
+    box.append(h("div", { class: "btns row end exec-actions" }, stop, handoffButton(t),
       serverButton("Approve and send", "v-btn v-btn--sm", { type: "approve", taskId: t.id }, APPROVED, t, "Approve")));
   } else if (v.phase === "blocked" || v.phase === "failed") {
     const reason = v.blocker?.reason || v.result || v.error || "I couldn’t finish this errand.";
     box.append(h("p", { class: "exec-reason", text: reason }));
     const url = v.blocker?.url || v.url;
-    if (url) box.append(h("div", { class: "btns row end" }, fillHereButton(t), h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
+    const handoff = handoffButton(t, "v-btn v-btn--sm");
+    if (handoff) box.append(h("div", { class: "btns row end" }, handoff));
+    else if (url) box.append(h("div", { class: "btns row end" }, fillHereButton(t), h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
     if (v.filled.length) {
       box.append(h("h4", { text: "Filled so far" }), filledList(v.filled, { copy: true }),
         h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
@@ -678,11 +680,22 @@ function renderExecution(t) {
     if (v.lastShot != null) box.append(stillShot(t, v.lastShot));
   } else if (v.phase === "stopped") {
     box.append(h("p", { class: "muted exec-result", text: v.error ? `Stopped: ${v.error}` : "Stopped. Nothing was sent." }));
+    const handoff = handoffButton(t, "v-btn v-btn--sm");
+    if (handoff) box.append(h("div", { class: "btns row end" }, handoff));
   }
   return box;
 }
 
 const APPROVED = "Approved. I’m sending it now.";
+
+// "Continue in my browser": the cloud browser's page with its cart and session, opened here. Once, for 15 minutes.
+function handoffButton(t, cls = "v-btn v-btn--quiet v-btn--sm") {
+  if (!t.backend || !t.execution?.handoff_available) return null;
+  const b = serverButton("Continue in my browser", cls, { type: "handoff", taskId: t.id },
+    "Opened in a new tab with your cart. Pay there yourself; Vali stopped.", t, "Continue");
+  b.title = "Open this page in your Chrome with the same cart, then pay yourself. Vali stops here.";
+  return b;
+}
 
 // "Fill it here": the form on the tab you are on (behind your own login, say), filled on this device. You send it.
 function fillHereButton(t) {

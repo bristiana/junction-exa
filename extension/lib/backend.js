@@ -84,6 +84,8 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
       call(`/v1/tasks/${id(taskId)}/execute`, { method: "POST", body: clean({ action_index, start_url, goal, profile }) }),
     approve: (taskId) => call(`/v1/tasks/${id(taskId)}/approve`, { method: "POST", body: {} }),
     stop: (taskId) => call(`/v1/tasks/${id(taskId)}/stop`, { method: "POST", body: {} }),
+    // "Continue in my browser": { url, cookies } once, within 15 minutes of the stop. The cookies are secrets.
+    handoff: (taskId) => call(`/v1/tasks/${id(taskId)}/handoff`, { method: "POST", body: {} }),
     // A message to the running browser (the answer to execution.question); the agent reads it between steps.
     message: (taskId, text) => call(`/v1/tasks/${id(taskId)}/messages`, { method: "POST", body: { text: String(text || "") } }),
     // The newest frame of the live browser view. The image endpoint takes the token as ?t= (an <img> sends no headers).
@@ -139,6 +141,7 @@ export const cancel = async (taskId) => (await configured()).cancel(taskId);
 export const execute = async (taskId, opts) => (await configured()).execute(taskId, opts);
 export const approve = async (taskId) => (await configured()).approve(taskId);
 export const stop = async (taskId) => (await configured()).stop(taskId);
+export const handoff = async (taskId) => (await configured()).handoff(taskId);
 export const shotUrl = async (task, n) => (await configured()).shotUrl(task, n);
 export const message = async (taskId, text) => (await configured()).message(taskId, text);
 export const liveUrl = async (task) => (await configured()).liveUrl(task);

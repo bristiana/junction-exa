@@ -309,6 +309,11 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
         # Straight to the store, like on_usage: a new lookup is not a status change worth a push.
         store.patch_execution(task_id, {'exa': calls})
 
+    def on_handoff(url, cookies):
+        # Cookies go to their own table only; the task shows just that a hand-off is there.
+        store.put_handoff(task_id, url, cookies)
+        store.patch_execution(task_id, {'handoff_available': True})
+
     def unread():
         execution = store.get_task(task_id)['execution'] or {}
         inbox = execution.get('inbox') or []
@@ -343,7 +348,7 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
         base = dict(on_step=on_step, wait_for_approval=wait_for_approval, should_stop=should_stop)
         try:
             hooks = AgentHooks(**base, on_frame=on_frame, on_usage=on_usage, pending_messages=pending_messages, ask_user=ask_user,
-                               on_exa=on_exa)
+                               on_exa=on_exa, on_handoff=on_handoff)
         except TypeError:  # an agent build without live view, usage or inbox hooks
             hooks = AgentHooks(**base)
         result = run_browser_agent(goal=goal, start_url=start_url, profile=profile, hooks=hooks)
@@ -614,6 +619,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         # the task would stay running forever. The next poll of the task starts a new check, which takes over.
         if quote_check_stalled(task):
             application.state.spawn_quote_check(tid)
+        if (task['execution'] or {}).get('handoff_available') and not application.state.store.handoff_live(tid):
+            task['execution']['handoff_available'] = False  # expired
         return task
 
     @application.post('/v1/tasks/{tid}/cancel')
@@ -689,6 +696,20 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     @application.post('/v1/tasks/{tid}/stop')
     def stop(tid: str, user=Depends(authenticate)):
         return stop_for_user(tid, user)
+
+    @application.post('/v1/tasks/{tid}/handoff')
+    def handoff(tid: str, user=Depends(authenticate)):
+        """Continue in my browser: the cloud browser's page and its site cookies, once, within 15 minutes.
+        The user takes over (pays), so the cloud run stops."""
+        execution = owned(tid, user)['execution'] or {}
+        store = application.state.store
+        found = execution.get('handoff_available') and store.take_handoff(tid)
+        if execution.get('handoff_available'):
+            stop = found and execution.get('status') in ACTIVE_EXECUTION
+            store.patch_execution(tid, {'handoff_available': False} | ({'status': 'stopped', 'approval_decision': 'stopped'} if stop else {}))
+        if not found:
+            raise HTTPException(404, 'No hand-off available (expired or already used)')
+        return JSONResponse({'url': found['url'], 'cookies': found['cookies']}, headers={'Cache-Control': 'no-store'})
 
     @application.get('/v1/tasks/{tid}/shots/{n}.jpg')
     def shots(tid: str, n: int, t: str):

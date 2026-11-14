@@ -110,3 +110,59 @@ def test_ask_user_times_out(api, monkeypatch):
     monkeypatch.setattr(module.time, 'monotonic', lambda: next(clock))
     module.run_browser_session(tid, 'goal', 'https://example.com/book', {}, application)
     assert store.get_task(tid)['execution']['status'] == 'failed'
+
+
+COOKIES = [{'name': 'cart', 'value': 'CART-SECRET', 'domain': '.gilda.fi', 'path': '/', 'expires': -1,
+            'httpOnly': True, 'secure': True, 'sameSite': 'Lax'}]
+
+
+def handed_off(client, application, monkeypatch):
+    tid = started_task(client, application)
+
+    def fake_agent(goal, start_url, profile, hooks):
+        hooks.on_handoff('https://www.gilda.fi/checkout', COOKIES)
+        return {'status': 'failed', 'result': 'needs payment: finish by hand at https://www.gilda.fi/checkout',
+                'final_url': 'https://www.gilda.fi/checkout'}
+
+    monkeypatch.setitem(sys.modules, 'vali_agent', types.SimpleNamespace(run_browser_agent=fake_agent, AgentHooks=AgentHooks))
+    module.run_browser_session(tid, 'goal', 'https://example.com/book', {}, application)
+    return tid
+
+
+def test_handoff_is_owner_only_and_one_time(api, monkeypatch):
+    client, application, store = api
+    tid = handed_off(client, application, monkeypatch)
+    task = client.get(f'/v1/tasks/{tid}').json()
+    assert task['execution']['handoff_available'] is True
+    for seen in (task, client.get('/v1/tasks').json(), store.sql('SELECT execution_json FROM tasks')):
+        assert 'CART-SECRET' not in repr(seen)  # the task never carries a cookie value
+    stranger = client.post('/v1/users').json()['token']
+    assert client.post(f'/v1/tasks/{tid}/handoff', headers={'Authorization': 'Bearer ' + stranger}).status_code == 404
+    assert client.post(f'/v1/tasks/{tid}/handoff', headers={'Authorization': ''}).status_code == 401
+    got = client.post(f'/v1/tasks/{tid}/handoff')
+    assert got.status_code == 200 and got.headers['cache-control'] == 'no-store'
+    assert got.json() == {'url': 'https://www.gilda.fi/checkout', 'cookies': COOKIES}
+    assert client.post(f'/v1/tasks/{tid}/handoff').status_code == 404  # deleted after the first fetch
+    assert client.get(f'/v1/tasks/{tid}').json()['execution']['handoff_available'] is False
+    assert store.sql('SELECT * FROM handoffs') == []
+
+
+def test_handoff_expires_after_15_minutes(api, monkeypatch):
+    client, application, store = api
+    tid = handed_off(client, application, monkeypatch)
+    assert store.HANDOFF_SECONDS == 900
+    store.sql("UPDATE handoffs SET expires_at='2000-01-01T00:00:00+00:00'")
+    assert client.get(f'/v1/tasks/{tid}').json()['execution']['handoff_available'] is False
+    assert client.post(f'/v1/tasks/{tid}/handoff').status_code == 404
+    assert store.sql('SELECT * FROM handoffs') == []
+
+
+def test_handoff_at_approval_stops_the_cloud_run(api):
+    client, application, store = api
+    tid = started_task(client, application)
+    store.put_handoff(tid, 'https://www.gilda.fi/checkout', COOKIES)
+    store.patch_execution(tid, {'status': 'awaiting_approval', 'handoff_available': True})
+    assert client.post(f'/v1/tasks/{tid}/handoff').status_code == 200
+    execution = client.get(f'/v1/tasks/{tid}').json()['execution']
+    assert execution['status'] == 'stopped' and execution['approval_decision'] == 'stopped'
+    assert execution['handoff_available'] is False
