@@ -165,3 +165,60 @@ export function publishedStamp(published) {
   const match = /^(\d{4})-(\d{2})/.exec(published || '');
   return match ? `updated ${MONTHS[Number(match[2]) - 1]} ${match[1]}` : '';
 }
+
+// ---------- the errands list ----------
+const LETTER_TITLE = 'Uploaded letter';
+
+// Where an errand came from: task.channel, else the older task.source; an uploaded letter counts as a letter.
+export function channelOf(task) {
+  if (task?.page?.title === LETTER_TITLE) return 'letter';
+  const channel = String(task?.channel || task?.source || 'extension');
+  return channel === 'desktop' ? 'mac' : channel;
+}
+
+// One status word, a tone (working | you | done | failed) and one line of detail.
+export function errandStatus(task) {
+  const research = task?.research || {};
+  const run = task?.execution?.status;
+  const question = questionOf(task);
+  if (run === 'awaiting_approval') return { word: 'Waiting for your OK', tone: 'you', detail: task.execution.approval?.summary || '' };
+  if (['starting', 'running', 'submitting'].includes(run)) return { word: 'Filling the form', tone: 'working', detail: lastStep(task) };
+  if (question) return { word: 'Needs your answer', tone: 'you', detail: question.text };
+  if (!TERMINAL.has(research.status)) {
+    const last = activityOf(task).at(-1);
+    return { word: 'Working', tone: 'working', detail: last ? activityLine(last) : 'Starting the research' };
+  }
+  if (research.status === 'cancelled' || run === 'stopped') return { word: 'Stopped', tone: 'failed', detail: 'Nothing was sent.' };
+  if (research.status === 'failed' || run === 'failed') {
+    return { word: "Couldn't finish", tone: 'failed', detail: research.error || task.execution?.error || '' };
+  }
+  if (structured(task).status === 'needs_info') return { word: 'Needs your answer', tone: 'you', detail: missingInfo(task)[0] || '' };
+  return { word: 'Done', tone: 'done', detail: task.execution?.result || sentences(structured(task).answer)[0] || '' };
+}
+
+function lastStep(task) {
+  return list(task?.execution?.steps).at(-1)?.text || '';
+}
+
+// Account counters: GET /v1/stats when the API has it, else counted from the errands on screen.
+export function countersOf(stats, tasks) {
+  if (stats && Number.isFinite(stats.total)) {
+    return { errands: stats.total, searches: stats.exa?.searches ?? null, pages: stats.exa?.pages_read ?? null, cost: stats.cost_usd ?? null };
+  }
+  const found = tasks.map((task) => findStats(task, sourcesOf(task)));
+  return {
+    errands: tasks.length,
+    searches: found.reduce((sum, f) => sum + f.searches, 0),
+    pages: found.reduce((sum, f) => sum + f.pages, 0),
+    cost: found.reduce((sum, f) => sum + (f.cost || 0), 0),
+  };
+}
+
+export function timeAgo(iso, now = Date.now()) {
+  const seconds = (now - Date.parse(iso)) / 1000;
+  if (!Number.isFinite(seconds)) return '';
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+  return `${Math.floor(seconds / 86400)} d ago`;
+}

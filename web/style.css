@@ -165,6 +165,30 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .run-error { color: var(--bad); }
 .run > .btn { margin-top: 12px; }
 
+/* ---------- your errands ---------- */
+.errands { margin: 56px auto 0; text-align: left; }
+.errands-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.errands-head .section-title { margin: 0; font-size: 18px; }
+.counters { display: flex; gap: 18px; margin: 0; }
+.counters div { text-align: right; }
+.counters dt { font-weight: 800; font-size: 18px; line-height: 1.1; }
+.counters dd { margin: 0; font-size: 12px; color: var(--muted); }
+.errand-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.errand { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; text-decoration: none; }
+.errand:hover { border-color: #d9c9ea; background: #fffdfe; }
+.errand.you { border-color: #f1d9a6; }
+.channel { flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--fill-2); color: var(--muted); display: grid; place-items: center; }
+.channel svg { width: 18px; height: 18px; }
+.errand-text { flex: 1; min-width: 0; display: grid; }
+.errand-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.errand-status { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.errand.working .errand-status b { color: var(--accent); }
+.errand.you .errand-status b { color: var(--warn); }
+.errand.done .errand-status b { color: var(--good); }
+.errand.failed .errand-status b { color: var(--bad); }
+.errand-when { flex: none; font-size: 12px; color: var(--muted); }
+.empty { text-align: center; padding: 18px; }
+
 @keyframes pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
@@ -173,6 +197,9 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 }
 
 @media (max-width: 640px) {
+  .counters { width: 100%; justify-content: space-between; }
+  .counters div { text-align: left; }
+  .errand-when { display: none; }
   .facts { grid-template-columns: minmax(0, 1fr); }
   .top { padding: 14px 16px; }
   main { padding: 0 16px 110px; }

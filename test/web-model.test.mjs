@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, activityLine, claimsOf, factsOf, findStats, primaryAction, publishedStamp, questionOf, sourcesOf, stepsOf } from "../web/model.js";
+import { activityOf, activityLine, channelOf, claimsOf, countersOf, errandStatus, factsOf, findStats, primaryAction, publishedStamp, questionOf, sourcesOf, stepsOf } from "../web/model.js";
 
 const legacy = {
   created_at: "2026-11-14T10:00:00Z", updated_at: "2026-11-14T10:00:20Z",
@@ -57,4 +57,16 @@ test("steps say who acts, the primary action is the first with a web address, an
   assert.deepEqual(primaryAction(legacy), { index: 1, url: "https://www.posti.fi/en/moving", domain: "posti.fi", label: "Open" });
   assert.equal(questionOf({ research: { question: { text: "How many?", options: ["2-4"], answer: "2-4" } } }), null);
   assert.deepEqual(questionOf({ research: { question: { text: "How many?", options: ["2-4", "5-8"], answer: null } } }).options, ["2-4", "5-8"]);
+});
+
+test("errand rows: who acts next, which channel, and counters with or without /v1/stats", () => {
+  assert.equal(errandStatus(legacy).word, "Done");
+  assert.equal(errandStatus({ ...legacy, execution: { status: "awaiting_approval", approval: { summary: "Send the form" } } }).tone, "you");
+  assert.equal(errandStatus({ research: { status: "running", progress: [] } }).word, "Working");
+  assert.equal(errandStatus({ research: { status: "cancelled" } }).word, "Stopped");
+  assert.equal(channelOf({ source: "voice" }), "voice");
+  assert.equal(channelOf({ channel: "web", source: "extension" }), "web");
+  assert.equal(channelOf({ source: "extension", page: { title: "Uploaded letter" } }), "letter");
+  assert.deepEqual(countersOf({ total: 42, exa: { searches: 120, pages_read: 310 }, cost_usd: 0.81 }, []), { errands: 42, searches: 120, pages: 310, cost: 0.81 });
+  assert.deepEqual(countersOf(null, [legacy]), { errands: 1, searches: 1, pages: 2, cost: 0.025 });
 });
