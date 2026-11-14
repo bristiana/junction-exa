@@ -4,7 +4,7 @@ import threading
 import logging
 
 from vali_wa.api import GraphAPIClient, GraphAPIError
-from vali_wa.render import render_nothing_new, render_watch_update, split_messages
+from vali_wa.render import render_nothing_new, render_result, render_watch_update, result_buttons, split_messages
 
 from .monitors import watch_criteria
 
@@ -109,6 +109,20 @@ def push_task(application, task_id, renderer):
                     except Exception as exc:
                         log_failure('approval buttons failed', exc, task_id=task_id)
                 return
+            buttons = result_buttons(task) if renderer is render_result and hasattr(api, 'send_buttons') else []
+            if buttons:
+                # The answer's actions as tap-to-choose buttons; the last part of the answer carries them.
+                parts = render_result(task, buttons=True)
+                last = parts.pop() if len(parts[-1]) <= 1024 else 'What next?'
+                for body in parts:
+                    await api.send_text(number, body)
+                try:
+                    await api.send_buttons(number, last, buttons)
+                    return
+                except Exception as exc:
+                    log_failure('result buttons failed', exc, task_id=task_id)
+                    replies = '\n'.join(f'Reply {i + 1} to {title}' for i, (_, title) in enumerate(buttons))
+                    bodies = split_messages(('' if last == 'What next?' else last + '\n\n') + replies)
             for body in bodies:
                 await api.send_text(number, body)
         run_outside_loop(send)

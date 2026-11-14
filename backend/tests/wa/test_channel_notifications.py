@@ -124,3 +124,28 @@ def test_graph_upload_and_image_id_payload():
     asyncio.run(scenario())
     assert requests[0].url.path == '/v21.0/phone-test/media'
     assert json.loads(requests[1].content)['image'] == {'id': 'media-result', 'caption': 'Review form'}
+
+
+def test_answer_actions_arrive_as_buttons(notification):
+    from vali_wa.render import render_result
+    app, task, api = notification
+    task['execution'] = None
+    task['research'] = {'status': 'completed', 'output': {'structured': {
+        'answer': 'Kulttuurisauna takes bookings online.', 'actions': [
+            {'type': 'open_link', 'label': 'Open the booking calendar', 'url': 'https://kulttuurisauna.fi/'},
+            {'type': 'reminder', 'label': 'Remind me'}]}}}
+    push_task(app, task['id'], render_result)
+    api.send_buttons.assert_awaited_once_with('358401234567', '*Kulttuurisauna takes bookings online.*',
+        [('choose:t-test:1', 'Open the booking ca…'), ('choose:t-test:2', 'Remind me')])
+    api.send_text.assert_not_awaited()
+
+
+def test_answer_buttons_failure_falls_back_to_numbers(notification):
+    from vali_wa.render import render_result
+    app, task, api = notification
+    task['execution'] = None
+    task['research'] = {'status': 'completed', 'output': {'structured': {
+        'answer': 'Done.', 'actions': [{'type': 'open_link', 'label': 'Open it', 'url': 'https://x.example/'}]}}}
+    api.send_buttons.side_effect = GraphAPIError(400, 100)
+    push_task(app, task['id'], render_result)
+    assert 'Reply 1 to Open it' in api.send_text.await_args.args[1]
