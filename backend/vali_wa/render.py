@@ -179,7 +179,10 @@ def render_nothing_new(lang="en"):
 
 def _short(text, limit=200):
     # One sentence, read on a phone: a long one stops at its first clause (":" or ";"); the rest is one tap away.
-    sentence = re.split(r"(?<=[.!?])\s+", " ".join(str(text).split()))[0]
+    parts = re.split(r"(?<=[.!?])\s+", " ".join(str(text).split()))
+    sentence = parts[0]
+    if len(sentence) < 30 and len(parts) > 1:  # "Yes." alone says nothing: keep the sentence that explains it
+        sentence = f"{sentence} {parts[1]}"
     if len(sentence) > limit:
         clause = re.split(r"\s*[:;]\s+", sentence)[0].rstrip(",")
         sentence = clause.rstrip(".") + "." if 20 <= len(clause) <= limit else sentence[:limit - 1].rsplit(" ", 1)[0] + "…"
@@ -260,7 +263,8 @@ def render_result(task, profile=None, buttons=False):
                                   for i, action in enumerate((structured.get("actions") or [])[:3])]
     questions = structured.get("missing_info") or []
     if questions:
-        actions.append(_text(questions[0], profile))
+        ask = _text(questions[0], profile).rstrip(". ")
+        actions.append(ask if ask.endswith("?") else f"One thing I need from you: {ask[:1].lower()}{ask[1:]}.")
     if actions:
         sections.append("\n".join(actions))
     if sources:
