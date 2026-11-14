@@ -39,7 +39,9 @@ export function renderExecution(task, { onApprove, onStop, onReply }) {
 }
 
 // While the run is live, the frame reloads every 1.2 s; afterwards it shows the last screenshot.
+// A run that typed your details keeps no picture after that point, so it says so instead.
 function frame(task, live) {
+  if (!live && task.execution.private_view) return h('p', { class: 'muted' }, 'No picture: the page showed your details.');
   const shots = task.execution.shots || [];
   const last = shots[shots.length - 1];
   const lastShot = last && Number.isInteger(last.n) ? shotSrc(task, last.n) : null;
