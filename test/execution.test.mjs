@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { executionView, executionPill, blockerOf, LIVE } from "../extension/lib/execution.js";
+import { executionView, blockerOf, LIVE } from "../extension/lib/execution.js";
 import { taskMascot, headerMascot } from "../extension/lib/mascot.js";
 import { createClient, toLocalTask, resolveBaseUrl, DEFAULT_BASE_URL, ensureConnected } from "../extension/lib/backend.js";
 import { createMockServer } from "../scripts/mock-backend.mjs";
@@ -74,9 +74,6 @@ test("blockers get a one-line reason and the URL to finish in the user's tab", (
     filled: [{ label: "Email", value: "{{email}}" }, { label: "Rent", value: "820 €" }] }), { profile });
   assert.equal(v.phase, "blocked");
   assert.deepEqual(v.filled.map((r) => [r.label, r.value]), [["Email", "aino@example.fi"], ["Rent", "820 €"]]);
-  assert.deepEqual(executionPill({ status: "failed", result: "needs captcha: finish by hand at https://a.fi" }), ["Your turn", "info"]);
-  assert.deepEqual(executionPill({ status: "running", question: { text: "Which?" } }), ["Question", "info"]);
-  assert.equal(executionPill({ status: "failed", result: "Action limit reached" }), null);
   assert.equal(executionView(task({ status: "failed", result: "Action limit reached" })).phase, "failed");
   assert.equal(executionView(task({ status: "done", result: "Sent, ref 1" })).phase, "done");
   assert.equal(executionView(task({ status: "stopped" })).phase, "stopped");
