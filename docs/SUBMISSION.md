@@ -17,18 +17,18 @@ Vali
 ## 2. Punchline (max 200)
 
 ```
-Message Vali on WhatsApp like a friend who knows Finland. It reads the live web with Exa, answers with the exact source, fills the real booking form and books only when you tap Approve.
+Your valet for life in Finland. Just arrived? Permits, bank, Kela, HSL, saunas, rent: message Vali, it researches the live web with Exa, fills the real form and acts when you tap Approve.
 ```
 
-185 characters.
+187 characters.
 
 ## 3. Description (max 5000, markdown)
 
-Paste everything between the two lines. 3,794 characters (3,849 if the form counts line breaks as two).
+Paste everything between the two lines. 3,970 characters (4,025 if the form counts line breaks as two).
 
 ---
 
-You just landed in Espoo for your master's. You need a bank account, but you have no Finnish ID yet. The answer is spread over bank sites and DVV, half in Finnish, and it changed this year. No chatbot knows it.
+Vali is your valet for life in Finland, built for foreigners who just arrived. Documents, money, transport, bookings, housing: message it on WhatsApp and it handles the errand. Say you just landed in Espoo for your master's and need a bank account, but have no Finnish ID yet. The answer is spread over bank sites and DVV, half in Finnish, and it changed this year. No chatbot knows it.
 
 So you message Vali on WhatsApp: *"Can I open a bank account without a Finnish ID?"* Vali reacts 👀 and about 30 seconds later answers in two sentences, with the key facts and the exact Danske Bank, Nordea and DVV pages it read. Every sentence is checked against a quote from those pages.
 

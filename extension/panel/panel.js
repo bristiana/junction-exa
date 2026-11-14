@@ -836,7 +836,7 @@ function userMeta(t) {
 }
 
 function buildThread(convo) {
-  if (!convo) return [valiMsg("hello", "idle", [h("p", { text: "Hi, I’m Vali. What should I take care of?" })])];
+  if (!convo) return [valiMsg("hello", "idle", [h("p", { text: "Hi, I’m Vali, your valet in Finland. Tell me what you need: documents, money, transport, bookings." })])];
   const nodes = [h("div", { class: "day", text: dayLabel(convo.tasks[0].createdAt) })];
   const ask = pendingAsk(convo, { answered });
   for (const t of convo.tasks) {

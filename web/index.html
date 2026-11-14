@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; connect-src 'self'">
 <meta name="vali-api" content="">
 <title>Vali</title>
-<meta name="description" content="Vali reads the official Finnish pages for you, shows where every fact comes from, and fills the forms. You approve the last step.">
+<meta name="description" content="Vali is your valet for life in Finland. Documents, money, transport, bookings and housing, handled for you. You tap Approve.">
 <link rel="stylesheet" href="style.css">
 <script src="vendor/butler.js"></script>
 <script type="module" src="app.js"></script>
@@ -32,8 +32,8 @@
 <main>
   <section id="home" class="view home">
     <div class="hero-slot" data-slot="home"></div>
-    <h1>New in Finland? Hand me the errand.</h1>
-    <p class="sub">Bank accounts, Kela, saunas, cinema. Vali finds it with Exa, fills it in and books it. You just say yes.</p>
+    <h1>Your valet for life in Finland.</h1>
+    <p class="sub">Just arrived? Permits, bank, Kela, HSL, saunas. Vali handles it all. You tap Approve.</p>
     <form id="ask" class="ask">
       <label class="sr-only" for="errand">Your errand</label>
       <input id="errand" type="text" maxlength="2000" autocomplete="off" enterkeyhint="send"
@@ -44,15 +44,27 @@
       <button type="submit" class="btn go">Ask Vali</button>
     </form>
     <div id="examples" class="chips examples">
+      <button type="button" class="chip">Register my address</button>
       <button type="button" class="chip">Bank account without a Finnish ID</button>
+      <button type="button" class="chip">HSL student discount</button>
       <button type="button" class="chip">Book a sauna this Friday</button>
-      <button type="button" class="chip">Cinema tickets for Saturday</button>
-      <button type="button" class="chip">Kela benefits for students</button>
-      <button type="button" class="chip">Register my new address</button>
+      <button type="button" class="chip">Watch Kela student benefits</button>
     </div>
    <section id="errands" class="errands"></section>
 
     <div class="landing">
+      <section class="areas-band" aria-labelledby="areas-title">
+        <p class="eyebrow">Areas</p>
+        <h2 id="areas-title">Everything a newcomer needs</h2>
+        <ul class="areas">
+          <li class="area"><b>Documents</b><span>Residence permit, DVV, tax card, Kela</span></li>
+          <li class="area"><b>Money</b><span>Bank account without a Finnish ID, benefits</span></li>
+          <li class="area"><b>Transport</b><span>HSL tickets and discounts, trains, delays</span></li>
+          <li class="area"><b>Bookings</b><span>Sauna, cinema, appointments. Vali fills the form, you tap Approve.</span></li>
+          <li class="area"><b>Housing</b><span>Rent, landlord check</span></li>
+          <li class="area"><b>Watches</b><span>Exa Monitors keep looking. You hear only what is new.</span></li>
+        </ul>
+      </section>
       <section class="feature">
         <div class="feature-text">
           <p class="eyebrow">WhatsApp</p>

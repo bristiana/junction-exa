@@ -25,6 +25,12 @@ export function domainOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
 }
 
+// A picture URL from the API (an Exa Contents page image): https only, else null.
+export function httpsOnly(url) {
+  const safe = safeUrl(url);
+  return safe && safe.startsWith('https:') ? safe : null;
+}
+
 export function safeUrl(url) {
   try {
     const parsed = new URL(url);
@@ -86,6 +92,7 @@ export function sourcesOf(task) {
       n: Number.isInteger(s.n) ? s.n : i + 1, url: safeUrl(s.url), title: String(s.title || domainOf(s.url)),
       domain: String(s.domain || domainOf(s.url)), quote: s.quote ? String(s.quote) : '',
       official: s.official ?? isOfficial(domainOf(s.url)), published: s.published || null, stale: !!s.stale,
+      image: httpsOnly(s.image),
     }));
   }
   const seen = new Map();
@@ -94,7 +101,7 @@ export function sourcesOf(task) {
     if (!url || seen.has(url)) continue;
     const domain = domainOf(url);
     seen.set(url, { n: seen.size + 1, url, title: String(citation.title || domain), domain, quote: '',
-      official: isOfficial(domain), published: null, stale: false });
+      official: isOfficial(domain), published: null, stale: false, image: null });
   }
   return [...seen.values()];
 }

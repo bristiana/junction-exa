@@ -1,4 +1,5 @@
-// The page controller: routes (#/ home, #/t/<id> one errand, #/dashboard), the ask box, and polling the open errand.
+// The page controller: routes (#/ home, #/t/<id> one errand, #/dashboard, #/dashboard/<id> one errand as a chat),
+// the ask box, and polling the open errand.
 import { api } from './api.js';
 import { $, h } from './dom.js';
 import { TERMINAL, isActive, moodOf } from './model.js';
@@ -191,14 +192,15 @@ function route() {
   if ($('whatsapp').open) $('whatsapp').close();
   notice(leaving);
   leaving = '';
-  if (location.hash !== '#/dashboard') closeBoard();
+  const board = location.hash.match(/^#\/dashboard(?:\/([\w-]+))?$/);
+  if (!board) closeBoard();
   const match = location.hash.match(/^#\/t\/([\w-]+)$/);
   if (match) return follow(match[1]);
   unfollow();
-  if (location.hash === '#/dashboard') {
+  if (board) {
     showView('dashboard');
     mascot?.setMood('idle');
-    return openBoard();
+    return openBoard(board[1] || null);
   }
   if (location.hash === '#/hub') {
     showView('hub');

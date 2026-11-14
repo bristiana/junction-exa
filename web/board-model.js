@@ -1,5 +1,5 @@
 // The dashboard's numbers and lists, read from GET /v1/tasks, /v1/stats and /v1/watches. Pure, no DOM.
-import { channelOf, domainOf, errandStatus, output, safeUrl, sourcesOf, structured } from './model.js';
+import { TERMINAL, activityOf, channelOf, domainOf, errandStatus, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
 import { exaUses } from './exa-uses.js';
 
 const list = (value) => (Array.isArray(value) ? value : []);
@@ -110,6 +110,121 @@ export function watchesOf(watches, tasks) {
       }),
     };
   });
+}
+
+// ---------- one errand as a conversation (#/dashboard/<id>) ----------
+// Browser steps that say nothing on their own; the thread skips them.
+const QUIET_STEP = /^(Read the page|Looked at the page|Scrolled\b|Pressed\b|Waiting for your approval|Finished|Stopped)$/;
+const RUN_WORD = {
+  starting: 'Opening the page', running: 'Filling the form', awaiting_approval: 'Waiting for your OK',
+  submitting: 'Submitting', completed: 'Done', done: 'Done', failed: "Couldn't finish", stopped: 'Stopped',
+};
+
+// "{{first_name}}" -> "your first name": the dashboard never shows saved details.
+export function plainPlaceholders(text) {
+  return String(text ?? '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, key) => `your ${key.toLowerCase().replaceAll('_', ' ')}`);
+}
+
+export function isPdf(url) {
+  try { return /\.pdf$/i.test(new URL(url).pathname); } catch { return false; }
+}
+
+// The first n sentences of the answer; the research's own lead or claims when there is no answer text.
+export function shortAnswer(task, n = 2) {
+  const text = structured(task).answer || output(task).lead || list(output(task).claims).map((c) => c?.text).filter(Boolean).join(' ');
+  return sentences(text).slice(0, n).join(' ');
+}
+
+// The browser steps worth reading, newest last: quiet steps dropped, "Opened <url>" shortened to its domain.
+export function runSteps(task, n = 4) {
+  const steps = list(task?.execution?.steps).map((s) => String(s?.text || '').trim()).filter((t) => t && !QUIET_STEP.test(t))
+    .map((t) => {
+      const opened = /^Opened\s+(\S+)/.exec(t);
+      return plainPlaceholders(opened && domainOf(opened[1]) ? `Opened ${domainOf(opened[1])}` : t);
+    });
+  return { steps: steps.slice(-n), more: Math.max(0, steps.length - n) };
+}
+
+// Every page Vali touched for this errand, sources first: [{url, domain, title, pdf, image, how}].
+export function pagesOpened(task) {
+  const pages = new Map();
+  const add = (url, how, title = '', image = null) => {
+    const safe = safeUrl(url);
+    if (!safe) return;
+    const known = pages.get(safe);
+    if (known) {
+      known.title ||= title;
+      known.image ||= image;
+      return;
+    }
+    pages.set(safe, { url: safe, domain: domainOf(safe), title: String(title || ''), pdf: isPdf(safe), image, how });
+  };
+  for (const s of sourcesOf(task)) add(s.url, `Source ${s.n}`, s.title !== s.domain ? s.title : '', s.image);
+  for (const line of activityOf(task)) if (line.kind === 'read') add(line.url, 'Read by Exa', line.text !== domainOf(line.url) ? line.text : '');
+  const run = task?.execution || {};
+  for (const call of list(run.exa)) if (call?.kind === 'read') add(call.url, 'Read for the form');
+  for (const step of list(run.steps)) {
+    const opened = /^Opened\s+(\S+)/.exec(String(step?.text || ''));
+    if (opened) add(opened[1], 'Opened in the browser');
+  }
+  add(run.start_url, 'Opened in the browser');
+  return [...pages.values()];
+}
+
+// The errand as chat bubbles, oldest first. who: 'me' (right) or 'vali' (left). Every bubble has text; the rest is
+// optional: label (small heading), facts [{label, value}], sources [{n, url, domain}], steps, more, tone, options.
+export function threadOf(task) {
+  const research = task?.research || {};
+  const status = errandStatus(task);
+  const bubbles = [{ who: 'me', text: String(task?.task || ''), at: task?.created_at || null }];
+  const question = research.question;
+  if (question?.text) {
+    const answered = question.answer != null;
+    bubbles.push({ who: 'vali', text: String(question.text), tone: answered ? null : 'you',
+      options: answered ? [] : list(question.options).map(String).filter(Boolean).slice(0, 6) });
+    if (answered) bubbles.push({ who: 'me', text: String(question.answer) });
+  }
+  if (!TERMINAL.has(research.status)) {
+    bubbles.push({ who: 'vali', text: status.detail || 'Working on it', label: 'Working', tone: 'working' });
+  } else if (research.status === 'cancelled') {
+    bubbles.push({ who: 'vali', text: 'Stopped. Nothing was sent.', tone: 'failed' });
+  } else if (research.status === 'failed') {
+    bubbles.push({ who: 'vali', text: String(research.error || "I couldn't finish this one."), tone: 'failed' });
+  } else {
+    const facts = list(structured(task).key_facts).filter((f) => f?.label && f?.value).slice(0, 3)
+      .map((f) => ({ label: String(f.label), value: String(f.value) }));
+    const sources = sourcesOf(task).slice(0, 6).map((s) => ({ n: s.n, url: s.url, domain: s.domain }));
+    const missing = structured(task).status === 'needs_info' ? missingInfo(task)[0] : '';
+    bubbles.push({ who: 'vali', text: plainPlaceholders(shortAnswer(task) || missing || 'Done.'), facts, sources });
+    if (missing && shortAnswer(task)) bubbles.push({ who: 'vali', text: missing, tone: 'you' });
+  }
+  return bubbles.concat(runBubbles(task));
+}
+
+function runBubbles(task) {
+  const run = task?.execution;
+  if (!run) return [];
+  const state = runStatus(task);
+  const { steps, more } = runSteps(task);
+  const where = domainOf(run.current_url || run.start_url);
+  const out = [{ who: 'vali', label: 'Browser', text: `${RUN_WORD[state] || 'Working'}${where ? ` · ${where}` : ''}`, steps, more,
+    tone: ['starting', 'running', 'submitting'].includes(state) ? 'working' : null }];
+  const talk = [];
+  if (run.question?.text) talk.push({ who: 'vali', text: String(run.question.text), at: String(run.question.at || ''), tone: 'you' });
+  for (const m of list(run.inbox)) if (m?.text) talk.push({ who: 'me', text: String(m.text), at: String(m.at || '') });
+  out.push(...talk.map((b, i) => ({ ...b, i })).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.i - b.i)).map(({ i, ...b }) => b));
+  const approval = run.approval;
+  if (approval?.summary || state === 'awaiting_approval') {
+    const fields = list(approval?.filled).map((f) => f?.label).filter(Boolean).map(String);
+    out.push({ who: 'vali', label: 'Approval', text: plainPlaceholders(approval?.summary || 'The form is filled.'),
+      steps: fields.length ? [`Filled: ${fields.join(', ')}`] : [], tone: state === 'awaiting_approval' ? 'you' : null });
+  }
+  if (run.approval_decision === 'approved') out.push({ who: 'me', text: 'Approve' });
+  if (run.approval_decision === 'stopped') out.push({ who: 'me', text: 'Stop' });
+  if (run.error) out.push({ who: 'vali', text: plainPlaceholders(run.error), tone: 'failed' });
+  else if (state === 'stopped') out.push({ who: 'vali', text: 'Stopped. Nothing was sent.', tone: 'failed' });
+  else if (run.result) out.push({ who: 'vali', text: plainPlaceholders(run.result), tone: 'done' });
+  return out;
 }
 
 const stamp = (iso) => Date.parse(iso) || 0;

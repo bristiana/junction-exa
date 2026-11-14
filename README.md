@@ -1,6 +1,6 @@
 # Vali
 
-Vali is an errand butler for international students and newcomers in Finland. Message it on WhatsApp like a friend who knows Finland: it reads the live web with Exa, answers in a sentence or two with the exact source links, fills the real booking form in a cloud browser, and books only when you tap Approve.
+Vali is your valet for life in Finland, for foreigners who just arrived. Documents, money, transport, bookings, housing: message it on WhatsApp and it handles the errand. It reads the live web with Exa, answers with the exact source links, fills the real form in a cloud browser, and acts only when you tap Approve. Watches keep researching in the background and tell you only what is new.
 
 **Live:** https://bogdan-c-2206--vali-web.us-east.modal.run/
 

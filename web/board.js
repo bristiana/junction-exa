@@ -1,10 +1,11 @@
 // The dashboard (#/dashboard): every errand from every channel and every Exa call behind them, refreshed every 5 s
 // while the view is open and the tab is visible, so a WhatsApp message shows up here as it arrives.
+// #/dashboard/<id> shows one errand as a chat with Vali, on the same refresh.
 import { api } from './api.js';
 import { h, show } from './dom.js';
 import { timeAgo } from './model.js';
 import { CHANNELS, icon } from './dashboard.js';
-import { feedOf, searchesOf, totalsOf, watchesOf } from './board-model.js';
+import { feedOf, pagesOpened, searchesOf, threadOf, totalsOf, watchesOf } from './board-model.js';
 
 const POLL_MS = 5000;
 const SHORT = { extension: 'Extension', mac: 'Mac', imessage: 'iMessage' };
@@ -12,10 +13,17 @@ const SEARCH_ICON = 'M10 3a7 7 0 0 1 5.6 11.2l4.6 4.6-1.4 1.4-4.6-4.6A7 7 0 1 1 
 const EYE_ICON = 'M12 5c5 0 9 4.5 10 7-1 2.5-5 7-10 7S3 14.5 2 12c1-2.5 5-7 10-7Zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z';
 
 let timer = 0, gen = 0, open = false, lastKey = '', seen = null, updatedAt = 0, failing = false;
+let threadId = null, last = null; // the errand open as a chat; the newest data, so opening one draws at once
 
-export function openBoard() {
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && open && threadId && !document.querySelector('dialog[open]')) location.hash = '#/dashboard';
+});
+
+export function openBoard(id = null) {
   open = true;
-  if (!lastKey) show('dashboard', h('p', { class: 'muted board-loading' }, 'Loading your dashboard…'));
+  threadId = id;
+  if (last) render(last);
+  else show('dashboard', h('p', { class: 'muted board-loading' }, 'Loading your dashboard…'));
   load();
 }
 
@@ -37,24 +45,29 @@ async function load() {
   try {
     const [{ tasks }, stats, watches] = await Promise.all([
       api.tasks(), api.stats().catch(() => null), api.watches().then((r) => r.watches).catch(() => null)]);
+    // An errand older than the newest 50 is fetched on its own.
+    const want = threadId;
+    const extra = want && !(tasks || []).some((t) => t.id === want) ? await api.task(want).catch(() => null) : null;
     if (mine !== gen || !open) return;
     failing = false;
     updatedAt = Date.now();
-    render(tasks || [], stats, watches);
+    last = { tasks: tasks || [], stats, watches, extra, checked: want };
+    render(last);
   } catch (error) {
     if (mine !== gen || !open) return;
     failing = true;
-    if (!lastKey) show('dashboard', h('p', { class: 'muted board-loading' }, `Couldn't load the dashboard: ${error.message}`));
+    if (!last) show('dashboard', h('p', { class: 'muted board-loading' }, `Couldn't load the dashboard: ${error.message}`));
   }
   stamp();
   if (mine === gen && open) timer = setTimeout(load, failing ? POLL_MS * 2 : POLL_MS);
 }
 
 // Redraw only when something changed, so focus and scroll survive the poll; the times update in place.
-function render(tasks, stats, watches) {
-  const key = JSON.stringify([tasks, stats, watches]);
+function render({ tasks, stats, watches, extra, checked }) {
+  const key = JSON.stringify([threadId, tasks, stats, watches, extra]);
   if (key === lastKey && document.querySelector('#dashboard .board')) return ticks();
   lastKey = key;
+  if (threadId) return renderThread(tasks.find((t) => t.id === threadId) || (extra?.id === threadId ? extra : null), checked === threadId);
   const fresh = seen ? new Set(tasks.map((t) => t.id).filter((id) => !seen.has(id))) : new Set();
   seen = new Set(tasks.map((t) => t.id));
   const focused = document.activeElement?.closest?.('#dashboard [data-key]')?.dataset.key;
@@ -67,7 +80,7 @@ function render(tasks, stats, watches) {
       h('div', {},
         h('p', { class: 'eyebrow' }, 'Exa at work'),
         h('h1', { class: 'board-title' }, 'Dashboard')),
-      h('p', { class: 'live', id: 'board-live' }, h('span', { class: 'live-dot', 'aria-hidden': 'true' }), h('span', { class: 'live-text' }))),
+      liveBadge()),
     tiles(totals),
     h('div', { class: 'board-grid' },
       h('section', { class: 'card panel feed-panel', 'aria-labelledby': 'feed-title' },
@@ -87,6 +100,66 @@ function render(tasks, stats, watches) {
             ? h('ol', { class: 'searches', tabindex: '0', 'aria-label': 'Exa searches' }, searches.map(searchRow))
             : h('p', { class: 'muted empty' }, 'No searches yet.'))))));
   if (focused) document.querySelector(`#dashboard [data-key="${CSS.escape(focused)}"]`)?.focus();
+}
+
+function liveBadge() {
+  return h('p', { class: 'live', id: 'board-live' }, h('span', { class: 'live-dot', 'aria-hidden': 'true' }), h('span', { class: 'live-text' }));
+}
+
+// ---------- one errand as a chat ----------
+function renderThread(task, checked) {
+  const back = h('a', { class: 'back thread-back', href: '#/dashboard', 'data-key': 'back' }, '← Dashboard');
+  if (!task) {
+    show('dashboard', h('div', { class: 'board thread-view' }, h('div', { class: 'thread-top' }, back, liveBadge()),
+      h('p', { class: 'muted board-loading' }, checked ? 'This errand is not in this account.' : 'Loading the errand…')));
+    return stamp();
+  }
+  const focused = document.activeElement?.closest?.('#dashboard [data-key]')?.dataset.key;
+  const [row] = feedOf([task]);
+  const pages = pagesOpened(task);
+  show('dashboard', h('div', { class: 'board thread-view' },
+    h('div', { class: 'thread-top' }, back, liveBadge()),
+    h('section', { class: 'card thread', 'aria-labelledby': 'thread-title' },
+      h('header', { class: 'thread-head' },
+        h('h1', { id: 'thread-title', class: 'sr-only' }, row.text),
+        badge(row.channel),
+        h('span', { class: `feed-meta tone-${row.tone}` }, row.mode, ' · ', h('b', {}, row.status), ' · ', ago(row.at)),
+        h('a', { class: 'thread-open', href: `#/t/${encodeURIComponent(task.id)}`, 'data-key': 'open' }, 'Open errand')),
+      h('ol', { class: 'bubbles', 'aria-label': 'Conversation' }, threadOf(task).map(bubble)),
+      pages.length ? h('section', { class: 'opened', 'aria-labelledby': 'opened-title' },
+        panelHead('opened-title', 'Opened by Vali', pages.length),
+        h('ul', { class: 'pages' }, pages.map(pageRow))) : null)));
+  if (focused) document.querySelector(`#dashboard [data-key="${CSS.escape(focused)}"]`)?.focus();
+  stamp();
+}
+
+function bubble(b) {
+  return h('li', { class: `bubble ${b.who}${b.tone ? ` tone-${b.tone}` : ''}` },
+    h('span', { class: 'sr-only' }, b.who === 'me' ? 'You: ' : 'Vali: '),
+    b.label ? h('span', { class: 'bubble-label' }, b.label) : null,
+    h('p', { class: 'bubble-text' }, b.text),
+    b.options?.length ? h('span', { class: 'bubble-options' }, b.options.map((o) => h('span', { class: 'tag' }, o))) : null,
+    b.facts?.length ? h('dl', { class: 'bubble-facts' }, b.facts.map((f) => h('div', {}, h('dt', {}, f.label), h('dd', {}, f.value)))) : null,
+    b.steps?.length ? h('ul', { class: 'bubble-steps' },
+      b.more ? h('li', { class: 'more' }, `${b.more} earlier ${b.more === 1 ? 'step' : 'steps'}`) : null,
+      b.steps.map((step) => h('li', {}, step))) : null,
+    b.sources?.length ? h('ol', { class: 'bubble-sources', 'aria-label': 'Sources' }, b.sources.map((s) => h('li', {},
+      h('a', { href: s.url, target: '_blank', rel: 'noopener noreferrer', title: s.url }, h('b', {}, String(s.n)), s.domain)))) : null);
+}
+
+function pageRow(page) {
+  const fallback = () => h('span', { class: `page-icon${page.pdf ? ' pdf' : ''}`, 'aria-hidden': 'true' },
+    page.pdf ? 'PDF' : (page.domain[0] || '?').toUpperCase());
+  const thumb = page.image
+    ? h('img', { class: 'page-thumb', src: page.image, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer',
+      onerror: (event) => event.currentTarget.replaceWith(fallback()) })
+    : fallback();
+  return h('li', {},
+    h('a', { class: 'page', href: page.url, target: '_blank', rel: 'noopener noreferrer' },
+      thumb,
+      h('span', { class: 'page-main' },
+        h('span', { class: 'page-title' }, page.title || page.domain),
+        h('span', { class: 'page-meta' }, page.pdf && page.image ? h('span', { class: 'tag pdf' }, 'PDF') : null, page.domain, ' · ', page.how))));
 }
 
 function panelHead(id, title, count) {
@@ -112,7 +185,7 @@ function tile(name, value, note) {
 
 function feedRow(row, fresh) {
   return h('li', { class: fresh ? 'fresh' : null },
-    h('a', { class: `feed-row tone-${row.tone}`, href: `#/t/${encodeURIComponent(row.id)}`, 'data-key': row.id },
+    h('a', { class: `feed-row tone-${row.tone}`, href: `#/dashboard/${encodeURIComponent(row.id)}`, 'data-key': row.id },
       h('span', { class: 'feed-top' },
         badge(row.channel),
         h('span', { class: 'feed-meta' }, row.mode, ' · ', h('b', {}, row.status), ' · ', ago(row.at))),
