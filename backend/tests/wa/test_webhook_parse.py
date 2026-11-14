@@ -56,7 +56,8 @@ def test_signature_and_handshake():
     *[(text, "stop") for text in ["stop", "No!", "cancel", "EI.", "lopeta"]],
     *[(text, "status") for text in ["status", "Tila!", "?", "?!", "???"]],
     *[(text, "help") for text in ["help", "Apua!", "hi", "hello", "Moi.", "hei"]],
-    *[(text, "new_errand") for text in ["hello help with rent", "yes please book", "10", "0", "link 12345", "link 1234567", "moi etsi sauna"]],
+    *[(text, "check") for text in ["check now", "Check now!", "check", "Tarkista."]],
+    *[(text, "new_errand") for text in ["hello help with rent", "yes please book", "10", "0", "link 12345", "link 1234567", "moi etsi sauna", "check my rent"]],
 ])
 def test_commands(text, kind):
     assert parse_command(text).kind == kind

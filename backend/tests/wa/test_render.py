@@ -75,3 +75,13 @@ def test_execution(task):
     assert render_execution_update(task) == ["Vali could not finish: Login required\nfinish here: https://airline.example/claim"]
     task["execution"] = {"status": "stopped"}
     assert render_execution_update(task) == ["Stopped. Vali will not submit this errand."]
+
+
+def test_watch_update_and_check_texts():
+    from vali_wa.render import render_check, render_watch_update
+    update = {'text': 'new: One. Two is here. Three.', 'sources': [
+        {'url': 'javascript:alert(1)'}, {'url': 'https://a.example/x'}, {'url': 'https://b.example/'}, {'url': 'https://c.example/'}]}
+    assert render_watch_update('flats in Vantaa', update, 'xx') == [
+        '*New on your watch:* flats in Vantaa\nOne. Two is here.\nhttps://a.example/x\nhttps://b.example/']
+    assert render_check('ro-RO') == ['Verific acum cu Exa. Îți scriu aici când termin.']
+    assert render_check(None) == ["Checking now with Exa. I'll message you here when it finishes."]

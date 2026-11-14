@@ -24,7 +24,7 @@ from .citations import cite, unchecked
 from .companion import CompanionBody, companion_tip, make_cache
 from .config import Config
 from .exa import ExaClient, ExaError, TTLCache
-from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
+from .monitors import provision_watch, delete_monitor, trigger_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
 from .guard import (CODE_LOCKOUT, CODE_TRIES, PAIR_BUDGET, PAIR_BUDGET_SECONDS, RateLimited, SlidingWindow, authenticate,
                     check_code_tries, check_origin, check_task_budget, client_ip, public_start_url, resolve_host)
 from .research import ANSWER_FIRST, FIND_RULES, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
@@ -40,7 +40,7 @@ from .voice_agent import add_voice_routes
 from vali_wa.flow import WhatsAppFlow
 from vali_wa.webhook import parse_webhook, verify_signature
 from vali_wa.render import render_result, render_execution_update, render_error
-from .wa_channel import ChannelAPI, push_task, log_failure, logger as whatsapp_logger
+from .wa_channel import ChannelAPI, push_task, push_watch_update, log_failure, logger as whatsapp_logger
 
 logger = logging.getLogger('vali.api')
 TERMINAL = {'completed', 'failed', 'cancelled'}
@@ -722,6 +722,16 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(404, 'Watch not found')
         return {'ok': True}
 
+    @application.post('/v1/watches/{wid}/check')
+    def check_watch(wid: str, user=Depends(authenticate)):
+        watch = application.state.store.get_watch(wid)
+        if not watch or watch['user_id'] != user['id']:
+            raise HTTPException(404, 'Watch not found')
+        if not watch['exa_monitor_id'] or not watch.get('secret'):
+            raise HTTPException(409, 'This watch has no live Exa monitor to check.')
+        trigger_monitor(application.state.exa, watch)
+        return {'ok': True, 'triggered': True}
+
     @application.get('/v1/status')
     def status(user=Depends(authenticate)):
         return {'failures': application.state.store.recent_failures(user['id'])}
@@ -775,6 +785,18 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         from vali_media.letters import read_letter
         return read_letter(data, mime or 'image/jpeg', caption)
 
+    def check_latest_watch(user):
+        """'check now' on WhatsApp: trigger the newest live watch; its errand language, or None without one."""
+        store = application.state.store
+        for row in store.sql('SELECT id FROM watches WHERE user_id=? AND exa_monitor_id IS NOT NULL '
+                             'ORDER BY created_at DESC', (user['id'],)):
+            watch = store.get_watch(row['id'])
+            if watch and watch.get('secret'):
+                trigger_monitor(application.state.exa, watch)
+                task = store.get_task(watch['task_id']) if watch.get('task_id') else None
+                return (task or {}).get('lang') or 'en'
+        return None
+
     async def create_whatsapp_task(user, text, source):
         return await asyncio.to_thread(create_task_for_user, TaskBody(task=text), user, source)
 
@@ -803,7 +825,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         execute=lambda tid, index: execute_for_user(tid, ExecuteBody(action_index=index), sender.get(), 'whatsapp'),
         approve=lambda tid: approve(tid, sender.get()), stop=lambda tid: stop_for_user(tid, sender.get(), notify=False),
         transcribe=transcribe if config.elevenlabs_api_key else None,
-        read_letter=read_letter if config.anthropic_api_key else None)
+        read_letter=read_letter if config.anthropic_api_key else None,
+        check=lambda user: asyncio.to_thread(check_latest_watch, user))
 
     def process_messages(messages):
         # Sync background work gets a worker thread, keeping blocking providers off ASGI.
@@ -848,7 +871,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         return {'ok': True}
 
     @application.post('/webhooks/exa')
-    async def exa_webhook(request: Request):
+    async def exa_webhook(request: Request, background_tasks: BackgroundTasks):
         length = request.headers.get('content-length')
         if length is not None:
             try:
@@ -866,8 +889,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             event_id, update = delivery_update(json.loads(raw), watch)
         except (ValueError, TypeError):
             raise HTTPException(400, 'Invalid delivery') from None
-        if update:
-            store.add_watch_update(watch, event_id, update)
+        # Only a first-seen event reaches WhatsApp; Exa retries are deduplicated by the store.
+        if update and store.add_watch_update(watch, event_id, update):
+            background_tasks.add_task(push_watch_update, application, watch, update)
         return {'ok': True}
 
     add_voice_routes(

@@ -145,6 +145,10 @@ def test_a_watch_answers_today_first_and_echoes_its_criteria(api):
     from vali_api.monitors import watch_criteria
     assert watch_criteria('watch for new flats under 900 eur in Espoo') == 'new flats under 900 eur in Espoo'
     assert watch_criteria('Tell me when Kela opens applications') == 'Kela opens applications'
+    assert (watch_criteria('remind me to renew my residence permit 2 months before it expires, expires 12 March')
+            == 'renew my residence permit 2 months before it expires, expires 12 March')
+    assert watch_criteria('wait for a flat deal under 800 eur in Vantaa and tell me') == 'a flat deal under 800 eur in Vantaa'
+    assert watch_criteria('Wait for a cheap sofa in Espoo and let me know.') == 'a cheap sofa in Espoo'
     client, application, calls, *_ = api
     task = client.post('/v1/tasks', json={'task': 'watch for new flats under 900 eur in Espoo'}).json()
     assert task['mode'] == 'watch'

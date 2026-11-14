@@ -14,12 +14,14 @@ from .store import now
 
 
 _WATCH_VERB = re.compile(r'^\s*(?:please\s+)?(?:keep\s+)?(?:watch(?:ing)?(?:\s+for)?|tell me when|notify me(?:\s+when|\s+about)?|'
-                         r'remind me(?:\s+when|\s+about)?|let me know when|alert me(?:\s+when)?|ilmoita)\s+', re.I)
+                         r'remind me(?:\s+when|\s+about)?|let me know when|alert me(?:\s+when)?|wait for|ilmoita)\s+', re.I)
+_TELL_ME = re.compile(r'[\s,]+and\s+(?:tell me|let me know)\s*[.!]?\s*$', re.I)
 
 
 def watch_criteria(task):
     """What the watch looks for, echoed back to the user: the errand without its 'watch for' verb."""
     criteria = _WATCH_VERB.sub('', task.strip(), count=1).strip()
+    criteria = _TELL_ME.sub('', re.sub(r'^to\s+', '', criteria, flags=re.I)).strip()  # 'remind me to X', 'wait for X and tell me'
     return criteria or task.strip()
 
 
@@ -104,6 +106,11 @@ def delete_monitor(exa, watch):
         except ExaError as exc:
             if exc.status != 404:
                 raise
+
+
+def trigger_monitor(exa, watch):
+    # A run now, on top of the schedule; its results arrive as a normal signed delivery. Paid, so never retried.
+    return exa.request('POST', '/monitors/' + quote(watch['exa_monitor_id'], safe='') + '/trigger', retry=False)
 
 
 def verify_delivery(raw, signature, secret):
