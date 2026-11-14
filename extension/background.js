@@ -12,6 +12,7 @@ import * as backend from "./lib/backend.js";
 import { isLinkSender, linkCodeInput } from "./lib/device-link.js";
 import { planFill, errandValues, samePage, PAGE_CHANGED } from "./lib/fill-here.js";
 import { cacheKey, helpfulPage, companionPayload, cleanTip, cachedEntry, remember } from "./lib/companion.js";
+import { askQuestion, askPage, askView } from "./lib/ask.js";
 
 const MAX_TASKS = 30;
 const MAX_HIDDEN = 200;
@@ -66,10 +67,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 // ---------- runs ----------
-async function startTask({ task, tabId, usePage, selection, previousRunId, parentId }) {
+// pageOnly: { url } for "Ask Vali anything" on the mascot: the address only, the page itself is not read.
+async function startTask({ task, tabId, usePage, selection, previousRunId, parentId, pageOnly }) {
   const { exaKey, profile, effort, backendUrl } = await settings();
-  let page = null;
-  if (usePage && tabId) {
+  let page = pageOnly?.url ? { url: pageOnly.url, title: "", text: "", fields: [] } : null;
+  if (!page && usePage && tabId) {
     try {
       const [res] = await chrome.scripting.executeScript({ target: { tabId }, func: capturePage });
       page = res?.result || null; // text, selection and title come back redacted
@@ -388,11 +390,52 @@ function markTipSeen(url) {
   }).then(() => true);
 }
 
+// "Ask Vali anything" (the mascot on the page): the typed question and the page address, nothing else from the page.
+// The errand is an ordinary one, so the panel lists it; the bubble polls it with ask-status.
+async function askFromPage(msg, sender) {
+  const task = askQuestion(msg.question);
+  if (!task) throw new Error("Type a question first.");
+  const rec = await startTask({ task, tabId: sender.tab?.id || null, pageOnly: askPage(sender.url || sender.tab?.url) });
+  return { id: rec.id };
+}
+
+const lastRefresh = new Map(); // task id -> when the bubble last asked the server, so two tabs don't double the polls
+async function askStatus(id) {
+  let t = id ? await findTask(String(id)) : null;
+  if (t?.backend && backend.isActive(t) && Date.now() - (lastRefresh.get(t.id) || 0) > 2000) {
+    lastRefresh.set(t.id, Date.now());
+    try {
+      const remote = await backend.getTask(t.remoteId);
+      t = await withTasks((tasks) => {
+        const i = tasks.findIndex((x) => x.id === t.id);
+        if (i < 0) return null;
+        tasks[i] = backend.toLocalTask(remote, tasks[i]);
+        return tasks[i];
+      });
+    } catch (_) { /* keep the last known state; the alarm poll catches up */ }
+  } else if (t && !t.backend && !TERMINAL.has(t.status)) {
+    await pollAll();
+    t = await findTask(t.id);
+  }
+  const view = askView(t);
+  if (view.state === "done" || view.state === "failed") lastRefresh.delete(id);
+  return view;
+}
+
 // ---------- messages from the panel and the badge ----------
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg?.type === "presence-open") return openWithPrefill(msg, sender, reply, { source: "presence", task: "Help me fill in this form", usePage: true });
   if (msg?.type === "explain") return startFromPageMessage(sender, reply, EXPLAIN_QUESTION, String(msg.selection || "").trim().slice(0, 4000));
   if (msg?.type === "companion-do") return startFromPageMessage(sender, reply, String(msg.task || "").trim().slice(0, 2000));
+  // From a click in the mascot's bubble: the panel opens inside the same user gesture, on the errand if there is one.
+  if (msg?.type === "open-panel" || msg?.type === "ask-open") {
+    const tabId = sender.tab?.id;
+    if (!tabId) { reply({ ok: false, error: "No tab." }); return false; }
+    const opening = openPanelNow(tabId);
+    const focus = msg.type === "ask-open" && msg.id ? chrome.storage.session.set({ focusTask: String(msg.id) }) : Promise.resolve();
+    Promise.all([opening, focus.catch(() => {})]).then(([opened]) => reply({ ok: true, data: { opened } }));
+    return true;
+  }
   const handlers = {
     linkAccount: async () => {
       if (!isLinkSender(sender, chrome.runtime.id)) throw new Error("Link your account from the extension panel.");
@@ -412,6 +455,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     poll: () => pollAll().then(() => true),
     "companion-tip": () => companionTip(msg.page, sender),
     "companion-seen": () => markTipSeen(sender.url),
+    ask: () => askFromPage(msg, sender),
+    "ask-status": () => askStatus(msg.id),
     fill: () => fillForm(msg.taskId),
     fillHere: () => fillHere(msg.taskId, msg.tabId, msg.url),
     cancel: async () => {
