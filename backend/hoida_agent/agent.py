@@ -56,6 +56,7 @@ class AgentResult:
     steps: int
     usage: dict | None = None
     sources: list | None = None
+    filled: list | None = None  # what was filled so far (placeholders), for finishing by hand
 
 
 def _validate(value, schema):
@@ -131,7 +132,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
     def outcome():
         sources = [{k: mask(v, profile) if isinstance(v, str) else v for k, v in s.items()} for s in exa.sources]
         return AgentResult(status, mask(result, profile), final_url, steps, dict(usage) | {'exa_cost_usd': round(exa.cost_usd, 4),
-                           'jev_calls': jev.calls}, sources)
+                           'jev_calls': jev.calls}, sources, [{'label': k, 'value': v} for k, v in filled_log.items()])
 
     def shot():
         mark_private(browser.page, profile)
@@ -184,6 +185,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         return mask(text, profile)
 
     consent_done = set()
+    filled_log = {}
 
     def consent():
         # Consent managers often load a second after the page; retry on later steps until one is closed per site.
@@ -342,12 +344,15 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                             elif name == 'type_text':
                                 approved = False
                                 browser.type(args['ref'], substitute(args['text'], profile))
+                                filled_log[label_of(args['ref'])] = mask(args['text'], profile)
                             elif name == 'select_option':
                                 approved = False
                                 browser.select(args['ref'], substitute(args['option'], profile))
+                                filled_log[label_of(args['ref'])] = mask(args['option'], profile)
                             elif name == 'set_checkbox':
                                 approved = False
                                 browser.check(args['ref'], args['checked'])
+                                filled_log[label_of(args['ref'])] = 'checked' if args['checked'] else 'unchecked'
                             elif name == 'open_url':
                                 approved = False
                                 browser.goto(args['url'])
