@@ -2,20 +2,23 @@
 
 ## Day 2 (Sat 14 Nov 11:00 to Sun 15 Nov 10:00)
 Plan agreed with Bogdan at 12:40 from the feature map (https://claude.ai/artifact/4NepXbzh54qjvdnjxyGiL5). Exa judges: info a model cannot know, usefulness for newcomers and international students in Finland, clear sources, originality, live queries typed by judges (brief video: "how to register a change of address after moving to Helsinki", "book a public sauna in Helsinki for a group", "AI startups in Helsinki building agents"). Main surface is a web page on Modal; the Chrome extension is the "comes with you" companion; the Mac app stays as it is. Code freeze 09:00 Sun. Bogdan submits on the Junction platform himself (name max 30 chars, punchline max 200, 2-minute video, set FINAL).
-- [ ] H1 Harness: one command runs the video queries, ~40 judge-style phrases and the newcomer cases, grades them, writes a scorecard and diffs it against the last run.
-- [ ] B1 Cited answer: every sentence has its sources, each source has the exact quote, domain, official flag and when it was read.
-- [ ] B2 Live Exa trail: research.activity streams each search and each page read while the errand runs.
-- [ ] B3 Channel on every errand and GET /v1/stats for the dashboard counters.
-- [ ] B4 Freshness stamp: published or updated date per source, a warning when it is old.
-- [ ] B5 Your language: ask in any language, answer in it, read Finnish-only pages.
-- [ ] B6 Asks what's missing early, as quick replies, while research runs.
-- [ ] W1 Web dashboard on Modal at "/": home, working state with the live trail, cited answer, all errands from every channel with counters, "Fill it for me" with live view and approval. Anonymous account on first visit. Pastel look with the Vali mascot (palette picker, walks on the page). Mockups: https://claude.ai/artifact/AN8LX6cTubRbexj4cw66x1 (row "Web base").
+- [x] H1 Harness: one command runs the video queries, ~40 judge-style phrases and the newcomer cases, grades them, writes a scorecard and diffs it against the last run.
+- [x] B1 Cited answer: every sentence has its sources, each source has the exact quote, domain, official flag and when it was read.
+- [x] B2 Live Exa trail: research.activity streams each search and each page read while the errand runs.
+- [x] B3 Channel on every errand and GET /v1/stats for the dashboard counters.
+- [x] B4 Freshness stamp: published or updated date per source, a warning when it is old.
+- [x] B5 Your language: ask in any language, answer in it, read Finnish-only pages.
+- [x] B6 Asks what's missing early, as quick replies, while research runs.
+- [x] W1 Web dashboard on Modal at "/": home, working state with the live trail, cited answer, all errands from every channel with counters, "Fill it for me" with live view and approval. Anonymous account on first visit. Pastel look with the Vali mascot (palette picker, walks on the page). Mockups: https://claude.ai/artifact/AN8LX6cTubRbexj4cw66x1 (row "Web base").
 - [ ] W2 Voice on the web page (the same ElevenLabs agent as the Mac app).
-- [ ] E1 Page companion: on any site the mascot offers the one thing that matters there (deadline, eligibility rule, cheaper option), checked with Exa, with its source, and a "Do it" button.
-- [ ] E2 Explain this: select text on any page, ask what it means, if it is legal, what to do.
-- [ ] E3 In your own tab: the extension fills the form on the current page for sites behind your login; you log in and you send.
-- [ ] E4 Extension in the same pastel look as the web page.
-- [ ] T1 Trust panel: what never leaves your device, what Vali never does without your OK, every page it touched.
+- [x] E1 Page companion: on any site the mascot offers the one thing that matters there (deadline, eligibility rule, cheaper option), checked with Exa, with its source, and a "Do it" button.
+- [x] E2 Explain this: select text on any page, ask what it means, if it is legal, what to do.
+- [x] E3 In your own tab: the extension fills the form on the current page for sites behind your login; you log in and you send.
+- [x] E4 Extension in the same pastel look as the web page.
+- [x] T1 Trust panel: what never leaves your device, what Vali never does without your OK, every page it touched.
+- [x] W3 Student hub: "Your first weeks in Finland" with 26 services by phase, live cited facts, nearby offices and hours, company register check (#55, #57).
+- [x] Z1 Safety: final controls need approval, wizard steps stay free, personal values only on the start site, live frames pause on personal fields, page text fenced as untrusted (#54).
+- [x] Z2 Server privacy and limits: profile never stored, webhooks fail closed, voice approves only on a clear yes, upload/pairing/signup limits, global spend cap, reuse within one account only (#59, #60).
 - [ ] S1 Submission text, 2-minute video script and screenshots (docs/SUBMISSION.md).
 
 ## Morning summary (08:30)
@@ -144,3 +147,4 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - 08:58 Health check: the overnight test account hit its $2 daily cap, so the cap is now $10 (#46, deployed). Golden 5/5 on a fresh account.
 - 11:00 Loop restarted: it had stopped at 09:49 on Sat thinking the deadline was today; the deadline is Sun 10:00. Day 2 items added.
 - 12:40 Feature map agreed with Bogdan; Day 2 rewritten around the web page, the extension companion and the harness. Probe of 10 judge-style queries on live: 10/10 answered with sources, 7 to 33 s.
+- 15:15 Shipped #49-#60: regression tests, harness, extension companion, web page, cited answers with quotes, live trail, stats, language, safety, student hub and services, privacy and limits, voice plain speech. Production = main. Golden 5/5, voice 14/14, video suite 3/3 with 100% cited claims. A cross-user research reuse bug was live 14:38-14:40 (test accounts only), rolled back, fixed in #59.
