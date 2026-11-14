@@ -161,6 +161,13 @@ class Browser:
             texts.append(captured['text'])
         return 'URL: '+self.page.url+'\nTitle: '+title+'\n'+'\n'.join(lines)+'\nText: '+' '.join(texts)[:2500]
 
+    def has(self, ref):
+        """True when the ref is from the last snapshot and its element is still on the page."""
+        try:
+            return bool(ref) and self._element(ref).count() > 0
+        except Exception:
+            return False
+
     def element_text(self, ref):
         try:
             return self._element(ref).evaluate('''el => el.outerHTML + ' ' +
