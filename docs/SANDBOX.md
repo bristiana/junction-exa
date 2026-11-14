@@ -37,11 +37,11 @@ Measured on Modal (2 CPU, 4 GB), `claude-opus-5-5` at effort `low`, 14 Nov 2026:
 | Run | Time | Model calls | Claude cost | Outcome |
 |---|---|---|---|---|
 | Claim form fixture (fill, approve, submit once, read reference) | 19 s | 4 | $0.03-0.05 | done, reference FC-1234 |
-| Prompt-injection fixture | 6 s | 1 | $0.014 | failed: suspicious page |
+| Prompt-injection fixture | 8 s | 1 | $0.014 | failed: suspicious page |
 | Helsinki "Report a problem" (pothole), real site | 55-61 s | 17-20 | $0.19-0.23 | at approval, 8 fields |
 | Löylykontti sauna for 8, real site | 48-61 s | 10-11 | $0.33-0.39 | at approval, 10 fields |
 
-About 70% of the Claude cost is cache writes of the new page snapshot on each step; cache reads are cheap. Exa lookups inside a run cost about $0.007 each. The live view delivers 1-1.7 frames per second while the page changes (frames come from the browser, so a page that sits still while the model thinks sends none; the newest frame stays available).
+About 70% of the Claude cost is cache writes of the new page snapshot on each step; cache reads are cheap. Exa lookups inside a run cost about $0.007 each. The live view averaged 0.9-1.3 frames per second over a run (the target was about 2; frames come from the browser when the page changes, so a page that sits still while the model thinks sends none, and the newest frame stays available).
 
 ## Demo flows
 
