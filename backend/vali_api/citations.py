@@ -96,9 +96,17 @@ def _plain(text):
     return squash(re.sub(r'\s*\|\s*', ' ', re.sub(r'[*_`]+', '', text)))
 
 
+_LINE_MARKS = re.compile(r'^(?:#{1,6}|[-•*])\s+')
+
+
 def verbatim(quote, page_text):
-    """The quote is on the page, word for word; markdown, typography and spacing do not count as a difference."""
-    return len(squash(quote)) >= 12 and _plain(quote) in _plain(page_text)  # a table row "| 12 | 13 416 |" counts
+    """The quote is on the page, word for word; markdown, typography and spacing do not count as a difference.
+    A quote under 12 characters counts only as a whole line with a word in it: a film title in a showtimes list."""
+    if len(squash(quote)) >= 12:
+        return _plain(quote) in _plain(page_text)  # a table row "| 12 | 13 416 |" counts
+    short = _LINE_MARKS.sub('', _plain(quote))
+    return len(short) >= 4 and bool(re.search(r'[^\W\d_]{3}', short)) and any(
+        _LINE_MARKS.sub('', _plain(line)) == short for line in str(page_text or '').splitlines())
 
 
 _EMPHASIS = re.compile(r'(\*\*|__|\*|`)(?=\S)(.+?)(?<=\S)\1')
@@ -403,7 +411,7 @@ def opener(lang, sources):
 
 
 def _unbacked(claim):
-    """No page states any of it: the judge said "no" (a "partly" claim keeps the pages that state part of it)."""
+    """No page quote backs any of it: the judge said "no", or no quote it gave is on the page."""
     return claim['supported'] is False and not claim['sources']
 
 
@@ -466,9 +474,8 @@ def number_sources(claims, support, pages, context):
         refs, supported = [], False
         for index, quote in found:
             source = source_for(index)
-            if source['n'] not in refs:
-                refs.append(source['n'])
-            if verbatim(quote, pages[index]['text']):
+            if verbatim(quote, pages[index]['text']):  # a page is cited for a sentence only by its quote
+                refs += [source['n']] if source['n'] not in refs else []
                 supported = True
                 source.setdefault('quote', squash(re.sub(r'^\s*#{1,6}\s+', '', quote)))  # a heading shows as its words
         out.append({'text': text, 'sources': refs, 'supported': supported})

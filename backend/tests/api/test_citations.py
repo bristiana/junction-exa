@@ -67,9 +67,9 @@ def test_llm_mapping_keeps_only_verbatim_quotes_and_numbers_by_first_use():
     assert exa.calls == [[DVV, POSTI, BLOG]]
     assert result['claims'] == [
         {'text': 'Forwarding costs 10 € a month.', 'sources': [1], 'supported': True},
-        {'text': 'Notify within one week.', 'sources': [2, 1], 'supported': True},
+        {'text': 'Notify within one week.', 'sources': [2], 'supported': True},  # Posti's quote is not on its page
         {'text': 'Moving is easy.', 'sources': [], 'supported': False},
-        {'text': 'Submit it online at night.', 'sources': [2], 'supported': False}]
+        {'text': 'Submit it online at night.', 'sources': [], 'supported': False}]  # no quote, no page marker
     posti, dvv, blog = result['sources']
     assert (posti['n'], posti['domain'], posti['quote'], posti['official']) == (1, 'posti.fi', 'Mail forwarding costs 10 euros per month.', False)
     assert dvv['quote'] == 'You must submit the notification of move no later than one week after moving.' and dvv['official']
