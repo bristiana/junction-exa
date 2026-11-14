@@ -27,6 +27,7 @@ from .exa import ExaClient, ExaError, TTLCache
 from .monitors import provision_watch, delete_monitor, run_completed, trigger_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
 from .guard import (CODE_LOCKOUT, CODE_TRIES, PAIR_BUDGET, PAIR_BUDGET_SECONDS, RateLimited, SlidingWindow, authenticate,
                     check_code_tries, check_origin, check_task_budget, client_ip, public_start_url, resolve_host)
+from .links import prefill_links
 from .research import ANSWER_FIRST, FIND_RULES, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .llm import make_fast_json
@@ -98,7 +99,9 @@ QUOTE_TIMEOUT = timedelta(seconds=90)
 
 
 def quoting(task, research):
-    """Research whose answer is in, waiting for the quote check (status stays running until it is done)."""
+    """Research whose answer is in, waiting for the quote check (status stays running until it is done).
+    A route question gets its journey-planner link, already filled in, as the first action."""
+    research = {**research, 'output': prefill_links(task.get('task'), research.get('output'))}
     return {**research, 'status': 'running', 'quoting': 'pending',
             'activity': (research.get('activity') or []) + [activity.checking(task, research['output'])]}
 
