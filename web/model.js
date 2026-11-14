@@ -275,3 +275,45 @@ export function timeAgo(iso, now = Date.now()) {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
   return `${Math.floor(seconds / 86400)} d ago`;
 }
+
+// Where an errand stands, for the state block on top of the errand page.
+// stages: the path this errand takes; at: the stage it reached; next: what moves it on.
+export function errandStage(task) {
+  const research = task?.research || {};
+  const run = task?.execution;
+  const status = runStatus(task);
+  const action = primaryAction(task);
+  const steps = list(run?.steps).map((s) => String(s?.text || '')).filter(Boolean);
+  const last = steps.at(-1) || '';
+  const asked = String(run?.question?.text || (last.match(/^Asked you: (.+)/) || [])[1] || '');
+  const site = domainOf(run?.current_url) || action?.domain || '';
+  const stages = action || run ? ['Found', 'Filled', 'Your OK', 'Done'] : ['Found', 'Done'];
+  const done = stages.length - 1;
+  const out = (at, tone, line, next, extra = {}) => ({ stages, at, tone, line, next, site, ...extra });
+  if (!TERMINAL.has(research.status)) return out(0, 'working', 'Vali is reading the web with Exa.', null);
+  if (research.status === 'failed') return out(0, 'failed', research.error || 'The research did not finish.', { kind: 'retry' });
+  if (research.status === 'cancelled' && !run) return out(0, 'stopped', 'You stopped this errand. Nothing was sent.', { kind: 'retry' });
+  const question = questionOf(task);
+  if (!run) {
+    if (question) return out(0, 'you', `Vali needs one thing from you: ${question.text}`, { kind: 'answer', question: question.text });
+    if (structured(task).status === 'needs_info' && missingInfo(task).length) {
+      return out(0, 'you', `Vali needs one thing from you: ${missingInfo(task)[0]}`, { kind: 'answer', question: missingInfo(task).join(' ') });
+    }
+    if (action) return out(0, 'ready', `Vali found it. Next: fill the form on ${action.domain}.`, { kind: 'fill' });
+    return out(done, 'done', 'Answered. Nothing left to do.', null);
+  }
+  if (status === 'starting') return out(1, 'working', `Opening ${site}.`, { kind: 'stop' });
+  if (status === 'running') {
+    if (run.question?.text) return out(1, 'you', `Vali is waiting for you on ${site}: ${run.question.text}`, { kind: 'reply', question: run.question.text });
+    return out(1, 'working', last ? `On ${site}: ${last}` : `Filling the form on ${site}.`, { kind: 'stop' });
+  }
+  if (status === 'awaiting_approval') return out(2, 'you', `Everything is filled on ${site}. Nothing is sent until you approve.`, { kind: 'approve' });
+  if (status === 'submitting') return out(2, 'working', `Sending it on ${site}.`, null);
+  if (status === 'done') return out(done, 'done', run.result || 'Done.', null);
+  const reached = run.approval ? 2 : 1;
+  if (status === 'stopped') {
+    const where = asked ? `while Vali was asking “${asked.replace(/[?.]\s*$/, '')}?”` : last ? `after “${last}”.` : `on ${site}.`;
+    return out(reached, 'stopped', `You stopped it ${where} Nothing was sent.`, { kind: 'refill', question: asked, hint: asked ? 'Answer and Vali picks up from there.' : 'Continue and Vali picks up from there.' });
+  }
+  return out(reached, 'failed', `Couldn't finish on ${site}${last ? ` after: ${last}` : ''}. ${run.error || ''}`.trim(), { kind: 'refill', question: asked, hint: 'Continue to let Vali try again from there, or open the site and finish it yourself.' });
+}

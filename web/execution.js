@@ -16,7 +16,7 @@ export function stopFrames() {
   clearInterval(frameTimer);
 }
 
-export function renderExecution(task, { onApprove, onStop, onReply }) {
+export function renderExecution(task, { onApprove, onStop, onReply, quiet = false }) {
   stopFrames();
   const run = task.execution;
   if (!run) return null;
@@ -25,17 +25,17 @@ export function renderExecution(task, { onApprove, onStop, onReply }) {
   const waiting = status === 'awaiting_approval';
   const steps = Array.isArray(run.steps) ? run.steps.slice(-6) : [];
   const profile = loadProfile(); // placeholders show your own values, on this page only
-  return h('section', { class: `run card ${waiting ? 'waiting' : ''}` },
+  return h('section', { class: quiet ? 'run quiet-run' : `run card ${waiting ? 'waiting' : ''}` },
     h('div', { class: 'run-head' },
-      h('span', { class: `badge ${live ? 'live' : status}` }, STATUS[status] || status),
+      quiet ? null : h('span', { class: `badge ${live ? 'live' : status}` }, STATUS[status] || status),
       run.current_url ? h('span', { class: 'run-url' }, domainOf(run.current_url)) : null),
     frame(task, live),
     steps.length ? h('ol', { class: 'run-steps' }, steps.map((step) => h('li', {}, fillPlaceholders(step.text, profile)))) : null,
-    run.question?.text ? questionBlock({ text: run.question.text, options: [] }, onReply) : null,
-    waiting ? approval(run.approval, profile, onApprove, onStop) : null,
-    run.result && !live ? h('p', { class: 'run-result' }, run.result) : null,
-    run.error ? h('p', { class: 'run-error' }, run.error) : null,
-    live && !waiting ? h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop') : null);
+    run.question?.text && !quiet ? questionBlock({ text: run.question.text, options: [] }, onReply) : null,
+    waiting ? approval(run.approval, profile, onApprove, onStop, quiet) : null,
+    run.result && !live && !quiet ? h('p', { class: 'run-result' }, run.result) : null,
+    run.error && !(quiet && status === 'stopped') ? h('p', { class: 'run-error' }, run.error) : null,
+    live && !waiting && !quiet ? h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop') : null);
 }
 
 // While the run is live, the frame reloads every 1.2 s; afterwards it shows the last screenshot.
@@ -59,13 +59,13 @@ function shotSrc(task, n) {
 }
 
 // filled: [{label, value, source}] from the agent; values hold placeholders, shown here with Your details.
-function approval(details, profile, onApprove, onStop) {
+function approval(details, profile, onApprove, onStop, quiet = false) {
   const filled = Array.isArray(details?.filled) ? details.filled.filter((f) => f?.label) : [];
   return h('div', { class: 'approval' },
     details?.summary ? h('p', { class: 'approval-summary' }, details.summary) : null,
     filled.length ? h('dl', { class: 'filled' }, filled.map((f) => h('div', {}, h('dt', {}, f.label), h('dd', {}, fillPlaceholders(f.value, profile))))) : null,
-    h('p', { class: 'muted' }, 'Nothing is sent until you approve.'),
-    h('div', { class: 'actions' },
+    quiet ? null : h('p', { class: 'muted' }, 'Nothing is sent until you approve.'),
+    quiet ? null : h('div', { class: 'actions' },
       h('button', { type: 'button', class: 'btn', onclick: (e) => onApprove(e.currentTarget) }, 'Approve'),
       h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop')));
 }

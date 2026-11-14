@@ -2,7 +2,7 @@
 // the ask box, and polling the open errand.
 import { api } from './api.js';
 import { $, h } from './dom.js';
-import { TERMINAL, isActive, moodOf } from './model.js';
+import { TERMINAL, isActive, moodOf, primaryAction } from './model.js';
 import { renderWorking, tickClock } from './working.js';
 import { renderAnswer } from './answer.js';
 import { stopFrames } from './execution.js';
@@ -89,6 +89,12 @@ const handlers = {
   onDetails: (needed) => openDetails(needed),
   onApprove: (button) => act(() => api.approve(followed.id), button),
   onStop: (button) => act(() => api.stop(followed.id), button),
+  // Continue a stopped run from where it stopped; an API without /continue starts the same form again.
+  onResume: (answer, button) => act(() => api.resume(followed.id, answer, loadProfile()).catch((error) => {
+    const action = primaryAction(followed.task);
+    if (![404, 405].includes(error.status) || !action) throw error;
+    return api.execute(followed.id, action.index, loadProfile());
+  }), button),
 };
 
 async function act(request, button) {

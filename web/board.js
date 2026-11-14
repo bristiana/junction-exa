@@ -78,7 +78,6 @@ function render({ tasks, stats, watches, extra, checked }) {
   show('dashboard', h('div', { class: 'board' },
     h('div', { class: 'board-head' },
       h('div', {},
-        h('p', { class: 'eyebrow' }, 'Exa at work'),
         h('h1', { class: 'board-title' }, 'Dashboard')),
       liveBadge()),
     tiles(totals),
@@ -166,17 +165,16 @@ function panelHead(id, title, count) {
   return h('div', { class: 'panel-head' }, h('h2', { id, class: 'section-title' }, title), h('span', { class: 'count' }, String(count)));
 }
 
+// The account in one sentence, numbers in ink; the channel split underneath.
 function tiles(totals) {
-  return h('dl', { class: 'tiles' },
-    h('div', { class: 'tile tile-errands' },
-      h('dt', {}, 'Errands'), h('dd', { class: 'tile-num' }, String(totals.errands)),
-      h('dd', { class: 'tile-channels' }, totals.channels.map(([channel, n]) =>
-        h('span', { class: `ch ch-${channel}${n ? '' : ' zero'}`, title: `${n} from ${label(channel)}` },
-          glyph(channel), label(channel), h('b', {}, String(n)))))),
-    tile('Exa searches', totals.searches, 'Search · Agent · Form fill'),
-    tile('Pages read', totals.pages, 'Agent · Contents'),
-    tile('Quotes checked', totals.quoted, 'Exa Contents'),
-    tile('Exa cost', `$${Number(totals.cost || 0).toFixed(2)}`, totals.today == null ? 'All errands' : `$${totals.today.toFixed(2)} today`));
+  const n = (v) => h('b', { class: 'tally-num' }, String(v ?? 0));
+  const cost = `$${Number(totals.cost || 0).toFixed(2)}`;
+  return h('div', { class: 'tally' },
+    h('p', { class: 'tally-line' },
+      n(totals.errands), totals.errands === 1 ? ' errand. ' : ' errands. ',
+      'Exa searched ', n(totals.searches), ' times, read ', n(totals.pages), ' pages and checked ', n(totals.quoted), ' quotes, for ', n(cost), '.'),
+    h('p', { class: 'tally-channels' }, totals.channels.filter(([, c]) => c).map(([channel, c]) =>
+      h('span', { class: `ch ch-${channel}` }, glyph(channel), `${label(channel)} ${c}`))));
 }
 
 function tile(name, value, note) {
