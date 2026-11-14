@@ -28,7 +28,7 @@
     }
   ],
   "web_accessible_resources": [
-    { "resources": ["mascot/needs_approval.svg", "icons/icon-48.png", "shared/fonts/plus-jakarta-sans.woff2"], "matches": ["<all_urls>"] }
+    { "resources": ["mascot/needs_approval.svg", "mascot/idle.svg", "mascot/thinking.svg", "mascot/searching.svg", "mascot/success.svg", "mascot/error.svg", "icons/icon-48.png", "shared/fonts/plus-jakarta-sans.woff2"], "matches": ["<all_urls>"] }
   ],
   "commands": {
     "_execute_action": { "suggested_key": { "default": "Alt+V" }, "description": "Open Vali" }
