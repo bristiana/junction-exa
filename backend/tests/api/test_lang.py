@@ -39,3 +39,24 @@ def test_task_carries_lang():
     task = store.create_task('u_1', 'cum îmi schimb adresa în Helsinki', None, 'check', {})
     assert task['lang'] == 'ro' and store.create_task('u_1', 'sauna', None, 'book', {})['lang'] == 'en'
     store.close()
+
+
+def test_a_tie_is_no_evidence():
+    assert detect('la') is None  # French and Spanish tie
+
+
+def test_lang_column_is_added_to_an_old_tasks_table(tmp_path):
+    import sqlite3
+    from vali_api.store import SQLiteStore
+    path = str(tmp_path / 'old.db')
+    old = sqlite3.connect(path)
+    old.execute('CREATE TABLE tasks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, source TEXT NOT NULL, mode TEXT NOT NULL, '
+                'task TEXT NOT NULL, page_json TEXT NOT NULL, research_json TEXT NOT NULL, execution_json TEXT, '
+                'created_at TEXT NOT NULL, updated_at TEXT NOT NULL)')
+    old.execute("INSERT INTO tasks VALUES('t_old','u','extension','check','kela opintotuki kuinka paljon','null','{}',NULL,'x','x')")
+    old.commit()
+    old.close()
+    store = SQLiteStore(path)
+    assert store.get_task('t_old')['lang'] == 'fi'
+    assert store.create_task('u', 'як зареєструвати адресу', None, 'check', {})['lang'] == 'uk'
+    store.close()

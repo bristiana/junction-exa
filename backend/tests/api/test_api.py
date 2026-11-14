@@ -43,7 +43,12 @@ def api():
             'grounding': [{'field': 'answer', 'citations': [{'url': 'https://example.com', 'title': 'Source'}]}]}, 'costDollars': {'total': 0.04}, 'stopReason': 'schema_satisfied'})
     store = SQLiteStore(':memory:')
     exa = ExaClient('fake-key', transport=httpx.MockTransport(respond))
-    application = create_app(Config(sqlite_path=':memory:'), store, exa, polls.append, lambda *args: browsers.append(args))
+    def spawn_poller(tid):
+        if store.get_task(tid)['research']['kind'] == 'search':
+            poll_research_once(tid, application)  # the fake poller finishes a search errand's quote check at once
+        else:
+            polls.append(tid)
+    application = create_app(Config(sqlite_path=':memory:'), store, exa, spawn_poller, lambda *args: browsers.append(args))
     with TestClient(application) as client:
         user = client.post('/v1/users').json()
         client.headers['Authorization'] = 'Bearer ' + user['token']
@@ -169,11 +174,29 @@ def test_polls_and_reads_are_never_limited_per_ip(api, monkeypatch):
     client, application, store, *_, user = api
     task = client.post('/v1/tasks', json={'task': 'find café'}).json()
     store.put_live_frame(task['id'], b'live-jpeg')
+    writes = {k: len(v) for k, v in application.state.limiter.events.items()}
     for _ in range(1500):
         assert client.get('/v1/tasks/' + task['id']).status_code == 200
     assert client.get(f"/v1/tasks/{task['id']}/live.jpg", params={'t': user['token']}).status_code == 200
     assert client.get('/health').status_code == 200
-    assert not [k for k in application.state.limiter.events if k.startswith('ip:')]
+    assert {k: len(v) for k, v in application.state.limiter.events.items()} == writes
+
+
+def test_writes_are_loosely_limited_per_ip_and_spend_has_a_global_kill_switch(api):
+    client, application, store, *_ = api
+    limiter = application.state.limiter
+    assert (limiter.ip_limit, limiter.ip_seconds) == (600, 600)
+    limiter.ip_limit = 2
+    limiter.events.clear()
+    headers = {'X-Forwarded-For': '203.0.113.9, 198.51.100.7'}
+    assert client.post('/webhooks/exa', headers=headers).status_code == 403
+    assert client.post('/webhooks/exa', headers=headers).status_code == 403
+    assert client.post('/webhooks/exa', headers=headers).status_code == 429
+    assert list(limiter.events) == ['ip:testclient']  # the peer address; a forwarded header is forgeable
+    limiter.ip_limit = 600
+    application.state.config.global_daily_cap_usd = 0.0
+    blocked = client.post('/v1/tasks', json={'task': 'find café'})
+    assert blocked.status_code == 429 and 'research budget' in blocked.json()['detail']
 
 
 def test_errands_per_account_and_new_accounts_per_ip(api, monkeypatch):

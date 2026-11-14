@@ -81,14 +81,14 @@ def test_llm_mapping_keeps_only_verbatim_quotes_and_numbers_by_first_use():
 def test_lexical_fallback_without_llm():
     result = output('You must submit the notification of move within one week after moving.')
     cite(result, FakeExa())
-    assert result['claims'][0]['sources'] == [1] and result['claims'][0]['supported']
+    assert result['claims'][0]['sources'] == [1] and result['claims'][0]['supported'] is None  # overlap is not a judgement
     assert result['sources'][0]['quote'].startswith('You must submit the notification of move')
 
 
 def test_failed_llm_falls_back_and_unreadable_pages_leave_support_unknown():
     result = output('You must submit the notification of move within one week after moving.')
     cite(result, FakeExa(), lambda *a: None)
-    assert result['claims'][0]['supported']
+    assert result['claims'][0]['supported'] is None and result['sources'][0]['quote']
     result = output('Notify within one week.')
     assert cite(result, FakeExa(fail=True), lambda *a: 1 / 0) == 0
     assert result['claims'] == [{'text': 'Notify within one week.', 'sources': [], 'supported': None}]

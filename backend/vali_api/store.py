@@ -34,7 +34,7 @@ class Store:
             'wa_seen(message_id TEXT PRIMARY KEY, at TEXT NOT NULL)',
             'pair_codes(code TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL)',
             'device_link_codes(code_hash TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL, sealed_token TEXT NOT NULL, salt TEXT NOT NULL, expires_at TEXT NOT NULL)',
-            'tasks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, source TEXT NOT NULL, mode TEXT NOT NULL, task TEXT NOT NULL, page_json TEXT NOT NULL, research_json TEXT NOT NULL, execution_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
+            'tasks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, source TEXT NOT NULL, mode TEXT NOT NULL, task TEXT NOT NULL, page_json TEXT NOT NULL, research_json TEXT NOT NULL, execution_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, lang TEXT)',
             'watches(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, query TEXT NOT NULL, exa_monitor_id TEXT, created_at TEXT NOT NULL)',
             'watch_details(watch_id TEXT PRIMARY KEY, task_id TEXT, secret TEXT NOT NULL)',
             'watch_slots(user_id TEXT NOT NULL, slot INTEGER NOT NULL, watch_id TEXT UNIQUE NOT NULL, PRIMARY KEY(user_id,slot))',
@@ -44,6 +44,14 @@ class Store:
             f'live_frames(task_id TEXT PRIMARY KEY, jpeg {blob} NOT NULL, updated_at TEXT NOT NULL)']
         for table in tables:
             self.sql('CREATE TABLE IF NOT EXISTS ' + table)
+        self._add_column('tasks', 'lang TEXT')
+
+    def _add_column(self, table, column):
+        """Additive migration for tables created before the column existed."""
+        if self.postgres:
+            self.sql(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column}')
+        elif column.split()[0] not in {r['name'] for r in self.sql(f'PRAGMA table_info({table})')}:
+            self.sql(f'ALTER TABLE {table} ADD COLUMN {column}')
 
     in_transaction = 0
 
@@ -179,13 +187,14 @@ class Store:
         for key in ('page', 'research', 'execution'):
             raw = row.pop(key + '_json')
             row[key] = json.loads(raw) if raw is not None else None
-        row['channel'], row['lang'] = row['source'], detect(row['task']) or 'en'
+        row['channel'] = row['source']
+        row['lang'] = row.get('lang') or detect(row['task']) or 'en'  # detection only for rows older than the column
         return row
 
     def create_task(self, uid, task, page, mode, research, source='extension'):
         tid, at = 't_' + uuid.uuid4().hex, now()
-        self.sql('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?)',
-                 (tid, uid, source, mode, task, json.dumps(page), json.dumps(research), None, at, at))
+        self.sql('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                 (tid, uid, source, mode, task, json.dumps(page), json.dumps(research), None, at, at, detect(task) or 'en'))
         return self.get_task(tid)
 
     def get_task(self, tid):
@@ -248,9 +257,13 @@ class Store:
         self.update_execution(tid, execution)
         return execution
 
-    def daily_spend(self, uid):
+    def daily_spend(self, uid=None):
+        """Today's research cost for one user, or for everyone when uid is None."""
         today = datetime.now(timezone.utc).date().isoformat()
-        rows = self.sql('SELECT research_json FROM tasks WHERE user_id=? AND created_at>=?', (uid, today))
+        if uid is None:
+            rows = self.sql('SELECT research_json FROM tasks WHERE created_at>=?', (today,))
+        else:
+            rows = self.sql('SELECT research_json FROM tasks WHERE user_id=? AND created_at>=?', (uid, today))
         return math.fsum(float(json.loads(r['research_json']).get('cost') or 0) for r in rows)
 
     def record_failure(self, tid, stage, error):

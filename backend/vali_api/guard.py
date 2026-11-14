@@ -17,11 +17,13 @@ class RateLimited(HTTPException):
 class SlidingWindow:
     """In-memory limits scoped to one process; shared storage is needed across replicas.
 
-    Errands are limited per account (40 a minute, so a burst of 10 always fits); new accounts per IP (20 an hour).
-    Nothing else is limited per IP: a room of judges shares one venue address and polls every second."""
-    def __init__(self, user_limit=40, seconds=60, signup_limit=20, signup_seconds=3600):
+    Errands are limited per account (40 a minute, so a burst of 10 always fits); new accounts per IP (20 an hour);
+    any other write per IP, loosely (600 in 10 minutes: a room of judges shares one venue address). Reads (GET polls)
+    are never limited per IP."""
+    def __init__(self, user_limit=40, seconds=60, signup_limit=20, signup_seconds=3600, ip_limit=600, ip_seconds=600):
         self.user_limit, self.seconds = user_limit, seconds
         self.signup_limit, self.signup_seconds = signup_limit, signup_seconds
+        self.ip_limit, self.ip_seconds = ip_limit, ip_seconds
         self.events = defaultdict(deque)
         self.lock = threading.Lock()
 
@@ -35,6 +37,12 @@ class SlidingWindow:
             if len(queue) >= limit:
                 raise RateLimited(queue[0] + seconds - current if queue else seconds, what)
             queue.append(current)
+
+
+def client_ip(request):
+    """Modal hands the app the caller's public address and adds no X-Forwarded-For (checked live on 2026-11-14:
+    public peer, zero forwarded hops), so a forwarded header could only be forged and is ignored."""
+    return request.client.host if request.client else 'unknown'
 
 
 def check_origin(origin, configured):
@@ -64,3 +72,5 @@ def check_task_budget(application, user, *, count_request=True):
         state.limiter.check('user:' + user['id'], state.limiter.user_limit, what='errands')
     if state.store.daily_spend(user['id']) >= state.config.daily_cap_usd:
         raise HTTPException(429, 'Daily research spend cap reached')
+    if state.store.daily_spend() >= state.config.global_daily_cap_usd:  # kill switch across all users
+        raise HTTPException(429, "Vali has used today's research budget. Try again tomorrow.")

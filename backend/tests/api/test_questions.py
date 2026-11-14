@@ -55,7 +55,12 @@ def api():
         return httpx.Response(200, json={'id': path.split('/')[3], 'status': state['status'], 'costDollars': {'total': 0.02},
                                          'output': output if state['status'] == 'completed' else None})
     store, exa = SQLiteStore(':memory:'), ExaClient('k', transport=httpx.MockTransport(respond))
-    application = create_app(Config(sqlite_path=':memory:', anthropic_api_key=''), store, exa, polls.append, lambda *a: None)
+    def spawn_poller(tid):
+        if store.get_task(tid)['research']['kind'] == 'search':
+            poll_research_once(tid, application)
+        else:
+            polls.append(tid)
+    application = create_app(Config(sqlite_path=':memory:', anthropic_api_key=''), store, exa, spawn_poller, lambda *a: None)
     with TestClient(application) as client:
         client.headers['Authorization'] = 'Bearer ' + client.post('/v1/users').json()['token']
         yield client, application, calls, polls, state

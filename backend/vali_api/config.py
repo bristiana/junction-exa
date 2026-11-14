@@ -31,6 +31,7 @@ class Config:
     public_url: str = field(default_factory=lambda: vali_env('VALI_PUBLIC_URL', ''))
     allowed_origins: str = field(default_factory=lambda: vali_env('VALI_ALLOWED_ORIGINS', ''))
     daily_cap_usd: float = field(default_factory=lambda: float(vali_env('VALI_DAILY_CAP_USD', '10.0')))
+    global_daily_cap_usd: float = field(default_factory=lambda: float(vali_env('VALI_GLOBAL_DAILY_CAP_USD', '60.0')))
 
     def services(self):
         return dict(ok=True, exa=bool(self.exa_api_key), anthropic=bool(self.anthropic_api_key),

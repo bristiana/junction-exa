@@ -9,7 +9,7 @@ PERSONAL_PATTERNS = [
     (re.compile(r'[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}'), '{{email}}'),
     (re.compile(r'\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,4})?\b'), '{{account}}'),
     (re.compile(r'\b\d{6}[-+AaBbCcDdEeFfUuVvWwXxY]\d{3}[0-9A-Ya-y]\b'), '{{id_code}}'),
-    (re.compile(r'(?<![\w/])(?:\+|0)\d[\d ()-]{7,}\d(?![\w/])'), '{{phone}}'),  # + or 0 first: not a year range
+    (re.compile(r'(?<![\w/])(?:\+|0)(?:[ ()-]*\d){8,}(?![\w/])'), '{{phone}}'),  # + or 0, then 8+ digits: not a date or year range
 ]
 
 
