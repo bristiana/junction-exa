@@ -1,10 +1,11 @@
-// Vali side panel: compose an errand, watch it run, review the result and approve the prepared steps.
+// Vali side panel: a chat. The errand is the user's bubble, Vali answers in bubbles with its sources, the Exa line
+// and the next steps as buttons; Vali's questions are bubbles too, answered from the composer at the bottom.
 // Everything the agent returns is rendered with textContent, never as HTML.
 
 import { PROFILE_FIELDS } from "../lib/task.js";
 import { numberSources, citesFor, resolveAction, fillPlaceholders, unfilledPlaceholders, hostOf } from "../lib/actions.js";
 import { search } from "../lib/exa.js";
-import { connect, me as serverMe, pair, normalizeBaseUrl, ensureConnected, liveUrl, shotUrl, DEFAULT_BASE_URL, linkCode } from "../lib/backend.js";
+import { connect, me as serverMe, pair, normalizeBaseUrl, ensureConnected, liveUrl, shotUrl, DEFAULT_BASE_URL, linkCode, stats as serverStats } from "../lib/backend.js";
 import { taskMascot, headerMascot, finishFlash, FLASH_MS } from "../lib/mascot.js";
 import { executionView, LIVE } from "../lib/execution.js";
 
@@ -12,15 +13,9 @@ import { linkCodeInput, codeCountdown, linkError } from "../lib/device-link.js";
 import { exaActivity } from "../lib/exa-activity.js";
 import { exaUses, EXA_USES } from "../shared/exa-uses.js";
 import { panelStatus as errandStatus } from "./errand-status.js";
+import { conversations, conversationOf, pendingAsk, composerMessage, executionTurns, rememberQuestion, shortAnswer, chatStats, money, ago, userText, titleOf } from "../lib/chat.js";
 
 const $ = (id) => document.getElementById(id);
-const PRESETS = [
-  ["Flight delay", "My flight was delayed by more than 3 hours. Can I get compensation? Prepare the claim."],
-  ["Address change", "I just moved to a new apartment in Helsinki. Register my change of address and tell me who else I need to notify."],
-  ["Rent increase", "My landlord wants to raise my rent by 8% from next month. Is that allowed under my lease and Finnish law? Draft a reply."],
-  ["Kela benefits", "I am an international student in Finland. Which Kela benefits can I get, and how do I apply?"],
-  ["Sauna booking", "Find a public sauna in Helsinki for a group of 8 this Saturday evening that can be booked online."],
-];
 // backendUrl: the deployed Vali server unless settings point elsewhere; "" means direct mode (Exa from this browser).
 const DEFAULTS = { tasks: [], profile: {}, exaKey: "", effort: "low", backendUrl: DEFAULT_BASE_URL, presence: true };
 const SERVER_PRESETS = [
@@ -31,10 +26,14 @@ const SERVER_PRESETS = [
 let state = { ...DEFAULTS };
 let activeTab = null;
 let prefill = null;
-const open = new Set();
-const drafts = new Map(); // edited email bodies, keyed by task+action index; answers to the browser, keyed "q:"+task
+// The conversation on screen: any errand id in it; null = the newest conversation; "new" = an empty thread.
+let currentTask = null;
+const drafts = new Map(); // edited email bodies, keyed by task+action index
 const answered = new Map(); // task id -> question.at answered from here, until the agent picks the answer up
 const pendingInline = new Map(); // action -> task snapshot and request still in flight
+const replyOff = new Set(); // questions the user chose not to answer from the composer (a new errand instead)
+let asked = {}; // task id -> [{ text, at }]: the browser's questions, kept here because the server clears them
+let statsData = null; // GET /v1/stats
 
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -50,7 +49,7 @@ function h(tag, attrs = {}, ...kids) {
 }
 
 function toast(msg) {
-  const t = h("div", { class: "toast", text: msg });
+  const t = h("div", { class: "toast", role: "status", text: msg });
   document.body.append(t);
   setTimeout(() => t.remove(), 2600);
 }
@@ -63,13 +62,13 @@ function send(msg) {
 }
 
 // ---------- the mascot ----------
-// One animated Vali in the header follows the errand that matters most (lib/mascot.js); cards and the empty state use stills.
+// One animated Vali in the header follows the errand that matters most (lib/mascot.js); bubbles use stills.
 const SAYS = {
   idle: "I’m ready to help.",
   listening: "I’m listening.",
   searching: "I’m searching the web.",
   working: "I’m working on your errand.",
-  needs_approval: "I’m waiting for your OK.",
+  needs_approval: "I’m waiting for you.",
   success: "I’ve finished an errand.",
   error: "I need your help to go on.",
 };
@@ -291,7 +290,7 @@ $("linkMac").addEventListener("click", async () => {
     $("macLinkStatus").textContent = "Linking…";
     await send({ type: "linkAccount", code });
     clearMacCode();
-    open.clear();
+    currentTask = null;
     drafts.clear();
     answered.clear();
     $("macCodeInput").value = "";
@@ -309,61 +308,143 @@ $("talk").addEventListener("click", () => {
 });
 
 // ---------- composer ----------
-$("presets").replaceChildren(
-  ...PRESETS.map(([label, text]) => h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => { $("task").value = text; fitTask(); $("task").focus(); } }))
-);
-
+let pageReadable = false;
 async function refreshActiveTab() {
   try {
     [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
   } catch (_) { activeTab = null; }
   const readable = activeTab?.url && /^(https?|file):/.test(activeTab.url);
-  $("context").hidden = !readable && !prefill?.selection;
+  pageReadable = !!(readable || prefill?.selection);
   if (prefill?.selection) $("contextLabel").textContent = `Use the selected text: “${prefill.selection.slice(0, 60)}${prefill.selection.length > 60 ? "…" : ""}”`;
   else if (readable) $("contextLabel").textContent = `Use this page: ${(activeTab.title || activeTab.url).slice(0, 70)}`;
+  updateComposer(currentConvo());
 }
 chrome.tabs.onActivated.addListener(refreshActiveTab);
 chrome.tabs.onUpdated.addListener((_id, info) => { if (info.status === "complete" || info.title) refreshActiveTab(); });
 
-$("composer").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const task = $("task").value.trim();
+const taskById = (id) => state.tasks.find((t) => t.id === id);
+const askKey = (ask) => (ask ? `${ask.route}:${ask.taskId}:${ask.at || ask.text}` : "");
+
+// The conversation on screen (see currentTask).
+function currentConvo(convos = conversations(state.tasks)) {
+  if (currentTask === "new") return null;
+  return (currentTask && conversationOf(convos, currentTask)) || convos[0] || null;
+}
+
+// What the composer answers right now: Vali's open question in this conversation, unless the user dismissed it.
+function replyAsk(convo) {
+  const ask = convo && $("history").hidden ? pendingAsk(convo, { answered }) : null;
+  return ask && !replyOff.has(askKey(ask)) ? ask : null;
+}
+
+function updateComposer(convo) {
+  const ask = replyAsk(convo);
+  $("replyTo").hidden = !ask;
+  if (ask) $("replyTo").querySelector(".reply-to__text").textContent = "Answering Vali: " + fillPlaceholders(ask.text, state.profile);
+  $("task").placeholder = ask ? "Type your answer…" : "What should I take care of?";
+  $("context").hidden = !!ask || !pageReadable;
+}
+$("replyOff").addEventListener("click", () => {
+  const ask = replyAsk(currentConvo());
+  if (ask) replyOff.add(askKey(ask));
+  render();
+  $("task").focus();
+});
+
+// Sends what the user typed: an answer to Vali's open question (lib/chat.js routes it), else a new errand.
+async function submitText(text) {
   const err = $("composerError");
   err.hidden = true;
-  if (!task) { $("task").focus(); return; }
-  if (!state.exaKey && !state.backendUrl) { err.textContent = "Add your Exa API key or a Vali server in settings first."; err.hidden = false; $("settings").hidden = false; renderSettings(); return; }
+  if (!text) { $("task").focus(); return; }
+  const ask = replyAsk(currentConvo());
+  const msg = ask ? composerMessage(ask, text, taskById(ask.taskId)) : null;
+  if (!msg && !state.exaKey && !state.backendUrl) { err.textContent = "Add your Exa API key or a Vali server in settings first."; err.hidden = false; $("settings").hidden = false; renderSettings(); return; }
   $("send").disabled = true;
   try {
-    const usePage = !$("context").hidden && $("usePage").checked;
-    const rec = await send({ type: "start", task, tabId: activeTab?.id, usePage, selection: usePage ? prefill?.selection || "" : "" });
-    open.add(rec.id);
+    if (msg) {
+      const rec = await send(msg);
+      if (ask.route === "execution") answered.set(ask.taskId, ask.at);
+      if (msg.type === "start" && rec?.id) currentTask = rec.id;
+    } else {
+      const usePage = !$("context").hidden && $("usePage").checked;
+      const rec = await send({ type: "start", task: text, tabId: activeTab?.id, usePage, selection: usePage ? prefill?.selection || "" : "" });
+      currentTask = rec.id;
+      prefill = null;
+      chrome.storage.session.remove("prefill");
+      refreshActiveTab();
+    }
     $("task").value = "";
     fitTask();
-    prefill = null;
-    chrome.storage.session.remove("prefill");
-    refreshActiveTab();
+    setHistory(false);
+    stickBottom = true;
+    render();
   } catch (e2) {
-    if (state.backendUrl) err.textContent = e2.status === 401 ? "The Vali server did not accept this browser. Press Connect in settings." : e2.message;
+    if (msg?.type === "message") err.textContent = e2.status === 409 ? "Vali isn’t waiting for an answer any more. Send it as a new errand." : e2.message;
+    else if (state.backendUrl) err.textContent = e2.status === 401 ? "The Vali server did not accept this browser. Press Connect in settings." : e2.message;
     else err.textContent = e2.status === 401 ? "Exa rejected the API key. Check it in settings." : e2.status === 402 ? "The Exa key is out of credits." : e2.message;
+    if (msg && e2.status === 409) replyOff.add(askKey(ask));
     err.hidden = false;
   } finally {
     $("send").disabled = false;
   }
+}
+$("composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  submitText($("task").value.trim());
 });
 $("task").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("composer").requestSubmit();
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("composer").requestSubmit(); }
 });
-// One line when errands are listed, two when empty, growing to ~5 lines as you type.
+// One line, growing to ~5 lines as you type.
 function fitTask() {
   const ta = $("task");
   ta.style.height = "auto";
-  const min = state.tasks.length ? 1 : 2, lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
-  const pad = ta.offsetHeight - ta.clientHeight + parseFloat(getComputedStyle(ta).paddingTop) * 2;
-  ta.style.height = Math.min(Math.max(ta.scrollHeight, min * lh + pad), 5 * lh + pad) + "px";
+  ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
 }
 $("task").addEventListener("input", fitTask);
 
-// ---------- cards ----------
+// ---------- header: new errand, history ----------
+function setHistory(on) {
+  $("history").hidden = !on;
+  $("thread").hidden = on;
+  $("historyBtn").setAttribute("aria-expanded", String(on));
+}
+$("historyBtn").addEventListener("click", () => { setHistory($("history").hidden); stickBottom = true; render(); });
+$("newBtn").addEventListener("click", () => {
+  currentTask = "new";
+  setHistory(false);
+  render();
+  $("task").focus();
+});
+function openConvo(taskId) {
+  currentTask = taskId;
+  setHistory(false);
+  stickBottom = true;
+  render();
+}
+
+// ---------- bubbles ----------
+const shownKeys = new Set(); // bubbles already on screen: only new ones pop in
+const openDetails = new Set(); // <details> left open, kept across re-renders
+let lastConvoId;
+let stickBottom = true;
+let animate = false;
+
+function msg(key, cls, pose, ...kids) {
+  const bubble = h("div", { class: "bubble" + (animate && !shownKeys.has(key) ? " pop" : "") }, ...kids);
+  return h("div", { class: `msg ${cls}`, "data-key": key }, pose ? h("img", { class: "avatar", src: `../mascot/${pose}.svg`, alt: "" }) : null, bubble);
+}
+const userMsg = (key, text, meta) => msg(key, "user", null, text, meta ? h("span", { class: "meta", text: meta }) : null);
+const valiMsg = (key, pose, kids, cls = "") => msg(key, `vali ${cls}`, pose, ...kids);
+
+function details(key, cls, summary, ...kids) {
+  const d = h("details", { class: cls, open: openDetails.has(key) }, summary, ...kids);
+  d.addEventListener("toggle", () => (d.open ? openDetails.add(key) : openDetails.delete(key)));
+  return d;
+}
+
+const typing = () => h("span", { class: "typing", "aria-hidden": "true" }, h("i"), h("i"), h("i"));
+
 function elapsed(t) {
   const s = Math.round(((t.completedAt || Date.now()) - t.createdAt) / 1000);
   if (!(s >= 1)) return null;
@@ -381,131 +462,144 @@ function cites(map, prefix) {
   return sup;
 }
 
-function renderWorking(t) {
-  const lines = (t.progress || []).slice(-6).map((p) =>
-    h("div", { class: "line" }, h("i", { class: "dot", style: "animation-delay:" + Math.random().toFixed(2) + "s" }), h("span", { text: (p.kind === "source" ? "Reading " : "Searching ") + p.text }))
-  );
-  if (!lines.length) lines.push(h("div", { class: "line" }, h("i", { class: "dot" }), h("span", { text: t.status === "queued" ? "Starting…" : "Searching the web…" })));
-  return h("div", { class: "working" }, ...lines,
-    h("div", { class: "foot" }, h("span", { class: "muted", text: "Runs in the background. You can close this panel." })));
+function activityText(l) {
+  if (l.kind === "search") return `Searching “${l.text}”`;
+  if (l.kind === "read" || l.kind === "source") return `Reading ${l.text}`;
+  return l.text;
+}
+
+// Research still running: the newest step, live Exa counts, Stop.
+function workingBubble(t) {
+  const lines = (t.research?.activity?.length ? t.research.activity : t.progress || []).filter((l) => l?.text);
+  const last = lines.at(-1);
+  const searches = lines.filter((l) => l.kind === "search").length;
+  const pages = lines.filter((l) => l.kind === "read" || l.kind === "source").length;
+  const step = last ? activityText(last) : t.status === "queued" ? "Starting…" : "Searching the web…";
+  const counts = searches || pages ? `${searches} ${searches === 1 ? "search" : "searches"} · ${pages} ${pages === 1 ? "page" : "pages"}` : "";
+  return valiMsg(`work:${t.id}`, "searching", [
+    h("div", { class: "step-line", role: "status" }, typing(), h("span", { text: step, title: step }), counts ? h("span", { class: "n", text: counts }) : null),
+    h("div", { class: "working-foot" }, h("span", { text: "Runs in the background. You can close this panel." }),
+      serverButton("Stop", "link-btn", { type: "cancel", taskId: t.id }, null, t)),
+  ], "wide");
+}
+
+function factList(facts, map, offset) {
+  const dl = h("dl", { class: "facts" });
+  facts.forEach((f, i) => dl.append(h("dt", { text: f.label }), h("dd", {}, fillPlaceholders(String(f.value ?? ""), state.profile), cites(map, `key_facts[${i + offset}]`))));
+  return dl;
+}
+
+function sourceList(sources, offset = 0) {
+  return h("ol", { class: "sources" }, ...sources.map((src, i) => h("li", {},
+    h("a", { href: src.url, target: "_blank", rel: "noopener", title: src.title || src.url },
+      h("span", { class: "num", text: String(i + 1 + offset) }), h("span", { class: "host", text: src.host }), h("span", { class: "t", text: src.title && src.title !== src.host ? src.title : "" })))));
+}
+
+// The answer: short text, up to 3 facts, the next steps as buttons, numbered sources, the Exa line; the rest under More.
+function answerBubble(t) {
+  const out = t.output || {};
+  const s = out.structured;
+  const map = numberSources(out.grounding);
+  const kids = [];
+  const more = [];
+  if (!s) {
+    const sa = shortAnswer(out.text || "No answer came back.", 3);
+    kids.push(h("p", { class: "answer-text", text: sa.text }));
+    if (sa.more) more.push(h("p", { class: "full", text: out.text }));
+  } else {
+    const full = fillPlaceholders(s.answer || "", state.profile);
+    const sa = shortAnswer(full, 2);
+    kids.push(h("p", { class: "answer-text" }, sa.text, cites(map, "answer")));
+    if (sa.more) more.push(h("p", { class: "full", text: full }));
+    const facts = s.key_facts || [];
+    if (facts.length) kids.push(factList(facts.slice(0, 3), map, 0));
+    if (facts.length > 3) more.push(h("h4", { text: "More facts" }), factList(facts.slice(3), map, 3));
+    if (s.form_fill?.length) kids.push(renderFormFill(t, s.form_fill));
+    (s.actions || []).forEach((a, i) => kids.push(renderAction(t, a, i, map)));
+    if (s.steps?.length) {
+      more.push(h("h4", { text: "Steps" }), h("ol", { class: "steps" }, ...s.steps.map((st, i) =>
+        h("li", { class: st.done_by_hoida ? "done" : "" },
+          h("div", {}, h("strong", { text: st.title }), st.done_by_hoida ? h("span", { class: "v-badge v-badge--success", text: "prepared" }) : null, cites(map, `steps[${i}]`)),
+          h("div", { class: "detail" }, st.detail || "", st.url ? h("span", {}, " ", h("a", { href: st.url, target: "_blank", rel: "noopener", text: "Open" })) : null)))));
+    }
+  }
+  if (map.sources.length) kids.push(sourceList(map.sources.slice(0, 5)));
+  if (map.sources.length > 5) more.push(h("h4", { text: "More sources" }), sourceList(map.sources.slice(5), 5));
+  const exa = renderExaActivity(t);
+  if (exa) kids.push(exa);
+  more.push(h("div", { class: "foot" }, h("span", { text: [elapsed(t), t.page?.title, t.cost != null ? money(t.cost) : null].filter(Boolean).join(" · ") }),
+    serverButton("Remove", "link-btn", { type: "remove", taskId: t.id })));
+  kids.push(details(`more:${t.id}`, "more", h("summary", { text: "More" }), ...more));
+  return valiMsg(`ans:${t.id}`, taskMascot(t) === "needs_approval" ? "needs_approval" : "success", kids, "wide");
 }
 
 function renderAction(t, a, i, map) {
   const key = t.id + ":" + i;
   const r = resolveAction(a, state.profile);
-  const box = h("div", { class: "action" });
-  const head = h("div", { class: "head" }, h("div", {}, h("div", { class: "title" }, a.label || a.type, cites(map, `actions[${i}]`))));
-  box.append(head);
   const sub = [];
   if (a.type === "email" && r.action.to) sub.push("To " + r.action.to);
   if (a.subject) sub.push(r.action.subject);
   if (a.type === "calendar" && a.start) sub.push(a.start + (a.location ? " · " + a.location : ""));
   if (a.type === "open_link" && a.url) sub.push(hostOf(a.url) || a.url);
   if (a.type === "phone_call" && a.to) sub.push(a.to);
-  if (sub.length) head.firstChild.append(h("div", { class: "sub", text: sub.join(" · ") }));
-
+  const box = h("div", { class: "act" }, h("div", { class: "title" }, a.label || a.type, cites(map, `actions[${i}]`)), sub.length ? h("div", { class: "sub", text: sub.join(" · ") }) : null);
   const btns = h("div", { class: "btns" });
+  box.append(btns);
   if (r.kind === "email" || r.kind === "copy" || (a.type === "phone_call" && a.body)) {
     const ta = h("textarea", { class: "v-textarea edit", "aria-label": "Draft" });
     ta.value = drafts.get(key) ?? (r.text || "");
     ta.addEventListener("input", () => drafts.set(key, ta.value));
-    box.append(ta);
     const current = () => ({ ...r.action, body: ta.value });
     if (r.kind === "email") {
       btns.append(
-        h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: "Open in Gmail", onclick: () => chrome.tabs.create({ url: resolveAction(current(), state.profile).gmail }) }),
-        h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: "Mail app", onclick: () => chrome.tabs.create({ url: resolveAction(current(), state.profile).mailto }) })
+        h("button", { class: "v-btn v-btn--sm", type: "button", text: "Open in Gmail", onclick: () => chrome.tabs.create({ url: resolveAction(current(), state.profile).gmail }) }),
+        h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Mail app", onclick: () => chrome.tabs.create({ url: resolveAction(current(), state.profile).mailto }) })
       );
     }
-    btns.append(h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: "Copy", onclick: () => navigator.clipboard.writeText(ta.value).then(() => toast("Copied")) }));
+    btns.append(h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Copy", onclick: () => navigator.clipboard.writeText(ta.value).then(() => toast("Copied")) }));
+    box.append(details(`draft:${key}`, "draft", h("summary", { text: r.kind === "email" ? "Edit the draft" : "See the text" }), ta));
   }
   if (r.kind === "link" && r.url) {
-    const label = a.type === "calendar" ? "Add to calendar" : a.type === "phone_call" ? "Call" : "Open";
-    btns.prepend(h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => chrome.tabs.create({ url: r.url }) }));
-    if (a.type === "open_link") btns.append(doItButton(t, { actionIndex: i }) || "", fillHereButton(t));
+    const label = a.type === "calendar" ? "Add to calendar" : a.type === "phone_call" ? "Call" : "Open site";
+    const open = h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: label, title: r.url, onclick: () => chrome.tabs.create({ url: r.url }) });
+    if (a.type === "open_link") btns.append(doItButton(t, { actionIndex: i }) || "", open, fillHereButton(t));
+    else btns.prepend(open);
   }
-  box.append(btns);
-  if (r.missing.length) box.append(h("div", { class: "warn-note", text: `Fill in before sending: ${r.missing.join(", ").replace(/_/g, " ")}. Add them in settings or edit the draft.` }));
+  if (r.missing.length) box.append(h("div", { class: "warn-note", text: `Still blank: ${r.missing.join(", ").replace(/_/g, " ")}. Type them into the draft before you send it.` }));
   return box;
 }
 
 function renderFormFill(t, fills) {
   const labels = Object.fromEntries((t.page?.fields || []).map((f) => [f.id, f.label || f.id]));
   const dl = h("dl", { class: "fill-preview" });
-  for (const f of fills.slice(0, 14)) {
-    dl.append(h("dt", { text: labels[f.field_id] || f.field_id }), h("dd", { text: fillPlaceholders(f.value, state.profile) }));
-  }
+  for (const f of fills.slice(0, 14)) dl.append(h("dt", { text: labels[f.field_id] || f.field_id }), h("dd", { text: fillPlaceholders(f.value, state.profile) }));
   const missing = unfilledPlaceholders(fills.map((f) => f.value).join(" "));
-  const box = h("div", { class: "action" },
-    h("div", { class: "head" }, h("div", {}, h("div", { class: "title", text: "Fill the form on this page" }), h("div", { class: "sub", text: t.page?.title || t.page?.url || "" }))),
-    dl,
-    h("div", { class: "btns" }, h("button", {
-      class: "v-btn v-btn--quiet v-btn--sm",
-      text: `Fill ${fills.length} field${fills.length === 1 ? "" : "s"}`,
-      onclick: async () => {
-        try {
-          const res = await send({ type: "fill", taskId: t.id });
-          toast(res.error ? res.error : `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check them, then submit yourself.`);
-        } catch (e) { toast(e.message); }
-      },
-    }), /^https?:/.test(t.page?.url || "") ? doItButton(t, { startUrl: t.page.url, goal: "Fill in the form on this page" }) : null)
-  );
-  if (missing.length) box.append(h("div", { class: "warn-note", text: `Still empty: ${missing.join(", ").replace(/_/g, " ")}. Add them in settings.` }));
-  return box;
+  const n = `${fills.length} field${fills.length === 1 ? "" : "s"}`;
+  return h("div", { class: "act" },
+    h("div", { class: "title", text: "Fill the form on this page" }), h("div", { class: "sub", text: t.page?.title || t.page?.url || "" }),
+    h("div", { class: "btns" },
+      /^https?:/.test(t.page?.url || "") ? doItButton(t, { startUrl: t.page.url, goal: "Fill in the form on this page" }, "Fill it for me") : null,
+      h("button", {
+        class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: `Fill ${n} here`,
+        onclick: async () => {
+          try {
+            const res = await send({ type: "fill", taskId: t.id });
+            toast(res.error ? res.error : `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check them, then submit yourself.`);
+          } catch (e) { toast(e.message); }
+        },
+      })),
+    details(`fill:${t.id}`, "draft", h("summary", { text: `See the ${n}` }), dl),
+    missing.length ? h("div", { class: "warn-note", text: `Still blank: ${missing.join(", ").replace(/_/g, " ")}. Vali asks for them when it fills the form.` }) : null);
 }
 
-function renderMissing(t, questions) {
-  const inputs = questions.map((q) => h("input", { class: "v-input", type: "text", "aria-label": q }));
-  return h("div", { class: "missing" },
-    h("h4", { text: "Vali needs" }),
-    ...questions.map((q, i) => h("label", {}, q, inputs[i])),
-    h("div", { class: "btns row end" }, h("button", {
-      class: "v-btn v-btn--sm",
-      text: "Continue",
-      onclick: async () => {
-        const answers = questions.map((q, i) => `${q} ${inputs[i].value.trim() || "(no answer)"}`).join("\n");
-        try {
-          const rec = await send({ type: "start", task: `${t.task}\n\nMy answers:\n${answers}`, tabId: t.tabId, usePage: !!t.page, previousRunId: t.runId, parentId: t.id });
-          open.add(rec.id);
-        } catch (e) { toast(e.message); }
-      },
-    }))
-  );
-}
-
-function renderResult(t) {
-  const out = t.output || {};
-  const s = out.structured;
-  const map = numberSources(out.grounding);
-  const body = [];
-  if (!s) {
-    body.push(h("p", { class: "answer", text: out.text || "No answer came back." }));
-  } else {
-    body.push(h("p", { class: "answer" }, s.answer || "", cites(map, "answer")));
-    if (s.key_facts?.length) {
-      const dl = h("dl", { class: "facts" });
-      s.key_facts.forEach((f, i) => dl.append(h("dt", { text: f.label }), h("dd", {}, f.value, cites(map, `key_facts[${i}]`))));
-      body.push(dl);
-    }
-    if (s.missing_info?.length) body.push(renderMissing(t, s.missing_info));
-    const acts = [];
-    if (s.form_fill?.length) acts.push(renderFormFill(t, s.form_fill));
-    (s.actions || []).forEach((a, i) => acts.push(renderAction(t, a, i, map)));
-    if (acts.length) body.push(h("h4", { text: "Ready for you" }), h("div", { class: "actions" }, ...acts));
-    if (s.steps?.length) {
-      body.push(h("h4", { text: "Steps" }), h("ol", { class: "steps" }, ...s.steps.map((st, i) =>
-        h("li", { class: st.done_by_hoida ? "done" : "" },
-          h("div", {}, h("strong", { text: st.title }), st.done_by_hoida ? h("span", { class: "v-badge v-badge--success", text: "prepared" }) : null, cites(map, `steps[${i}]`)),
-          h("div", { class: "detail" }, st.detail || "", st.url ? h("span", {}, " ", h("a", { href: st.url, target: "_blank", rel: "noopener", text: "Open" })) : null)
-        ))));
-    }
-  }
-  if (map.sources.length) {
-    body.push(h("h4", { text: "Sources" }), h("ol", { class: "sources" }, ...map.sources.map((src) =>
-      h("li", {}, h("a", { href: src.url, target: "_blank", rel: "noopener", text: src.title }), " ", h("span", { class: "host", text: src.host }))
-    )));
-  }
-  return body;
+// A question from Vali. pending: the one the composer answers now (with quick replies, if the server sent any).
+function askBubble(key, text, { pending = false, options = [], questions = null } = {}) {
+  const kids = [questions && questions.length > 1
+    ? h("ul", { class: "ask-list" }, ...questions.map((q) => h("li", { class: "ask-text", text: fillPlaceholders(q, state.profile) })))
+    : h("p", { class: "ask-text", text: fillPlaceholders(text, state.profile) })];
+  if (pending && options.length) kids.push(h("div", { class: "quick" }, ...options.map((o) => h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: o, onclick: () => submitText(o) }))));
+  if (pending) kids.push(h("p", { class: "hint-line", text: "Answer below." }));
+  return valiMsg(key, "needs_approval", kids, pending ? "ask" : "ask past");
 }
 
 // ---------- the cloud browser run (task.execution) ----------
@@ -569,36 +663,9 @@ function filledList(rows, { copy = false } = {}) {
   return dl;
 }
 
-function renderQuestion(t, q) {
-  if (q.answered) return h("div", { class: "exec-question sent" }, h("strong", { text: "Vali asked: " }), q.text, h("div", { class: "muted small", text: "Answer sent. Vali reads it at the next step." }));
-  const key = "q:" + t.id;
-  const ta = h("textarea", { class: "v-textarea edit answer-box", rows: "2", "aria-label": "Your answer", placeholder: "Your answer" });
-  ta.value = drafts.get(key) || "";
-  ta.addEventListener("input", () => drafts.set(key, ta.value));
-  const btn = h("button", { class: "v-btn v-btn--sm", type: "button", text: "Send answer" });
-  const submit = async () => {
-    const text = ta.value.trim();
-    if (!text) { ta.focus(); return; }
-    btn.disabled = true;
-    try {
-      await send({ type: "message", taskId: t.id, text });
-      answered.set(t.id, q.at);
-      drafts.delete(key);
-      ta.blur();
-      render();
-    } catch (e) {
-      btn.disabled = false;
-      toast(e.message);
-    }
-  };
-  btn.addEventListener("click", submit);
-  ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
-  return h("div", { class: "exec-question" }, h("p", { text: q.text }), ta, h("div", { class: "btns row end" }, btn));
-}
-
 function inlineButton(t, text, cls, action, name = text) {
   const key = `${t.id}:${name}`;
-  const b = h("button", { class: cls, type: "button", text, "aria-label": `${text}: ${t.task.split("\n\nMy answers:")[0]}`, "data-inline-action": key });
+  const b = h("button", { class: cls, type: "button", text, "aria-label": `${text}: ${titleOf(t)}`, "data-inline-action": key });
   b.disabled = pendingInline.has(key);
   b.addEventListener("click", async () => {
     if (b.disabled) return;
@@ -612,22 +679,23 @@ function inlineButton(t, text, cls, action, name = text) {
       toast(e.message);
     } finally {
       pending.inFlight = false;
+      stickBottom = true;
       render();
     }
   });
   return b;
 }
 
-function serverButton(text, cls, msg, done, task = null, name = text) {
+function serverButton(text, cls, message, done, task = null, name = text) {
   if (task) return inlineButton(task, text, cls, async () => {
-    await send(msg);
+    await send(message);
     if (done) toast(done);
   }, name);
   const b = h("button", { class: cls, type: "button", text });
   b.addEventListener("click", async () => {
     b.disabled = true;
     try {
-      await send(msg);
+      await send(message);
       if (done) toast(done);
     } catch (e) {
       toast(e.message);
@@ -644,49 +712,50 @@ function stillShot(t, n) {
   return h("div", { class: "v-live done" }, img);
 }
 
-function renderExecution(t) {
-  const v = executionView(t, { profile: state.profile, answered: answered.get(t.id) ?? null });
-  if (!v) return null;
-  const box = h("section", { class: `exec exec-${v.phase}` });
+const APPROVED = "Approved. I’m sending it now.";
+const EXEC_POSE = { live: "working", approval: "needs_approval", blocked: "error", failed: "error", done: "success", stopped: "idle" };
+
+// The run's state as one Vali bubble: live picture and step, the approval, where it stopped, or how it ended.
+function execBubble(t, v) {
+  const kids = [];
   const stop = v.live ? serverButton("Stop", "v-btn v-btn--quiet v-btn--sm", { type: "stop", taskId: t.id }, null, t) : null;
   if (v.live) {
     const [status, tone] = errandStatus(t);
-    const frame = h("div", { class: "v-live" + (v.phase === "approval" ? " v-live--waiting" : ""), "data-empty": frames.has(t.id) ? null : "Waiting for the first picture…" },
-      liveImg(t), h("span", { class: `v-badge v-badge--dot ${tone ? "v-badge--" + tone : "v-badge--live"}`, text: status }));
-    box.append(frame, h("div", { class: "exec-step" }, v.phase === "live" ? h("i", { class: "dot" }) : null, h("span", { text: v.step || (v.status === "starting" ? "Opening the browser…" : "Working…") }), v.stepCount ? h("span", { class: "muted n", text: `step ${v.stepCount}` }) : null,
-      v.phase === "approval" ? null : stop));
-    if (v.question) box.append(renderQuestion(t, v.question));
+    kids.push(h("div", { class: "v-live" + (v.phase === "approval" ? " v-live--waiting" : ""), "data-empty": frames.has(t.id) ? null : "Waiting for the first picture…" },
+      liveImg(t), h("span", { class: `v-badge v-badge--dot ${tone ? "v-badge--" + tone : "v-badge--live"}`, text: status })));
   }
-  if (v.phase === "approval") {
-    box.append(h("h4", { text: "Ready to send" }));
-    if (v.summary) box.append(h("p", { class: "exec-summary", text: v.summary }));
-    if (v.approval.length) box.append(filledList(v.approval));
-    box.append(h("div", { class: "btns row end exec-actions" }, stop, handoffButton(t),
+  if (v.phase === "live") {
+    const step = v.step || (v.status === "starting" ? "Opening the browser…" : "Working…");
+    kids.push(h("div", { class: "step-line", role: "status" }, typing(), h("span", { text: step, title: step }), v.stepCount ? h("span", { class: "n", text: `step ${v.stepCount}` }) : null),
+      h("div", { class: "btns row end" }, stop));
+  } else if (v.phase === "approval") {
+    kids.push(h("p", { class: "exec-summary", text: v.summary || "Everything is filled in. Shall I send it?" }));
+    if (v.approval.length) kids.push(filledList(v.approval));
+    kids.push(h("div", { class: "btns row end" }, stop, handoffButton(t),
       serverButton("Approve and send", "v-btn v-btn--sm", { type: "approve", taskId: t.id }, APPROVED, t, "Approve")));
   } else if (v.phase === "blocked" || v.phase === "failed") {
-    const reason = v.blocker?.reason || v.result || v.error || "I couldn’t finish this errand.";
-    box.append(h("p", { class: "exec-reason", text: reason }));
+    kids.push(h("p", { class: "exec-result", text: v.blocker?.reason || v.result || v.error || "I couldn’t finish this errand." }));
     const url = v.blocker?.url || v.url;
     const handoff = handoffButton(t, "v-btn v-btn--sm");
-    if (handoff) box.append(h("div", { class: "btns row end" }, handoff));
-    else if (url) box.append(h("div", { class: "btns row end" }, fillHereButton(t), h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
+    if (handoff) kids.push(h("div", { class: "btns" }, handoff));
+    else if (url) kids.push(h("div", { class: "btns" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) }), fillHereButton(t)));
     if (v.filled.length) {
-      box.append(h("h4", { text: "Filled so far" }), filledList(v.filled, { copy: true }),
-        h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
+      kids.push(h("h4", { text: "Filled so far" }), filledList(v.filled, { copy: true }),
+        h("div", { class: "btns" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
     }
-    if (v.lastShot != null) box.append(stillShot(t, v.lastShot));
+    if (v.lastShot != null) kids.push(stillShot(t, v.lastShot));
   } else if (v.phase === "done") {
-    box.append(h("p", { class: "exec-result", text: v.result || "Submitted." }));
-    if (v.lastShot != null) box.append(stillShot(t, v.lastShot));
+    kids.push(h("p", { class: "exec-result", text: v.result || "Submitted." }));
+    if (v.lastShot != null) kids.push(stillShot(t, v.lastShot));
   } else if (v.phase === "stopped") {
-    box.append(h("p", { class: "muted exec-result", text: v.error ? `Stopped: ${v.error}` : "Stopped. Nothing was sent." }));
+    kids.push(h("p", { class: "muted exec-result", text: v.error ? `Stopped: ${v.error}` : "Stopped. Nothing was sent." }));
     const handoff = handoffButton(t, "v-btn v-btn--sm");
-    if (handoff) box.append(h("div", { class: "btns row end" }, handoff));
+    if (handoff) kids.push(h("div", { class: "btns" }, handoff));
   }
-  return box;
+  const exa = v.live ? renderExaActivity(t, { busy: true }) : null;
+  if (exa) kids.push(exa);
+  return valiMsg(`x:${t.id}:${v.phase}`, EXEC_POSE[v.phase] || "working", kids, "wide" + (v.phase === "done" ? " done-run" : ""));
 }
-
-const APPROVED = "Approved. I’m sending it now.";
 
 // "Continue in my browser": the cloud browser's page with its cart and session, opened here. Once, for 15 minutes.
 function handoffButton(t, cls = "v-btn v-btn--quiet v-btn--sm") {
@@ -711,65 +780,13 @@ function fillHereButton(t) {
   });
 }
 
-// "Let Vali do it": start the cloud browser on a prepared link or on the page the errand came from.
-function doItButton(t, opts) {
+// "Book it" / "Fill it for me": start the cloud browser on a prepared link or on the page the errand came from.
+// It starts even when no details are saved: the browser then asks for them in this chat (execution.question).
+function doItButton(t, opts, label) {
   const x = t.execution?.status;
   if (!t.backend || t.status !== "completed" || (x && (LIVE.has(x) || x === "done"))) return null;
-  return serverButton(x ? "Let Vali try again" : "Let Vali do it", "v-btn v-btn--quiet v-btn--sm", { type: "execute", taskId: t.id, ...opts }, "Vali is opening the page in a cloud browser.");
-}
-
-function selectTask(t, focusAnswer = false) {
-  open.delete(t.id);
-  open.add(t.id);
-  if (t.status === "completed" && !t.seen) send({ type: "seen", taskId: t.id }).catch((e) => toast(e.message));
-  render();
-  $("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
-  if (focusAnswer) $("detail").querySelector("textarea.answer-box, .missing input")?.focus();
-}
-
-// The words after the status in a row: what Vali asks, waits for, does now, or found.
-function statusDetail(t, v) {
-  if (v?.question && !v.question.answered) return v.question.text;
-  if (v?.phase === "approval") return v.summary;
-  if (v?.blocker) return v.blocker.reason;
-  if (v?.live) return v.step;
-  if (t.status === "queued" || t.status === "running") {
-    const p = t.progress?.at(-1);
-    return p?.text ? (p.kind === "source" ? "Reading " : "Searching ") + p.text : "Starting";
-  }
-  if (v?.phase === "done") return v.result;
-  if (t.status === "failed") return t.error || "";
-  return t.output?.structured?.answer || "";
-}
-
-function renderCard(t) {
-  const card = $("cardTpl").content.firstElementChild.cloneNode(true);
-  const [label, tone] = errandStatus(t);
-  card.dataset.tone = tone;
-  card.querySelector(".still").src = `../mascot/${taskMascot(t)}.svg`;
-  card.querySelector(".status").textContent = label;
-  card.querySelector(".task-text").textContent = t.parentId ? "↳ " + t.task.split("\n\nMy answers:")[0] : t.task;
-  card.querySelector(".card-head").addEventListener("click", () => selectTask(t));
-  card.dataset.id = t.id;
-  const actions = card.querySelector(".v-row__actions");
-  const v = executionView(t, { profile: state.profile, answered: answered.get(t.id) ?? null });
-  const detail = fillPlaceholders(statusDetail(t, v) || "", state.profile);
-  card.querySelector(".meta").textContent = detail ? " · " + detail : "";
-  card.querySelector(".v-row__status").title = label + card.querySelector(".meta").textContent;
-  if ((v?.question && !v.question.answered) || (!v && t.output?.structured?.missing_info?.length)) {
-    actions.append(inlineButton(t, "Answer", "v-btn v-btn--soft v-btn--sm", () => selectTask(t, true)));
-  } else if (v?.phase === "approval") {
-    actions.append(serverButton("Approve", "v-btn v-btn--soft v-btn--sm", { type: "approve", taskId: t.id }, APPROVED, t));
-  }
-  if (v?.live || t.status === "queued" || t.status === "running") {
-    actions.append(serverButton("Stop", "v-btn v-btn--quiet v-btn--sm", { type: v?.live ? "stop" : "cancel", taskId: t.id }, null, t));
-  }
-  return card;
-}
-
-function selectedTask() {
-  const selected = [...open].reverse().map((id) => state.tasks.find((t) => t.id === id)).find(Boolean);
-  return selected || state.tasks.find((t) => LIVE.has(t.execution?.status)) || state.tasks[0];
+  const text = x ? "Let Vali try again" : label || (t.mode === "book" ? "Book it" : t.mode === "claim" || t.mode === "write" ? "Fill it for me" : "Let Vali do it");
+  return serverButton(text, "v-btn v-btn--sm", { type: "execute", taskId: t.id, ...opts }, "Vali is opening the page in a cloud browser.", t, "do-it");
 }
 
 // One Exa call from the browser run: what was asked, then links to the pages it returned.
@@ -781,15 +798,18 @@ function renderLookup(e) {
   return h("li", {}, label, what, e.failed ? " (no answer)" : null, found.length ? h("div", { class: "exa-hosts" }, ...found) : null);
 }
 
-function renderExaActivity(t, expanded, busy) {
+// The Exa line ("Agent research 2 searches, 10 pages · Contents 2 of 2 quoted"); it opens to show how Vali found it.
+function renderExaActivity(t, { busy = false } = {}) {
   const view = exaActivity(t);
-  if (busy && !view.filling.length) return null; // while research runs, show only live form lookups
-  if (!view.sources.length && !view.queries.length && !view.filling.length && view.note) return null; // nothing to show yet
+  if (busy && !view.filling.length) return null; // while the browser runs, show only live form lookups
+  const uses = exaUses(t).map((u) => `${u.label} ${u.detail}`).join(" · ");
+  if (!uses && !view.sources.length && !view.queries.length && !view.filling.length) return null;
   const hosts = new Map();
   for (const s of view.sources) if (!hosts.has(s.host)) hosts.set(s.host, s);
-  return h("details", { class: "result-details exa-activity", open: expanded },
-    h("summary", {}, h("span", { text: "How Vali found this" }), h("span", { class: "muted small exa-summary", text: view.summary })),
+  return details(`exa:${t.id}`, "exa-activity",
+    h("summary", { title: "How Vali found this" }, h("span", { class: "exa-tag", text: "EXA" }), h("span", { class: "exa-summary", text: uses || view.summary })),
     h("p", { class: "small", text: view.method }),
+    uses ? h("p", { class: "muted small", text: view.summary }) : null,
     view.note ? h("p", { class: "muted small", text: view.note }) : null,
     view.queries.length ? [h("h4", { text: "Searched for" }), h("ul", { class: "exa-queries" }, ...view.queries.map((q) => h("li", { text: q })))] : null,
     view.filling.length ? [h("h4", { text: "While filling the form" }), h("ul", { class: "exa-queries exa-filling" }, ...view.filling.map(renderLookup))] : null,
@@ -797,95 +817,176 @@ function renderExaActivity(t, expanded, busy) {
       h("a", { class: "exa-host", href: s.url, target: "_blank", rel: "noopener noreferrer", title: s.title }, h("span", { class: "host", text: s.host }))))] : null);
 }
 
-// The Exa capabilities this errand used, with their counts (shared/exa-uses.js).
+// The Exa capabilities, for settings (shared/exa-uses.js).
 function exaUsesList(rows) {
   return h("dl", { class: "exa-uses" }, ...rows.map(([label, detail]) => h("div", {}, h("dt", { text: label }), h("dd", { text: detail }))));
 }
 
-function renderExaUses(t) {
-  const rows = exaUses(t);
-  return rows.length ? h("section", {}, h("h4", { text: "Exa" }), exaUsesList(rows.map((r) => [r.label, r.detail]))) : null;
+// ---------- the thread ----------
+function dayLabel(ms) {
+  const d = new Date(ms || Date.now());
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date().toDateString() === d.toDateString() ? `Today ${time}` : `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`;
 }
 
-function renderDetail(t) {
-  const body = $("detail");
-  const expanded = body.dataset.taskId === t?.id && body.querySelector(".result-details:not(.exa-activity)")?.open;
-  const exaExpanded = body.dataset.taskId === t?.id && body.querySelector(".exa-activity")?.open;
-  body.dataset.taskId = t?.id || "";
-  body.hidden = !t;
-  body.replaceChildren();
-  if (!t) return;
-  const [label, tone] = errandStatus(t);
-  body.classList.toggle("v-card--attention", tone === "warning");
-  const exec = renderExecution(t);
-  if (!exec?.querySelector(".v-live:not(.done)")) body.append(h("span", { class: `v-badge v-badge--dot detail-status ${tone ? "v-badge--" + tone : "v-badge--live"}`, text: label }));
-  const title = t.task.split("\n\nMy answers:")[0];
-  body.append(h("h2", { class: "v-card__title detail-title", text: title, title }));
-  if (exec) body.append(exec);
-  if (t.status === "queued" || t.status === "running") body.append(renderWorking(t));
-  else if (t.status === "completed") {
-    const result = renderResult(t);
-    if (exec) body.append(h("details", { class: "result-details", open: expanded }, h("summary", { text: "Details and sources" }), ...result));
-    else body.append(...result);
-  }
-  else if (t.status === "failed") {
-    body.append(h("p", { class: "exec-reason", text: fillPlaceholders(t.error, state.profile) || "I couldn’t finish this errand." }),
-      h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Try again", onclick: async () => {
-        try { open.add((await send({ type: "start", task: t.task, tabId: t.tabId, usePage: !!t.page })).id); } catch (e) { toast(e.message); }
-      } })));
-  }
-  else body.append(h("p", { class: "muted exec-result", text: "Stopped. Nothing was sent." }));
-  const exa = renderExaActivity(t, exaExpanded, t.status === "queued" || t.status === "running");
-  if (exa) body.append(exa);
-  if (t.status !== "queued" && t.status !== "running") {
-    const used = renderExaUses(t);
-    if (used) body.append(used);
-    body.append(h("div", { class: "foot" }, h("span", { class: "muted", text: [elapsed(t), t.page?.title, t.cost != null ? "$" + Number(t.cost).toFixed(3) : null].filter(Boolean).join(" · ") }),
-      serverButton("Remove", "v-btn v-btn--quiet v-btn--sm", { type: "remove", taskId: t.id })));
-  }
+function userMeta(t) {
+  if (t.parentId) return null;
+  const from = t.source === "whatsapp" ? "From WhatsApp" : t.source === "mac" || t.source === "desktop" ? "From the Mac" : null;
+  return [from, t.page?.title ? "On: " + t.page.title : null].filter(Boolean).join(" · ") || null;
 }
 
+function buildThread(convo) {
+  if (!convo) return [valiMsg("hello", "idle", [h("p", { text: "Hi, I’m Vali. What should I take care of?" })])];
+  const nodes = [h("div", { class: "day", text: dayLabel(convo.tasks[0].createdAt) })];
+  const ask = pendingAsk(convo, { answered });
+  for (const t of convo.tasks) {
+    nodes.push(userMsg(`u:${t.id}`, userText(t), userMeta(t)));
+    const rq = t.backend ? t.research?.question : null;
+    if (rq?.text && rq.answer != null) nodes.push(askBubble(`rq:${t.id}`, rq.text), userMsg(`ra:${t.id}`, String(rq.answer)));
+    if (t.status === "queued" || t.status === "running") nodes.push(workingBubble(t));
+    else if (t.status === "completed") nodes.push(answerBubble(t));
+    else if (t.status === "failed") {
+      nodes.push(valiMsg(`fail:${t.id}`, "error", [
+        h("p", { class: "exec-result", text: "I couldn’t finish this errand." }),
+        t.error ? h("p", { class: "muted small", text: fillPlaceholders(t.error, state.profile) }) : null,
+        h("div", { class: "btns" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Try again", onclick: async () => {
+          try { currentTask = (await send({ type: "start", task: t.task, tabId: t.tabId, usePage: !!t.page })).id; stickBottom = true; render(); } catch (e) { toast(e.message); }
+        } }), serverButton("Remove", "v-btn v-btn--quiet v-btn--sm", { type: "remove", taskId: t.id }))]));
+    } else nodes.push(valiMsg(`stop:${t.id}`, "idle", [h("p", { class: "muted", text: "Stopped. Nothing was sent." }),
+      h("div", { class: "btns" }, serverButton("Remove", "link-btn", { type: "remove", taskId: t.id }))]));
+    // Vali's open research question (asked before or with the answer), or what the answer says is still missing.
+    if (rq?.text && rq.answer == null && t.status !== "failed" && t.status !== "cancelled") {
+      const pending = ask?.route === "research" && ask.taskId === t.id;
+      nodes.push(askBubble(`rq:${t.id}`, rq.text, { pending, options: pending ? ask.options : [] }));
+    } else if (!rq?.text && t.status === "completed" && t.output?.structured?.missing_info?.length) {
+      const qs = t.output.structured.missing_info;
+      nodes.push(askBubble(`mi:${t.id}`, qs.join(" "), { pending: ask?.route === "followup" && ask.taskId === t.id, questions: qs }));
+    }
+    const v = executionView(t, { profile: state.profile, answered: answered.get(t.id) ?? null });
+    if (v) {
+      nodes.push(userMsg(`go:${t.id}`, "Go ahead, do it for me."));
+      const live = ask?.route === "execution" && ask.taskId === t.id ? ask : null;
+      executionTurns(t, asked[t.id] || []).forEach((turn, i) => {
+        if (turn.who === "user") nodes.push(userMsg(`in:${t.id}:${turn.at}:${i}`, fillPlaceholders(turn.text, state.profile)));
+        else if (!(live && turn.at === String(live.at))) nodes.push(askBubble(`xq:${t.id}:${turn.at}`, turn.text));
+      });
+      nodes.push(execBubble(t, v));
+      if (live) nodes.push(askBubble(`xq:${t.id}:${live.at}`, live.text, { pending: true }));
+    }
+  }
+  return nodes;
+}
+
+function renderThread(convo) {
+  const main = $("main");
+  const id = convo?.id || "none";
+  const same = lastConvoId === id;
+  const atBottom = main.scrollHeight - main.scrollTop - main.clientHeight < 80;
+  const top = main.scrollTop;
+  animate = same && lastConvoId !== undefined;
+  const nodes = buildThread(convo);
+  $("thread").replaceChildren(...nodes);
+  const fresh = $("thread").querySelector(".pop")?.closest(".msg");
+  if (!same || stickBottom || (atBottom && !fresh)) main.scrollTop = main.scrollHeight;
+  else if (fresh && atBottom) {
+    // A new bubble: show it from its top when it is taller than the view, else scroll to the end.
+    if (fresh.offsetHeight > main.clientHeight - 40) main.scrollTop = fresh.offsetTop - main.offsetTop - 8;
+    else main.scrollTop = main.scrollHeight;
+  } else main.scrollTop = top;
+  stickBottom = false;
+  lastConvoId = id;
+  for (const n of $("thread").querySelectorAll("[data-key]")) shownKeys.add(n.dataset.key);
+}
+
+function renderHistory(convos, cur) {
+  const box = $("history");
+  if (box.hidden) return;
+  box.replaceChildren(h("h2", { text: `History · ${convos.length}` }), convos.length
+    ? h("ol", {}, ...convos.map((c) => {
+      const [label, tone] = errandStatus(c.last);
+      return h("li", {}, h("button", { class: "h-row" + (c.id === cur?.id ? " is-current" : ""), type: "button", "data-id": c.id, onclick: () => openConvo(c.last.id) },
+        h("img", { src: `../mascot/${taskMascot(c.last)}.svg`, alt: "" }),
+        h("div", { class: "h-main" }, h("div", { class: "h-title", text: c.title, title: c.title }),
+          h("div", { class: "h-meta" }, h("b", { "data-tone": tone, text: label }), h("span", { text: "· " + ago(c.at) }),
+            c.tasks.length > 1 ? h("span", { text: `· ${c.tasks.length} errands` }) : null))));
+    }))
+    : h("p", { class: "h-empty", text: "No errands yet. Your conversations with Vali show up here." }));
+}
+
+function renderStats() {
+  const s = chatStats(statsData, state.tasks);
+  const cells = [[String(s.errands), s.errands === 1 ? "errand" : "errands"], [String(s.searches), "Exa searches"], [String(s.pages), "pages read"], [money(s.cost), "Exa cost"]];
+  $("stats").replaceChildren(...cells.map(([n, label]) => h("div", { class: "stat" }, h("b", { text: n }), h("span", { text: label }))));
+}
+
+let statsAt = 0;
+async function refreshStats(force = false) {
+  if (!state.backendUrl) { statsData = null; renderStats(); return; }
+  if (!force && Date.now() - statsAt < 10000) return;
+  statsAt = Date.now();
+  try { statsData = await serverStats(); } catch (_) { /* keep the last numbers; the local count stands in */ }
+  renderStats();
+}
+
+let saveAskedTimer = 0;
+function saveAsked() {
+  clearTimeout(saveAskedTimer);
+  saveAskedTimer = setTimeout(() => {
+    const ids = new Set(state.tasks.map((t) => t.id));
+    asked = Object.fromEntries(Object.entries(asked).filter(([id]) => ids.has(id)));
+    chrome.storage.local.set({ chatAsked: asked }).catch(() => {});
+  }, 300);
+}
+
+const seenSent = new Set();
+let doneCount = -1;
 function render() {
   updateMascot();
   for (const [key, pending] of pendingInline) {
     if (!pending.inFlight && pending.tasks !== state.tasks) pendingInline.delete(key);
   }
-  const list = $("list");
-  for (const button of list.querySelectorAll("[data-inline-action]")) button.disabled = pendingInline.has(button.dataset.inlineAction);
   const live = new Set(state.tasks.filter((t) => LIVE.has(t.execution?.status)).map((t) => t.id));
   for (const [id, url] of frames) if (!live.has(id)) { URL.revokeObjectURL(url); frames.delete(id); liveImgs.delete(id); }
-  // Preserve unsent answers and the caret while polling.
-  const focused = document.activeElement?.closest?.(".detail-card") ? document.activeElement : null;
-  if (focused && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT")) return;
-  if (!list.contains(document.activeElement)) list.replaceChildren(...state.tasks.map(renderCard));
-  $("list").hidden = !state.tasks.length;
-  const selected = selectedTask();
-  for (const card of list.children) { // also when the list kept its nodes because a row has focus
-    card.classList.toggle("is-selected", card.dataset.id === selected?.id);
-    card.querySelector(".card-head").setAttribute("aria-expanded", String(card.dataset.id === selected?.id));
+  let changed = false;
+  for (const t of state.tasks) if (rememberQuestion(asked, t)) changed = true;
+  if (changed) saveAsked();
+  const done = state.tasks.filter((t) => t.status === "completed").length;
+  if (done !== doneCount) { doneCount = done; refreshStats(true); }
+  renderStats();
+  const convos = conversations(state.tasks);
+  const convo = currentConvo(convos);
+  renderHistory(convos, convo);
+  // Keep unsent drafts and the caret while polling.
+  const focused = document.activeElement?.closest?.("#thread") ? document.activeElement : null;
+  if (!(focused && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT"))) renderThread(convo);
+  updateComposer(convo);
+  if (!$("thread").hidden && document.visibilityState === "visible") {
+    for (const t of convo?.tasks || []) {
+      if (t.status === "completed" && !t.seen && !seenSent.has(t.id)) { seenSent.add(t.id); send({ type: "seen", taskId: t.id }).catch(() => {}); }
+    }
   }
-  renderDetail(selected);
-  const next = !$("detail").hidden && $("detail").querySelector(".v-btn:not(.v-btn--quiet, .v-btn--soft, .v-btn--danger)");
-  $("send").classList.toggle("v-btn--soft", !!next);
-  $("empty").hidden = state.tasks.length > 0;
-  fitTask();
 }
-
-$("list").addEventListener("focusout", () => setTimeout(() => {
-  if (!$("list").contains(document.activeElement)) render();
-}));
 
 // ---------- state ----------
 async function load() {
-  const s = await chrome.storage.local.get(Object.keys(DEFAULTS));
+  const s = await chrome.storage.local.get([...Object.keys(DEFAULTS), "chatAsked"]);
   state = Object.fromEntries(Object.entries(DEFAULTS).map(([k, d]) => [k, s[k] ?? d]));
+  asked = s.chatAsked && typeof s.chatAsked === "object" ? s.chatAsked : {};
   const sess = await chrome.storage.session.get(["prefill", "focusTask"]);
   if (sess.prefill && Date.now() - sess.prefill.at < 5 * 60 * 1000) applyPrefill(sess.prefill);
-  if (sess.focusTask) { open.add(sess.focusTask); chrome.storage.session.remove("focusTask"); }
+  if (sess.focusTask) focusOn(sess.focusTask);
   if (!state.exaKey && !state.backendUrl) { $("settings").hidden = false; renderSettings(); }
   if (state.backendUrl) send({ type: "poll" }).catch(() => {}); // bring in errands started on WhatsApp
   await refreshActiveTab();
   render();
+}
+
+// "Open" on the page mascot, a notification, or an errand started from the page: show that errand's conversation.
+function focusOn(taskId) {
+  currentTask = String(taskId);
+  setHistory(false);
+  stickBottom = true;
+  chrome.storage.session.remove("focusTask").catch(() => {}); // so the same errand can be focused again
 }
 
 function applyPrefill(p) {
@@ -898,6 +999,8 @@ function applyPrefill(p) {
   } else if (p.link && !p.selection) {
     $("task").value = `Help me with this link: ${p.link}\n`;
   }
+  currentTask = "new"; // a new errand from the page, so the text never goes out as an answer to an older question
+  setHistory(false);
   fitTask();
   $("task").focus();
   refreshActiveTab();
@@ -905,11 +1008,12 @@ function applyPrefill(p) {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local") {
-    for (const k of Object.keys(DEFAULTS)) if (changes[k]) state[k] = changes[k].newValue ?? DEFAULTS[k];
-    render();
+    let mine = false;
+    for (const k of Object.keys(DEFAULTS)) if (changes[k]) { state[k] = changes[k].newValue ?? DEFAULTS[k]; mine = true; }
+    if (mine) render();
   }
-  if (area === "session" && changes.prefill?.newValue) applyPrefill(changes.prefill.newValue);
-  if (area === "session" && changes.focusTask?.newValue) { open.delete(changes.focusTask.newValue); open.add(changes.focusTask.newValue); render(); }
+  if (area === "session" && changes.prefill?.newValue) { applyPrefill(changes.prefill.newValue); render(); }
+  if (area === "session" && changes.focusTask?.newValue) { focusOn(changes.focusTask.newValue); render(); }
 });
 
 // Poll faster than the background alarm while the panel is open and something is running.
@@ -924,16 +1028,18 @@ setInterval(() => {
     send({ type: "poll" }).catch(() => {});
     if (busy) render();
   }
+  if (ticks % 4 === 0) refreshStats();
 }, 4000);
 
-// The live browser view: a new frame about once a second for each open card whose run is live, and the run's
+// The live browser view: a new frame about once a second for each run in the open conversation, and the run's
 // steps from the server every 2 s, only while the panel is visible.
 let liveTicks = 0;
 setInterval(() => {
   if (document.hidden) return;
   const live = state.tasks.filter((t) => t.backend && LIVE.has(t.execution?.status));
   if (!live.length) return;
-  for (const t of live) if (selectedTask()?.id === t.id) refreshFrame(t);
+  const shown = new Set((currentConvo()?.tasks || []).map((t) => t.id));
+  for (const t of live) if (shown.has(t.id)) refreshFrame(t);
   if (++liveTicks % 2 === 0) send({ type: "poll" }).catch(() => {});
 }, 1000);
 

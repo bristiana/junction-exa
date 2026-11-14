@@ -77,6 +77,8 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
     // A tip for the page the user is on (lib/companion.js builds the body): { tip } or { tip: null }.
     companion: (page) => call("/v1/companion", { method: "POST", body: page }),
     listTasks: (limit = 30) => call(`/v1/tasks?limit=${limit}`),
+    // Totals for this user: { total, exa: { searches, pages_read }, cost_usd, ... } (the panel's stats strip).
+    stats: () => call("/v1/stats"),
     getTask: (taskId) => call(`/v1/tasks/${id(taskId)}`),
     cancel: (taskId) => call(`/v1/tasks/${id(taskId)}/cancel`, { method: "POST", body: {} }),
     // The only request that carries the profile: the cloud browser types it into the form the user approved.
@@ -136,6 +138,7 @@ export const pair = async () => (await configured()).pair();
 export const createTask = async (body) => (await configured()).createTask(body);
 export const companion = async (page) => (await configured()).companion(page);
 export const listTasks = async (limit) => (await configured()).listTasks(limit);
+export const stats = async () => (await configured()).stats();
 export const getTask = async (taskId) => (await configured()).getTask(taskId);
 export const cancel = async (taskId) => (await configured()).cancel(taskId);
 export const execute = async (taskId, opts) => (await configured()).execute(taskId, opts);
@@ -224,7 +227,7 @@ export function toLocalTask(remote, prev = null) {
     seen: prev?.seen ?? false,
     mode: remote.mode ?? null,
     research: { kind: r.kind, sources: r.sources, citations: r.citations, usage: r.usage, activity: r.activity,
-      watch_id: r.watch_id, monitor_stubbed: r.monitor_stubbed, reused_from: r.reused_from },
+      watch_id: r.watch_id, monitor_stubbed: r.monitor_stubbed, reused_from: r.reused_from, question: r.question ?? null },
     source: remote.source || "extension",
     execution: remote.execution ?? null,
   };
