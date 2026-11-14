@@ -97,11 +97,3 @@ export function executionView(t, { profile = {}, answered = null } = {}) {
     error: String(x.error || ""),
   };
 }
-
-// The pill on the card for a run: a blocker is the user's turn, not a plain failure.
-export function executionPill(x) {
-  if (!x?.status) return null;
-  if (x.question?.text && LIVE.has(x.status)) return ["Question", "info"];
-  if (blockerOf(x)) return ["Your turn", "info"];
-  return null;
-}

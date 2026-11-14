@@ -6,7 +6,9 @@ import { numberSources, citesFor, resolveAction, fillPlaceholders, unfilledPlace
 import { search } from "../lib/exa.js";
 import { connect, me as serverMe, pair, normalizeBaseUrl, ensureConnected, liveUrl, shotUrl, DEFAULT_BASE_URL } from "../lib/backend.js";
 import { taskMascot, headerMascot, finishFlash, FLASH_MS } from "../lib/mascot.js";
-import { executionView, executionPill, LIVE } from "../lib/execution.js";
+import { executionView, LIVE } from "../lib/execution.js";
+
+import { errandStatus } from "../lib/panel-state.js";
 
 const $ = (id) => document.getElementById(id);
 const PRESETS = [
@@ -16,30 +18,6 @@ const PRESETS = [
   ["Kela benefits", "I am an international student in Finland. Which Kela benefits can I get, and how do I apply?"],
   ["Sauna booking", "Find a public sauna in Helsinki for a group of 8 this Saturday evening that can be booked online."],
 ];
-const STATUS = {
-  queued: ["Queued", ""],
-  running: ["Working", ""],
-  completed: ["Ready", "ready"],
-  failed: ["Failed", "failed"],
-  cancelled: ["Cancelled", "cancelled"],
-};
-const RESULT_PILL = {
-  ready_to_approve: ["Approve", "ready"],
-  needs_info: ["Needs info", "info"],
-  not_possible: ["Not possible", "failed"],
-  info_only: ["Answer", "ready"],
-};
-// Once the cloud browser has started on an errand, its status is the one that matters.
-const EXEC_PILL = {
-  starting: ["Starting", ""],
-  running: ["Doing it", ""],
-  awaiting_approval: ["Approve", "info"],
-  submitting: ["Sending", ""],
-  done: ["Done", "ready"],
-  failed: ["Failed", "failed"],
-  stopped: ["Stopped", "cancelled"],
-};
-
 // backendUrl: the deployed Vali server unless settings point elsewhere; "" means direct mode (Exa from this browser).
 const DEFAULTS = { tasks: [], profile: {}, exaKey: "", effort: "low", backendUrl: DEFAULT_BASE_URL, presence: true };
 const SERVER_PRESETS = [
@@ -53,6 +31,7 @@ let prefill = null;
 const open = new Set();
 const drafts = new Map(); // edited email bodies, keyed by task+action index; answers to the browser, keyed "q:"+task
 const answered = new Map(); // task id -> question.at answered from here, until the agent picks the answer up
+const pendingInline = new Map(); // action -> task snapshot and request still in flight
 
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -83,13 +62,13 @@ function send(msg) {
 // ---------- the mascot ----------
 // One animated Vali in the header follows the errand that matters most (lib/mascot.js); cards and the empty state use stills.
 const SAYS = {
-  idle: "At your service",
-  listening: "Listening",
-  thinking: "Researching",
-  working: "Working in the browser",
-  needs_approval: "Waiting for your OK",
-  success: "Done",
-  error: "Something went wrong",
+  idle: "I’m ready to help.",
+  listening: "I’m listening.",
+  thinking: "I’m looking into it.",
+  working: "I’m working on your errand.",
+  needs_approval: "I’m waiting for your OK.",
+  success: "I’ve finished an errand.",
+  error: "I need your help to go on.",
 };
 const mascot = (() => {
   const box = $("mascot");
@@ -114,8 +93,10 @@ function updateMascot() {
   }
   const pose = headerMascot(state.tasks, { focused: document.hasFocus() && document.activeElement === $("task"), flash });
   mascot.setState(pose);
-  $("mascotSays").textContent = SAYS[pose] || "";
+  const says = SAYS[pose] || "";
+  if ($("mascotSays").textContent !== says) $("mascotSays").textContent = says;
 }
+$("newErrand").addEventListener("click", () => $("task").focus());
 $("task").addEventListener("focus", updateMascot);
 $("task").addEventListener("blur", () => setTimeout(updateMascot)); // after the blur, so hasFocus() is current
 
@@ -127,12 +108,12 @@ function renderSettings() {
   $("backendUrl").value = state.backendUrl;
   $("pairInfo").hidden = true;
   $("serverPresets").replaceChildren(...SERVER_PRESETS.map(([label, url]) =>
-    h("button", { type: "button", class: "chip", text: label, title: url, onclick: () => { $("backendUrl").value = url; $("connectBtn").click(); } })));
+    h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, title: url, onclick: () => { $("backendUrl").value = url; $("connectBtn").click(); } })));
   refreshServerStatus();
   const box = $("profileFields");
   box.replaceChildren(
     ...PROFILE_FIELDS.map(([k, label]) =>
-      h("label", {}, h("span", { text: label }), h("input", { type: "text", "data-k": k, value: state.profile[k] || "", placeholder: k === "language" ? "English" : "" }))
+      h("label", {}, h("span", { text: label }), h("input", { class: "v-input", type: "text", "data-k": k, value: state.profile[k] || "", placeholder: k === "language" ? "English" : "" }))
     )
   );
 }
@@ -259,7 +240,7 @@ $("testKey").addEventListener("click", async () => {
 
 // ---------- composer ----------
 $("presets").replaceChildren(
-  ...PRESETS.map(([label, text]) => h("button", { type: "button", class: "chip", text: label, onclick: () => { $("task").value = text; $("task").focus(); } }))
+  ...PRESETS.map(([label, text]) => h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => { $("task").value = text; $("settings").hidden = true; $("task").focus(); } }))
 );
 
 async function refreshActiveTab() {
@@ -323,9 +304,9 @@ function renderWorking(t) {
   const lines = (t.progress || []).slice(-6).map((p) =>
     h("div", { class: "line" }, h("i", { class: "dot", style: "animation-delay:" + Math.random().toFixed(2) + "s" }), h("span", { text: (p.kind === "source" ? "Reading " : "Searching ") + p.text }))
   );
-  if (!lines.length) lines.push(h("div", { class: "line" }, h("i", { class: "dot" }), h("span", { text: t.status === "queued" ? "Queued at Exa…" : "Searching the web…" })));
+  if (!lines.length) lines.push(h("div", { class: "line" }, h("i", { class: "dot" }), h("span", { text: t.status === "queued" ? "Starting…" : "Searching the web…" })));
   return h("div", { class: "working" }, ...lines,
-    h("div", { class: "foot" }, h("span", { class: "muted", text: "Runs in the background. You can close this panel." }), h("button", { class: "btn quiet small", text: "Cancel", onclick: () => send({ type: "cancel", taskId: t.id }) })));
+    h("div", { class: "foot" }, h("span", { class: "muted", text: "Runs in the background. You can close this panel." })));
 }
 
 function renderAction(t, a, i, map) {
@@ -344,22 +325,22 @@ function renderAction(t, a, i, map) {
 
   const btns = h("div", { class: "btns" });
   if (r.kind === "email" || r.kind === "copy" || (a.type === "phone_call" && a.body)) {
-    const ta = h("textarea", { class: "edit", "aria-label": "Draft" });
+    const ta = h("textarea", { class: "v-textarea edit", "aria-label": "Draft" });
     ta.value = drafts.get(key) ?? (r.text || "");
     ta.addEventListener("input", () => drafts.set(key, ta.value));
     box.append(ta);
     const current = () => ({ ...r.action, body: ta.value });
     if (r.kind === "email") {
       btns.append(
-        h("button", { class: "btn small", text: "Open in Gmail", onclick: () => chrome.tabs.create({ url: resolveAction(current(), state.profile).gmail }) }),
-        h("button", { class: "btn ghost small", text: "Mail app", onclick: () => chrome.tabs.create({ url: resolveAction(current(), state.profile).mailto }) })
+        h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: "Open in Gmail", onclick: () => chrome.tabs.create({ url: resolveAction(current(), state.profile).gmail }) }),
+        h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: "Mail app", onclick: () => chrome.tabs.create({ url: resolveAction(current(), state.profile).mailto }) })
       );
     }
-    btns.append(h("button", { class: "btn ghost small", text: "Copy", onclick: () => navigator.clipboard.writeText(ta.value).then(() => toast("Copied")) }));
+    btns.append(h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: "Copy", onclick: () => navigator.clipboard.writeText(ta.value).then(() => toast("Copied")) }));
   }
   if (r.kind === "link" && r.url) {
     const label = a.type === "calendar" ? "Add to calendar" : a.type === "phone_call" ? "Call" : "Open";
-    btns.prepend(h("button", { class: "btn small", text: label, onclick: () => chrome.tabs.create({ url: r.url }) }));
+    btns.prepend(h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => chrome.tabs.create({ url: r.url }) }));
     if (a.type === "open_link") btns.append(doItButton(t, { actionIndex: i }) || "");
   }
   box.append(btns);
@@ -378,7 +359,7 @@ function renderFormFill(t, fills) {
     h("div", { class: "head" }, h("div", {}, h("div", { class: "title", text: "Fill the form on this page" }), h("div", { class: "sub", text: t.page?.title || t.page?.url || "" }))),
     dl,
     h("div", { class: "btns" }, h("button", {
-      class: "btn small",
+      class: "v-btn v-btn--quiet v-btn--sm",
       text: `Fill ${fills.length} field${fills.length === 1 ? "" : "s"}`,
       onclick: async () => {
         try {
@@ -393,12 +374,12 @@ function renderFormFill(t, fills) {
 }
 
 function renderMissing(t, questions) {
-  const inputs = questions.map((q) => h("input", { type: "text", "aria-label": q }));
+  const inputs = questions.map((q) => h("input", { class: "v-input", type: "text", "aria-label": q }));
   return h("div", { class: "missing" },
     h("h4", { text: "Vali needs" }),
     ...questions.map((q, i) => h("label", {}, q, inputs[i])),
     h("div", { class: "btns row end", style: "margin-top:8px" }, h("button", {
-      class: "btn small",
+      class: "v-btn v-btn--quiet v-btn--sm",
       text: "Continue",
       onclick: async () => {
         const answers = questions.map((q, i) => `${q} ${inputs[i].value.trim() || "(no answer)"}`).join("\n");
@@ -433,7 +414,7 @@ function renderResult(t) {
     if (s.steps?.length) {
       body.push(h("h4", { text: "Steps" }), h("ol", { class: "steps" }, ...s.steps.map((st, i) =>
         h("li", { class: st.done_by_hoida ? "done" : "" },
-          h("div", {}, h("strong", { text: st.title }), st.done_by_hoida ? h("span", { class: "badge", text: "prepared" }) : null, cites(map, `steps[${i}]`)),
+          h("div", {}, h("strong", { text: st.title }), st.done_by_hoida ? h("span", { class: "v-badge v-badge--success", text: "prepared" }) : null, cites(map, `steps[${i}]`)),
           h("div", { class: "detail" }, st.detail || "", st.url ? h("span", {}, " ", h("a", { href: st.url, target: "_blank", rel: "noopener", text: "Open" })) : null)
         ))));
     }
@@ -455,7 +436,7 @@ const loadingFrame = new Set();
 function liveImg(t) {
   let img = liveImgs.get(t.id);
   if (!img) {
-    img = h("img", { class: "live-shot", alt: "What Vali sees in the browser" });
+    img = h("img", { class: "live-shot v-live__shot", alt: "What Vali sees in the browser" });
     liveImgs.set(t.id, img);
   }
   const f = frames.get(t.id);
@@ -488,7 +469,7 @@ async function refreshFrame(t) {
     const obj = URL.createObjectURL(blob);
     frames.set(t.id, obj);
     const img = liveImgs.get(t.id);
-    if (img) { img.src = obj; img.closest(".live")?.classList.add("has-frame"); }
+    if (img) { img.src = obj; img.closest(".v-live")?.removeAttribute("data-empty"); }
     if (old) URL.revokeObjectURL(old);
   } finally {
     loadingFrame.delete(t.id);
@@ -501,7 +482,7 @@ function filledList(rows, { copy = false } = {}) {
     const dd = h("dd", {}, h("span", { class: "val", text: r.value }));
     if (r.source) dd.append(" ", h("a", { class: "src", href: r.source, target: "_blank", rel: "noopener", title: r.source, text: r.sourceHost || "source" }));
     else if (r.sourceText) dd.append(" ", h("span", { class: "src muted", text: r.sourceText }));
-    if (copy) dd.append(h("button", { class: "btn quiet small copy", type: "button", text: "Copy", onclick: () => navigator.clipboard.writeText(r.value).then(() => toast("Copied")) }));
+    if (copy) dd.append(h("button", { class: "v-btn v-btn--quiet v-btn--sm copy", type: "button", text: "Copy", onclick: () => navigator.clipboard.writeText(r.value).then(() => toast("Copied")) }));
     dl.append(h("dt", { text: r.label, title: r.label }), dd);
   }
   return dl;
@@ -510,10 +491,10 @@ function filledList(rows, { copy = false } = {}) {
 function renderQuestion(t, q) {
   if (q.answered) return h("div", { class: "exec-question sent" }, h("strong", { text: "Vali asked: " }), q.text, h("div", { class: "muted small", text: "Answer sent. Vali reads it at the next step." }));
   const key = "q:" + t.id;
-  const ta = h("textarea", { class: "edit answer-box", rows: "2", "aria-label": "Your answer", placeholder: "Your answer" });
+  const ta = h("textarea", { class: "v-textarea edit answer-box", rows: "2", "aria-label": "Your answer", placeholder: "Your answer" });
   ta.value = drafts.get(key) || "";
   ta.addEventListener("input", () => drafts.set(key, ta.value));
-  const btn = h("button", { class: "btn small", type: "button", text: "Send answer" });
+  const btn = h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Send answer" });
   const submit = async () => {
     const text = ta.value.trim();
     if (!text) { ta.focus(); return; }
@@ -534,7 +515,33 @@ function renderQuestion(t, q) {
   return h("div", { class: "exec-question" }, h("strong", { text: "Vali asks" }), h("p", { text: q.text }), ta, h("div", { class: "btns row end" }, btn));
 }
 
-function serverButton(text, cls, msg, done) {
+function inlineButton(t, text, cls, action) {
+  const key = `${t.id}:${text}`;
+  const b = h("button", { class: cls, type: "button", text, "aria-label": `${text}: ${t.task.split("\n\nMy answers:")[0]}`, "data-inline-action": key });
+  b.disabled = pendingInline.has(key);
+  b.addEventListener("click", async () => {
+    if (b.disabled) return;
+    const pending = { tasks: state.tasks, inFlight: true };
+    pendingInline.set(key, pending);
+    b.disabled = true;
+    try {
+      await action();
+    } catch (e) {
+      pendingInline.delete(key);
+      toast(e.message);
+    } finally {
+      pending.inFlight = false;
+      render();
+    }
+  });
+  return b;
+}
+
+function serverButton(text, cls, msg, done, task = null) {
+  if (task) return inlineButton(task, text, cls, async () => {
+    await send(msg);
+    if (done) toast(done);
+  });
   const b = h("button", { class: cls, type: "button", text });
   b.addEventListener("click", async () => {
     b.disabled = true;
@@ -551,9 +558,9 @@ function serverButton(text, cls, msg, done) {
 }
 
 function stillShot(t, n) {
-  const img = h("img", { class: "live-shot", alt: "The page where Vali stopped" });
+  const img = h("img", { class: "live-shot v-live__shot", alt: "The page where Vali stopped" });
   shotUrl(t, n).then((u) => { if (u) img.src = u; }).catch(() => {});
-  return h("div", { class: "live has-frame done" }, img);
+  return h("div", { class: "v-live done" }, img);
 }
 
 function renderExecution(t) {
@@ -561,28 +568,24 @@ function renderExecution(t) {
   if (!v) return null;
   const box = h("section", { class: `exec exec-${v.phase}` });
   if (v.live) {
-    const frame = h("div", { class: "live" + (frames.has(t.id) ? " has-frame" : "") }, liveImg(t), h("span", { class: "live-tag", text: v.status === "awaiting_approval" ? "Paused" : "Live" }));
+    const [status, tone] = errandStatus(t);
+    const frame = h("div", { class: "v-live" + (v.phase === "approval" ? " v-live--waiting" : ""), "data-empty": frames.has(t.id) ? null : "Waiting for the first picture…" },
+      liveImg(t), h("span", { class: `v-badge v-badge--dot ${tone ? "v-badge--" + tone : "v-badge--live"}`, text: status }));
     box.append(frame, h("div", { class: "exec-step" }, v.phase === "live" ? h("i", { class: "dot" }) : null, h("span", { text: v.step || (v.status === "starting" ? "Opening the browser…" : "Working…") }), v.stepCount ? h("span", { class: "muted n", text: `step ${v.stepCount}` }) : null));
     if (v.question) box.append(renderQuestion(t, v.question));
   }
   if (v.phase === "approval") {
-    box.append(h("h4", { text: "Vali will submit" }));
+    box.append(h("h4", { text: "Ready to send" }));
     if (v.summary) box.append(h("p", { class: "exec-summary", text: v.summary }));
     if (v.approval.length) box.append(filledList(v.approval));
-    box.append(h("div", { class: "btns row end exec-btns" },
-      serverButton("Stop", "btn ghost small", { type: "stop", taskId: t.id }, "Stopped. Nothing was sent."),
-      serverButton("Approve and submit", "btn small", { type: "approve", taskId: t.id }, "Approved. Vali submits once.")));
-  } else if (v.phase === "live") {
-    box.append(h("div", { class: "foot" }, h("span", { class: "muted", text: "Vali works in a cloud browser and stops before sending anything." }),
-      serverButton("Stop", "btn quiet small", { type: "stop", taskId: t.id })));
   } else if (v.phase === "blocked" || v.phase === "failed") {
-    const reason = v.blocker?.reason || v.result || v.error || "The browser run failed.";
+    const reason = v.blocker?.reason || v.result || v.error || "I couldn’t finish this errand.";
     box.append(h("p", { class: "exec-reason", text: reason }));
     const url = v.blocker?.url || v.url;
-    if (url) box.append(h("div", { class: "btns row" }, h("button", { class: "btn small", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
+    if (url) box.append(h("div", { class: "btns row" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
     if (v.filled.length) {
       box.append(h("h4", { text: "Filled so far" }), filledList(v.filled, { copy: true }),
-        h("div", { class: "btns row end" }, h("button", { class: "btn quiet small", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
+        h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
     }
     if (v.lastShot != null) box.append(stillShot(t, v.lastShot));
   } else if (v.phase === "done") {
@@ -598,55 +601,92 @@ function renderExecution(t) {
 function doItButton(t, opts) {
   const x = t.execution?.status;
   if (!t.backend || t.status !== "completed" || (x && (LIVE.has(x) || x === "done"))) return null;
-  return serverButton(x ? "Let Vali try again" : "Let Vali do it", "btn ghost small", { type: "execute", taskId: t.id, ...opts }, "Vali is opening the page in a cloud browser.");
+  return serverButton(x ? "Let Vali try again" : "Let Vali do it", "v-btn v-btn--quiet v-btn--sm", { type: "execute", taskId: t.id, ...opts }, "Vali is opening the page in a cloud browser.");
+}
+
+function selectTask(t, focusAnswer = false) {
+  open.delete(t.id);
+  open.add(t.id);
+  if (t.status === "completed" && !t.seen) send({ type: "seen", taskId: t.id }).catch((e) => toast(e.message));
+  render();
+  $("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (focusAnswer) $("detail").querySelector("textarea.answer-box, .missing input")?.focus();
 }
 
 function renderCard(t) {
-  const card = document.getElementById("cardTpl").content.firstElementChild.cloneNode(true);
-  const s = t.output?.structured;
-  const [label, cls] = executionPill(t.execution) || EXEC_PILL[t.execution?.status]
-    || (t.status === "completed" && s?.status ? RESULT_PILL[s.status] || STATUS.completed : STATUS[t.status] || [t.status, ""]);
+  const card = $("cardTpl").content.firstElementChild.cloneNode(true);
+  const [label, tone] = errandStatus(t);
+  card.dataset.tone = tone;
   card.querySelector(".still").src = `../mascot/${taskMascot(t)}.svg`;
-  card.querySelector(".pill").textContent = label;
-  if (cls) card.querySelector(".pill").classList.add(cls);
+  card.querySelector(".status").textContent = label;
   card.querySelector(".task-text").textContent = t.parentId ? "↳ " + t.task.split("\n\nMy answers:")[0] : t.task;
-  const meta = [elapsed(t)];
-  if (t.page?.title) meta.push(t.page.title.slice(0, 40));
-  if (t.cost != null) meta.push("$" + Number(t.cost).toFixed(3));
-  const metaEl = card.querySelector(".meta");
-  metaEl.textContent = meta.join(" · ");
-  if (t.source === "whatsapp") metaEl.prepend(h("span", { class: "tag", text: "WhatsApp" }));
-  if (t.status === "completed" && !t.seen) card.classList.add("unseen");
-  if (!open.has(t.id)) card.classList.add("collapsed");
-  card.querySelector(".card-head").addEventListener("click", () => {
-    open.has(t.id) ? open.delete(t.id) : open.add(t.id);
-    if (t.status === "completed" && !t.seen) send({ type: "seen", taskId: t.id });
-    render();
-  });
-  const body = card.querySelector(".card-body");
-  const exec = renderExecution(t);
-  if (exec) body.append(exec);
-  if (t.status === "queued" || t.status === "running") body.append(renderWorking(t));
-  else if (t.status === "completed") body.append(...renderResult(t));
-  else body.append(h("p", { class: "error", text: t.error || "Cancelled." }));
-  if (t.status !== "queued" && t.status !== "running") {
-    body.append(h("div", { class: "foot" }, h("span", { class: "muted", text: t.stopReason && t.stopReason !== "schema_satisfied" ? `Stopped: ${t.stopReason.replace(/_/g, " ")}` : "" }),
-      h("button", { class: "btn quiet small", text: "Remove", onclick: () => send({ type: "remove", taskId: t.id }) })));
+  card.querySelector(".meta").textContent = t.source === "whatsapp" ? " · WhatsApp" : "";
+  card.querySelector(".card-head").addEventListener("click", () => selectTask(t));
+  card.querySelector(".card-head").setAttribute("aria-expanded", String(t.id === selectedTask()?.id));
+  const actions = card.querySelector(".v-row__actions");
+  const v = executionView(t, { answered: answered.get(t.id) ?? null });
+  if ((v?.question && !v.question.answered) || (!v && t.output?.structured?.missing_info?.length)) {
+    actions.append(inlineButton(t, "Answer", "v-btn v-btn--quiet v-btn--sm", () => selectTask(t, true)));
+  } else if (v?.phase === "approval") {
+    actions.append(serverButton("Approve", "v-btn v-btn--quiet v-btn--sm", { type: "approve", taskId: t.id }, "Approved. I’m sending it now.", t));
+  }
+  if (v?.live || t.status === "queued" || t.status === "running") {
+    actions.append(serverButton("Stop", "v-btn v-btn--danger v-btn--sm", { type: v?.live ? "stop" : "cancel", taskId: t.id }, null, t));
   }
   return card;
 }
 
+function selectedTask() {
+  const selected = [...open].reverse().map((id) => state.tasks.find((t) => t.id === id)).find(Boolean);
+  return selected || state.tasks.find((t) => LIVE.has(t.execution?.status)) || state.tasks[0];
+}
+
+function renderDetail(t) {
+  const body = $("detail");
+  const expanded = body.dataset.taskId === t?.id && body.querySelector("details")?.open;
+  body.dataset.taskId = t?.id || "";
+  body.hidden = !t;
+  body.replaceChildren();
+  if (!t) return;
+  const [, tone] = errandStatus(t);
+  body.classList.toggle("v-card--attention", tone === "warning");
+  body.append(h("h2", { class: "v-card__title", text: t.task.split("\n\nMy answers:")[0] }));
+  const exec = renderExecution(t);
+  if (exec) body.append(exec);
+  if (t.status === "queued" || t.status === "running") body.append(renderWorking(t));
+  else if (t.status === "completed") {
+    const result = renderResult(t);
+    if (exec) body.append(h("details", { class: "result-details", open: expanded }, h("summary", { text: "Details and sources" }), ...result));
+    else body.append(...result);
+  }
+  else body.append(h("p", { class: "error", text: t.error || "Stopped." }));
+  if (t.status !== "queued" && t.status !== "running") {
+    body.append(h("div", { class: "foot" }, h("span", { class: "muted", text: [elapsed(t), t.page?.title, t.cost != null ? "$" + Number(t.cost).toFixed(3) : null].filter(Boolean).join(" · ") }),
+      serverButton("Remove", "v-btn v-btn--quiet v-btn--sm", { type: "remove", taskId: t.id })));
+  }
+}
+
 function render() {
   updateMascot();
+  for (const [key, pending] of pendingInline) {
+    if (!pending.inFlight && pending.tasks !== state.tasks) pendingInline.delete(key);
+  }
+  const list = $("list");
+  for (const button of list.querySelectorAll("[data-inline-action]")) button.disabled = pendingInline.has(button.dataset.inlineAction);
   const live = new Set(state.tasks.filter((t) => LIVE.has(t.execution?.status)).map((t) => t.id));
   for (const [id, url] of frames) if (!live.has(id)) { URL.revokeObjectURL(url); frames.delete(id); liveImgs.delete(id); }
-  const list = $("list");
-  // keep focus and scroll inside text areas stable while polling re-renders
-  const focused = document.activeElement?.closest?.(".card") ? document.activeElement : null;
+  // Preserve unsent answers and the caret while polling.
+  const focused = document.activeElement?.closest?.(".detail-card") ? document.activeElement : null;
   if (focused && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT")) return;
-  list.replaceChildren(...state.tasks.map(renderCard));
+  if (!list.contains(document.activeElement)) list.replaceChildren(...state.tasks.map(renderCard));
+  $("list").hidden = !state.tasks.length;
+  renderDetail(selectedTask());
   $("empty").hidden = state.tasks.length > 0;
 }
+
+$("list").addEventListener("focusout", () => setTimeout(() => {
+  if (!$("list").contains(document.activeElement)) render();
+}));
 
 // ---------- state ----------
 async function load() {
@@ -680,7 +720,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     render();
   }
   if (area === "session" && changes.prefill?.newValue) applyPrefill(changes.prefill.newValue);
-  if (area === "session" && changes.focusTask?.newValue) { open.add(changes.focusTask.newValue); render(); }
+  if (area === "session" && changes.focusTask?.newValue) { open.delete(changes.focusTask.newValue); open.add(changes.focusTask.newValue); render(); }
 });
 
 // Poll faster than the background alarm while the panel is open and something is running.
@@ -704,7 +744,7 @@ setInterval(() => {
   if (document.hidden) return;
   const live = state.tasks.filter((t) => t.backend && LIVE.has(t.execution?.status));
   if (!live.length) return;
-  for (const t of live) if (open.has(t.id)) refreshFrame(t);
+  for (const t of live) if (selectedTask()?.id === t.id) refreshFrame(t);
   if (++liveTicks % 2 === 0) send({ type: "poll" }).catch(() => {});
 }, 1000);
 
