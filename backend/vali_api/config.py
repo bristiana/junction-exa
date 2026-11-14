@@ -1,5 +1,6 @@
 """Environment configuration; optional integrations expose configured booleans."""
 import os
+import re
 from dataclasses import dataclass, field
 
 
@@ -28,6 +29,7 @@ class Config:
     whatsapp_phone_number_id: str = field(default_factory=lambda: os.getenv('WHATSAPP_PHONE_NUMBER_ID', ''))
     whatsapp_verify_token: str = field(default_factory=lambda: os.getenv('WHATSAPP_VERIFY_TOKEN', ''))
     whatsapp_app_secret: str = field(default_factory=lambda: os.getenv('WHATSAPP_APP_SECRET', ''))
+    whatsapp_number: str = field(default_factory=lambda: re.sub(r'\D', '', vali_env('VALI_WHATSAPP_NUMBER', '')))
     public_url: str = field(default_factory=lambda: vali_env('VALI_PUBLIC_URL', ''))
     allowed_origins: str = field(default_factory=lambda: vali_env('VALI_ALLOWED_ORIGINS', ''))
     daily_cap_usd: float = field(default_factory=lambda: float(vali_env('VALI_DAILY_CAP_USD', '10.0')))
