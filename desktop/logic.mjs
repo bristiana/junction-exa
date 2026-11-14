@@ -212,3 +212,13 @@ export function caption(text, max = 140) {
   const tail = s.slice(-max), cut = tail.search(/[.!?]\s+\S/);
   return '…' + (cut >= 0 && cut < max / 2 ? tail.slice(cut + 1).trim() : tail.slice(tail.indexOf(' ') + 1));
 }
+// The call's state in plain words, for the chip above Vali. 'ended' shows for a moment after hanging up.
+const TALK_STATUS = { connecting: 'Connecting…', listening: 'Listening', speaking: 'Vali is speaking', ended: 'Call ended' };
+export const talkStatus = mode => TALK_STATUS[mode] || '';
+// The caption under Vali during a call: the user's words while they are the newest line (and for at least `hold` ms,
+// so they are readable before Vali's answer replaces them), otherwise Vali's last line, otherwise a hint.
+export function talkCaption({ mode = '', agent = '', agentAt = 0, user = '', userAt = 0, now = Date.now(), hold = 2500 } = {}) {
+  if (user && (userAt >= agentAt || now - userAt < hold)) return { who: 'you', text: user };
+  if (agent) return { who: 'vali', text: agent };
+  return { who: 'vali', text: mode === 'connecting' ? 'One moment…' : 'I’m listening. Tell me the errand.' };
+}

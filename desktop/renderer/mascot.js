@@ -1,7 +1,7 @@
 // The mascot: a badge with the number of running errands, a ring and a bell when one needs you, a speech bubble with
 // one line, hover or click for the list of everything, Talk for a live voice conversation, and a drop target for a
 // photo or PDF of a letter. Where he stands and when he sleeps comes from main (stage.mjs, valet.mjs).
-import { letterType } from '../logic.mjs';
+import { letterType, talkCaption, talkStatus } from '../logic.mjs';
 import { bubbleLine, contextLine } from '../valet.mjs';
 import { createTalk } from './talk.js';
 window.__desktopErrors = [];
@@ -9,7 +9,9 @@ window.addEventListener('error', e => window.__desktopErrors.push(e.message));
 const mascot = Butler.create(document.getElementById('mascot'), { palette: 'lilac', state: 'idle', reducedMotion: 'auto', trackPointer: true });
 const $ = id => document.getElementById(id);
 const wrap = $('wrap');
-let current = null, override = '', overrideTimer = 0, talkMode = '', lastCaption = '';
+let current = null, override = '', overrideTimer = 0, talkMode = '';
+// The call's last lines: Vali's and the user's, with when they arrived (see talkCaption).
+let heard = { agent: '', agentAt: 0, user: '', userAt: 0 }, heardTimer = 0, statusTimer = 0;
 // Smoke and talk-check load this page with ?check=1; only then are the test hooks on window.
 const testing = new URLSearchParams(location.search).has('check');
 
@@ -25,8 +27,8 @@ function settle() {
 window.addEventListener('pointermove', () => { if (window.ValiFrames.paused) settle(); }, { passive: true });
 reduceMotion.addEventListener('change', () => settle());
 
-function line(text, action) {
-  $('line').textContent = text;
+function line(text, action, who = '') {
+  $('line').textContent = text; $('bubble').dataset.who = who;
   $('bubble').querySelector('.v-btn')?.remove();
   if (action) $('bubble').append(Object.assign(document.createElement('button'), { className: 'v-btn v-btn--quiet v-btn--sm', type: 'button', textContent: action[0], onclick: action[1] }));
 }
@@ -52,7 +54,7 @@ function update(s) {
   settle();
   if (override) return;
   mascot.setState(poseNow(s));
-  if (talkMode) line(lastCaption || (talkMode === 'connecting' ? 'One moment…' : 'I’m listening. Tell me the errand.'));
+  if (talkMode) { const c = talkCaption({ mode: talkMode, ...heard }); line(c.text, null, c.who); }
   else line(bubbleLine({ pose: s.pose, paused: s.paused, sleeping, welcome: s.welcome, badge: s.badge }));
 }
 function say(text, ms = 3000, pose, action) {
@@ -61,23 +63,34 @@ function say(text, ms = 3000, pose, action) {
 }
 
 // ---------- Talk to Vali ----------
+function status(key) {
+  clearTimeout(statusTimer);
+  $('status').textContent = talkStatus(key); $('status').dataset.mode = key; $('status').hidden = !key;
+}
+// A new caption: the user's words stay up for a moment (talkCaption), then Vali's line takes over by itself.
+function hear(text, who) {
+  const now = Date.now();
+  heard = who === 'you' ? { ...heard, user: text, userAt: now } : { ...heard, agent: text, agentAt: now };
+  if (who === 'you') { clearTimeout(heardTimer); heardTimer = setTimeout(() => current && update(current), 2600); }
+}
+function ended() { status('ended'); statusTimer = setTimeout(() => { if (!talkMode) status(''); }, 3000); }
 function setTalkMode(mode) {
-  talkMode = mode; if (!mode) lastCaption = '';
-  for (const c of ['talking', 'connecting', 'speaking']) wrap.classList.toggle(c, c === 'talking' ? !!mode : mode === c);
+  talkMode = mode; if (!mode) { heard = { agent: '', agentAt: 0, user: '', userAt: 0 }; clearTimeout(heardTimer); }
+  status(mode);
+  for (const c of ['talking', 'connecting', 'listening', 'speaking']) wrap.classList.toggle(c, c === 'talking' ? !!mode : mode === c);
   $('talk').classList.toggle('v-btn--danger', !!mode);
   $('talk').querySelector('span').textContent = mode ? 'Stop' : 'Talk';
   $('talk').setAttribute('aria-label', mode ? 'Stop talking' : 'Talk to Vali');
 }
-const talk = createTalk({
-  expose: testing,
-  level: v => wrap.style.setProperty('--level', v.toFixed(2)),
-  show({ mode, caption, error, mic }) {
-    if (mode !== undefined) setTalkMode(mode);
-    if (caption) lastCaption = caption;
-    if (error) { say(error, 8000, 'error', mic ? ['Open settings', () => window.vali.call('micSettings')] : null); return; }
-    if (current) update(current);
-  },
-});
+const level = v => wrap.style.setProperty('--level', v.toFixed(2));
+function showTalk({ mode, caption, who = 'vali', ended: hungUp, error, mic }) {
+  if (mode !== undefined) setTalkMode(mode);
+  if (caption) hear(caption, who);
+  if (hungUp) ended();
+  if (error) { say(error, 8000, 'error', mic ? ['Open settings', () => window.vali.call('micSettings')] : null); return; }
+  if (current) update(current);
+}
+const talk = createTalk({ expose: testing, level, show: showTalk });
 $('talk').onclick = e => { e.stopPropagation(); talk.toggle(); };
 window.vali.onTalk(action => (action === 'stop' ? talk.stop() : action === 'start' ? talk.start() : talk.toggle()));
 
@@ -113,5 +126,5 @@ window.addEventListener('drop', async e => {
   say(r.ok ? 'Got it. I’m on it.' : r.error, r.ok ? 3000 : 6000, r.ok ? 'working' : r.comingSoon ? 'idle' : 'error');
 });
 
-// Smoke only: show the talking state without a network call.
-if (testing) window.__smokeTalk = (mode, text = '') => { setTalkMode(mode); lastCaption = text; wrap.style.setProperty('--level', mode ? '0.6' : '0'); if (current) update(current); };
+// Smoke only: feed the bubble what talk.js would (see showTalk), plus a voice level, without a network call.
+if (testing) window.__smokeTalk = ({ level: v = 0, ...event }) => { showTalk(event); level(v); };

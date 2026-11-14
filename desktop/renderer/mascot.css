@@ -27,6 +27,22 @@ body[data-edge="left"] .bell { left: auto; right: 14px; }
 #wrap.talking::after { content: ""; position: absolute; inset: 20px; border-radius: 50%; border: 3px solid var(--v-accent); pointer-events: none;
   opacity: calc(.35 + var(--level, 0) * .65); transform: scale(calc(1 + var(--level, 0) * .1)); }
 #wrap.connecting::after { border-style: dashed; animation: v-pulse 1.2s var(--v-ease) infinite; }
+/* The user's turn: the ring turns green and glows with the microphone level. */
+#wrap.listening::after { border-color: var(--v-success); box-shadow: 0 0 calc(var(--level, 0) * 24px) var(--v-success); }
+
+/* The call's state above Vali in plain words (Connecting…, Listening, Vali is speaking, Call ended). Drags like the handle. */
+.talk-status { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); z-index: 2; display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 10px; border: 1px solid var(--v-line); border-radius: 999px; background: var(--v-surface); box-shadow: var(--v-shadow-1);
+  font-weight: 650; white-space: nowrap; cursor: grab; -webkit-app-region: drag; }
+.talk-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--v-muted); }
+.talk-status[data-mode="connecting"]::before { background: var(--v-warning); animation: v-pulse 1.2s var(--v-ease) infinite; }
+.talk-status[data-mode="listening"]::before { background: var(--v-success); animation: v-pulse 1.2s var(--v-ease) infinite; }
+.talk-status[data-mode="speaking"]::before { background: var(--v-accent); }
+body:not([data-place="home"]) .talk-status { visibility: hidden; }
+
+/* Captions: what the user just said reads as theirs, in the muted voice. */
+#bubble[data-who="you"] #line { color: var(--v-muted); font-style: italic; }
+#bubble[data-who="you"] #line::before { content: "You: "; color: var(--v-text); font-style: normal; font-weight: 650; }
 #wrap.speaking [data-p="mouthO"] { opacity: calc(.4 + var(--level, 0) * .6); }
 #wrap.speaking [data-p="smile"] { opacity: 0; }
 
@@ -44,10 +60,12 @@ body[data-edge="left"] .bell { left: auto; right: 14px; }
 #line { text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 #bubble::before { left: 50%; margin-left: -5px; }
 #bubble .v-btn { margin-top: var(--v-s-1); }
+/* A bubble with a button (the microphone message) grows upward from the window's foot, so the button stays on screen. */
+#bubble:has(.v-btn) { top: auto; bottom: var(--v-s-1); }
 body:not([data-place="home"]) #bubble { visibility: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
-  #wrap.you:not(.talking)::before, .bell, .zzz i, #wrap.connecting::after { animation: none; }
+  #wrap.you:not(.talking)::before, .bell, .zzz i, #wrap.connecting::after, .talk-status::before { animation: none; }
   #wrap.talking::after { transform: none; }
 }
 [hidden] { display: none !important; }
