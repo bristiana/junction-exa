@@ -78,6 +78,8 @@ python -m hoida_agent --url ... --goal ... --headful                # locally, a
 
 `modal_smoke.py` uses its own ephemeral app and an in-container SQLite store, so it never touches the deployed `hoida` app.
 
+**Deploying.** The sandbox is its own Modal app: `modal deploy backend/modal_sandbox.py` (app `hoida-sandbox`, function `browser_session`, no warm container). The API (`modal_app.py`, app `hoida`) spawns it by name and falls back to its own copy when the sandbox app is not deployed. Never deploy the sandbox branch's `modal_app.py` over `hoida`.
+
 ## Known limits
 
 - **Datacenter IP.** The browser runs on a Modal IP. Sites behind Cloudflare bot checks (HSL feedback, several airlines) block it; the run ends with a hand-off, it does not try to get around the check.
