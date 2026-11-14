@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request
 
 class SlidingWindow:
     """In-memory limits scoped to one process; shared storage is needed across replicas."""
-    def __init__(self, ip_limit=300, user_limit=30, seconds=600):
+    def __init__(self, ip_limit=1200, user_limit=30, seconds=600):
         self.ip_limit, self.user_limit, self.seconds = ip_limit, user_limit, seconds
         self.events = defaultdict(deque)
         self.lock = threading.Lock()

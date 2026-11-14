@@ -1,8 +1,10 @@
 """Vali HTTP API and injectable research/browser workers."""
 import asyncio
+from datetime import datetime, timedelta, timezone
 from contextvars import ContextVar
 import hmac
 import json
+import re
 from io import BytesIO
 from urllib.parse import urlsplit, unquote
 import threading
@@ -17,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from .config import Config
 from .exa import ExaClient, ExaError
+from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update
 from .guard import SlidingWindow, authenticate, check_origin, check_task_budget
 from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, map_find_output, progress_from_events
 from .jev import JevClient
@@ -68,13 +71,6 @@ def research_from_run(run, kind='agent'):
                 stop_reason=run.get('stopReason'), error=error.get('message') if isinstance(error, dict) else error)
 
 
-def create_monitor(config, query):
-    """Monitor provisioning is intentionally stubbed until webhook delivery is implemented."""
-    if not config.public_url:
-        raise NotImplementedError('VALI_PUBLIC_URL is required for monitors')
-    return None
-
-
 def poll_research_once(task_id, application=None):
     application = application or app
     store, exa = application.state.store, application.state.exa
@@ -92,9 +88,10 @@ def poll_research_once(task_id, application=None):
                 if progress:
                     research['progress'] = progress
             except ExaError:
-                pass
+                store.record_failure(task_id, 'research.events', 'Research progress is temporarily unavailable.')
     except ExaError as exc:
         if exc.status != 404:
+            store.record_failure(task_id, 'research.poll', 'Research service is temporarily unavailable.')
             return False
         research = {**previous, 'status': 'failed', 'error': 'The run was not found.'}
     if store.update_research(task_id, research, expected=previous) and research['status'] in {'completed', 'failed'}:
@@ -276,8 +273,11 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             check_origin(request.headers.get('origin'), config.allowed_origins)
             if oversized_request(request.url.path, request.headers.get('content-length')):
                 raise HTTPException(413, 'Upload exceeds 10 MB')
-            ip = request.client.host if request.client else 'unknown'
-            application.state.limiter.check('ip:' + ip, application.state.limiter.ip_limit)
+            image_get = request.method == 'GET' and re.fullmatch(
+                r'/v1/tasks/[^/]+/(?:live\.jpg|shots/[0-9]+\.jpg)', request.url.path)
+            if not image_get:
+                ip = request.client.host if request.client else 'unknown'
+                application.state.limiter.check('ip:' + ip, application.state.limiter.ip_limit)
         except HTTPException as exc:
             return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
         return await call_next(request)
@@ -345,14 +345,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                     run_request['previousRunId'] = previous_run
                 research = research_from_run(state.exa.create_run(run_request))
             else:
-                try:
-                    monitor_id = create_monitor(config, body.task)
-                except NotImplementedError:
-                    monitor_id = None
-                watch = state.store.create_watch(user['id'], body.task, monitor_id)
-                research.update(status='completed', watch_id=watch['id'], monitor_stubbed=True,
-                    output={'text': 'Watch created locally. Live monitoring is not enabled.', 'structured': {
-                        'answer': 'Watch created locally. Live monitoring is not enabled.', 'status': 'info_only',
+                watch, message = provision_watch(config, state.store, state.exa, user['id'], body.task, task['id'])
+                if watch is None:
+                    state.store.update_research(task['id'], {**research, 'status': 'failed', 'error': message})
+                    raise HTTPException(409, message)
+                research.update(status='completed', watch_id=watch['id'],
+                    monitor_stubbed=not bool(watch.get('secret')),
+                    output={'text': message, 'structured': {
+                        'answer': message, 'status': 'info_only',
                         'key_facts': [], 'steps': [], 'actions': [], 'missing_info': []}, 'grounding': []})
             state.store.update_research(task['id'], research)
         except ExaError:
@@ -523,10 +523,33 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def watches(user=Depends(authenticate)):
         return {'watches': application.state.store.list_watches(user['id'])}
 
-    @application.delete('/v1/watches/{wid}')
-    def delete_watch(wid: str, user=Depends(authenticate)):
-        if not application.state.store.delete_watch(user['id'], wid):
+    @application.post('/v1/watches/{wid}/seen')
+    def see_watch(wid: str, user=Depends(authenticate)):
+        if not application.state.store.see_watch_updates(user['id'], wid):
             raise HTTPException(404, 'Watch not found')
+        return {'ok': True}
+
+    @application.get('/v1/status')
+    def status(user=Depends(authenticate)):
+        return {'failures': application.state.store.recent_failures(user['id'])}
+
+    @application.delete('/v1/watches/{wid}')
+    def delete_watch(wid: str, force: bool = False, user=Depends(authenticate)):
+        store = application.state.store
+        watch = store.get_watch(wid)
+        if not watch or watch['user_id'] != user['id']:
+            raise HTTPException(404, 'Watch not found')
+        if not watch['exa_monitor_id'] and store.sql('SELECT slot FROM watch_slots WHERE watch_id=?', (wid,)):
+            expired = datetime.fromisoformat(watch['created_at']) <= datetime.now(timezone.utc) - timedelta(minutes=10)
+            if not force and not expired:
+                raise HTTPException(409, 'Live setup is uncertain. Check Exa before releasing this reserved watch with force=1.')
+        try:
+            delete_monitor(application.state.exa, watch)
+        except ExaError:
+            if watch.get('task_id'):
+                store.record_failure(watch['task_id'], 'watch.delete', 'Could not remove recurring search. Please retry.')
+            raise
+        store.delete_watch(user['id'], wid)
         return {'ok': True}
 
     @application.get('/webhooks/whatsapp')
@@ -617,8 +640,26 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.post('/webhooks/exa')
     async def exa_webhook(request: Request):
-        # No monitor is provisioned yet; do not accept unauthenticated task updates.
-        raise HTTPException(501, 'Monitor delivery is not implemented')
+        length = request.headers.get('content-length')
+        if length is not None:
+            try:
+                size = int(length)
+            except ValueError:
+                raise HTTPException(400, 'Invalid Content-Length') from None
+            if size > 256 * 1024:
+                raise HTTPException(413, 'Delivery exceeds 256 KB')
+        store = application.state.store
+        watch = store.get_watch(request.query_params.get('w', ''))
+        raw = await request.body()
+        if not watch or not verify_delivery(raw, request.headers.get('exa-signature', ''), watch.get('secret')):
+            raise HTTPException(403, 'Invalid signature')
+        try:
+            event_id, update = delivery_update(json.loads(raw), watch)
+        except (ValueError, TypeError):
+            raise HTTPException(400, 'Invalid delivery') from None
+        if update:
+            store.add_watch_update(watch, event_id, update)
+        return {'ok': True}
 
     add_voice_routes(
         application, owned=owned, active=active_task, approve=approve, cancel=cancel,

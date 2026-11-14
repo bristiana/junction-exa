@@ -11,7 +11,8 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from vali_api.app import create_app, poll_research_once, create_monitor
+from vali_api.app import create_app, poll_research_once
+from vali_api.monitors import create_monitor
 from vali_api.config import Config
 from vali_api.exa import ExaClient, ExaError
 from vali_api.research import SYSTEM_PROMPT, output_schema, build_query, build_run_request, FIND_SCHEMA, progress_from_events
@@ -153,6 +154,46 @@ def test_rate_limits_and_cap(api):
     assert client.get('/health').status_code == 429
 
 
+def test_image_gets_do_not_consume_ip_limit(api):
+    client, application, store, *_, user = api
+    task = client.post('/v1/tasks', json={'task': 'find café'}).json()
+    store.put_shot(task['id'], 1, b'shot-jpeg')
+    store.put_live_frame(task['id'], b'live-jpeg')
+    limiter = application.state.limiter
+    limiter.events.clear()
+    limiter.ip_limit = 2
+    urls = [f"/v1/tasks/{task['id']}/live.jpg", f"/v1/tasks/{task['id']}/shots/1.jpg"]
+    for _ in range(5):
+        for url in urls:
+            assert client.get(url, params={'t': user['token']}).status_code == 200
+    assert not limiter.events
+    assert client.get('/health').status_code == 200
+    assert client.get('/health').status_code == 200
+    assert client.get('/health').status_code == 429
+    for url in urls:
+        assert client.get(url, params={'t': user['token']}).status_code == 200
+        assert client.get(url, params={'t': 'wrong'}).status_code == 401
+
+
+def test_general_ip_limit_is_1200_per_ten_minutes(api, monkeypatch):
+    from types import SimpleNamespace
+    from vali_api import guard
+
+    client, application, *_ = api
+    limiter = application.state.limiter
+    assert (limiter.ip_limit, limiter.seconds, limiter.user_limit) == (1200, 600, 30)
+    current = [1000.0]
+    monkeypatch.setattr(guard, 'time', SimpleNamespace(monotonic=lambda: current[0]))
+    limiter.events.clear()
+    for _ in range(1200):
+        assert client.get('/health').status_code == 200
+    assert client.get('/health').status_code == 429
+    current[0] += 599
+    assert client.get('/health').status_code == 429
+    current[0] += 1
+    assert client.get('/health').status_code == 200
+
+
 @pytest.mark.parametrize('text,expected', [
     ('tell me when it changes', ('watch', 'monitor')), ('ilmoita uusista', ('watch', 'monitor')),
     ('etsi kahvila', ('find', 'search')), ('best near me', ('find', 'search')),
@@ -201,9 +242,9 @@ def test_watch_stub_and_origin(api):
     watches = client.get('/v1/watches').json()['watches']
     assert len(watches) == 1
     assert client.delete('/v1/watches/' + watches[0]['id']).status_code == 200
-    assert client.post('/webhooks/exa', json={}).status_code == 501
-    with pytest.raises(NotImplementedError):
-        create_monitor(Config(public_url=''), 'watch')
+    assert client.post('/webhooks/exa', json={}).status_code == 403
+    with pytest.raises(ValueError):
+        create_monitor(Config(public_url=''), 'watch', exa=application.state.exa, watch_id='w_test')
     application.state.config.allowed_origins = 'extension,http://localhost:3000'
     assert client.get('/health', headers={'Origin': 'https://example.com'}).status_code == 403
     assert client.get('/health', headers={'Origin': 'chrome-extension://abcdef'}).status_code == 200
