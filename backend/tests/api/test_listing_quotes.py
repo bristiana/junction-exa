@@ -7,7 +7,8 @@ shown film titles torn from their times and from the day heading, and asked for 
 import re
 from pathlib import Path
 
-from vali_api.citations import MAP_SYSTEM, PAGE_CHARS, cite, excerpt
+from vali_api.citations import MAP_SYSTEM, PAGE_CHARS, cite, excerpt, verbatim
+from vali_api.research import FIND_RULES, FIND_SCHEMA
 
 from test_answer_quality import FakeExa, output
 
@@ -94,3 +95,49 @@ def test_a_quote_for_an_item_not_on_the_page_backs_nothing():
 
 def test_the_judge_is_told_how_list_pages_state_things():
     assert 'one quote per item' in MAP_SYSTEM and 'headings above it' in MAP_SYSTEM
+
+
+# Second live case: "what's playing at Finnkino Tennispalatsi tomorrow evening" cited only kinoon.fi, whose Exa text
+# is times and seat counts with two film titles left ("Clayface", "DIGGER"). The judge quoted those two lines; both
+# were under the 12-character floor, so nothing counted, yet the page marker stayed and no opener was shown.
+KINOON = 'https://kinoon.fi/en/theaters/finnkino/tennispalatsi-helsinki-movies-and-showtimes'
+KINOON_PAGE = (Path(__file__).parents[1] / 'fixtures' / 'kinoon_tennispalatsi.txt').read_text()
+
+
+def test_a_short_quote_counts_only_as_a_whole_line_of_the_page():
+    assert verbatim('Clayface', KINOON_PAGE) and verbatim('DIGGER', KINOON_PAGE) and verbatim('Clayface', PAGE)
+    assert not verbatim('Digger', KINOON_PAGE)  # word for word, case too
+    assert not verbatim('Sali', KINOON_PAGE)  # part of the line "· Sali 2", not a line
+    assert not verbatim('21:15', KINOON_PAGE) and not verbatim('Dune', KINOON_PAGE)  # a bare time; not on the page
+
+
+def test_film_titles_on_a_times_only_page_back_the_films_they_name():
+    claim = 'Tomorrow evening Finnkino Tennispalatsi shows DIGGER and Clayface.'
+    result = output(claim, KINOON)
+    def judge(system, user, schema):
+        return {'claims': [{'i': 0, 'verdict': 'yes', 'soft': '',
+                            'support': [{'page': 0, 'quote': 'DIGGER'}, {'page': 0, 'quote': 'Clayface'}]}]}
+    cite(result, FakeExa({KINOON: KINOON_PAGE}), judge)
+    assert result['claims'][0] == {'text': claim, 'sources': [1], 'supported': True}
+    assert result['sources'][0]['quote'] == 'DIGGER' and 'lead' not in result
+
+
+def test_no_sentence_quoted_means_the_answer_opens_with_could_not_confirm():
+    answer = 'Evening showtimes start from 18:00 with Digger, Clayface and several others. Tickets cost 14 euros.'
+    result = output(answer, KINOON)
+    def judge(system, user, schema):  # lists the page but gives no quote that is on it
+        i = int(user.split('[C', 1)[1].split(']', 1)[0])
+        if i == 0:
+            return {'claims': [{'i': 0, 'verdict': 'partly', 'soft': 'Evening showtimes include Digger and Clayface.',
+                                'support': [{'page': 0, 'quote': 'Digger'}]}]}
+        return {'claims': [{'i': 1, 'verdict': 'no', 'soft': 'Not confirmed by the sources: Tickets cost 14 euros.',
+                            'support': [{'page': 0, 'quote': ''}]}]}
+    cite(result, FakeExa({KINOON: KINOON_PAGE}), judge, "what's playing at Finnkino Tennispalatsi tomorrow evening")
+    assert [c['supported'] for c in result['claims']] == [False, False]
+    assert all(c['sources'] == [] for c in result['claims'])  # no page marker without a quote
+    assert result['structured']['answer'].startswith('I could not confirm this on the pages I read. Check kinoon.fi.')
+
+
+def test_a_find_answer_names_each_listed_item_with_its_time():
+    assert 'several others' in FIND_RULES and 'with its time' in FIND_RULES
+    assert 'never "several others"' in FIND_SCHEMA['properties']['answer']['description']

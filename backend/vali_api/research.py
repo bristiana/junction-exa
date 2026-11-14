@@ -245,12 +245,15 @@ FIND_RULES = """
 Options found:
 - Give each option the price its page states, with the unit (for example "from 22.90 €", "9.89 snt/kWh + 5.90 €/month").
 - The answer names the concrete figure first (the lowest price found and which option it is). Never answer only
-  "prices vary": give the range the pages state. Only when no page states a price, say that no source gives one."""
+  "prices vary": give the range the pages state. Only when no page states a price, say that no source gives one.
+- Showtimes, timetables, opening hours: name each item with its time as the page lists it ("Clayface 21:15,
+  Digger 20:15"), only items and times a page states. Never "and several others" or "various films"."""
 
 FIND_SCHEMA = {'type': 'object', 'properties': {
     'answer': {'type': 'string', 'description': 'In the errand\'s language, 1-3 sentences. For a price or cost '
                'question, lead with the figure the pages state (the lowest price found and the option it is for); '
-               '"varies" only together with those figures. Only when no page states a price, say so.'},
+               '"varies" only together with those figures. Only when no page states a price, say so. For showtimes, '
+               'timetables or opening hours, name each item with its time as the page lists it, never "several others".'},
     'options': {'type': 'array', 'description': '3 to 5 different options (places, products or services), '
                 'each with its own page to book or buy', 'items': {'type': 'object', 'properties': {
         k: {'type': 'string'} for k in ('name', 'detail', 'price', 'url')},
