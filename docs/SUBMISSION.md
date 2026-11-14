@@ -24,7 +24,7 @@ Your valet for life in Finland. Just arrived? Permits, bank, Kela, HSL, saunas, 
 
 ## 3. Description (max 5000, markdown)
 
-Paste everything between the two lines. 3,970 characters (4,025 if the form counts line breaks as two).
+Paste everything between the two lines. 4,329 characters (4,385 if the form counts line breaks as two).
 
 ---
 
@@ -73,9 +73,9 @@ Every answer ends with the exact source links. On the web, every sentence has nu
 - Payments are always yours.
 - Page text is treated as data, never as instructions.
 
-## Tech
+## Built on Modal
 
-Exa, Modal (API and one cloud browser per run), Playwright and Chromium driven by Claude, Aiven Postgres, WhatsApp Cloud API, Chrome extension, plain JS web app.
+Modal does the heavy lifting. Every **Book it** runs in its own Modal container with Chromium (2 CPUs, 4 GB, one errand at a time), where Claude drives the real booking page and streams live frames and screenshots to WhatsApp and the web. **Continue** spawns a new run that picks up where you stopped. Exa research runs in separate Modal workers, and the API and web app run on Modal too, with Aiven Postgres as the shared store. Plus Playwright, WhatsApp Cloud API, a Chrome extension and a plain JS web app.
 
 ## Try it
 

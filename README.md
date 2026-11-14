@@ -40,6 +40,16 @@ Built for the Exa "Internet Butler" challenge at Junction 2026. Submission texts
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (API, task shape) and [docs/SANDBOX.md](docs/SANDBOX.md) (browser agent, guardrails, measured cost).
 
+## Built on Modal
+
+Modal does the heavy lifting:
+
+- **One cloud browser per errand.** "Book it" spawns `browser_session` in its own Modal app (`backend/modal_sandbox.py`, app `vali-sandbox`): Playwright Chromium driven by Claude, 2 CPUs, 4 GB, 15-minute limit, one errand per container at a time. It writes steps, screenshots, live frames and the approval state to the shared Postgres, so WhatsApp and the web show the run as it happens.
+- **Continue.** `POST /v1/tasks/{id}/continue` spawns a new run with the earlier steps and your answer, so a stopped errand picks up where it stopped.
+- **Research workers.** Each Exa Agent run is followed by its own `research_poller` function (15 minutes) that streams progress and runs the quote check.
+- **API and web app.** One FastAPI container (`backend/modal_app.py`, app `vali`) kept warm with `min_containers=1` (up to 2 containers, 20 requests each), serving the API, the WhatsApp webhook and the web app.
+- **Separate deploys.** The API and the sandbox deploy independently; the API spawns the sandbox by name.
+
 ## Channels, one task list
 
 - **WhatsApp** (`backend/vali_wa/`). The main channel: Vali's name and picture, tap buttons for actions, Approve / Stop on bookings, reactions instead of status messages (👀 🚀 ✍️ 👍 ✋), and watch findings pushed to the chat.

@@ -27,7 +27,8 @@ export function renderAnswer(task, handlers) {
           drafts(draftsOf(task)),
           run ? null : steps(stepsOf(task)),
           h('p', { class: 'exa-line' }, webWork(task))]),
-        run ? chapter('Vali did', renderExecution(task, { ...handlers, quiet: true })) : null,
+        run ? chapter('Vali did', [renderExecution(task, { ...handlers, quiet: true }),
+          h('p', { class: 'exa-line' }, 'In a private cloud browser on Modal, one errand at a time.')]) : null,
         chapter('Now', renderState(task, handlers), 'now'))));
 }
 
