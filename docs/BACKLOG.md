@@ -34,7 +34,7 @@ What to show (docs/DEMO.md, 3 minutes): give a task on the Mac (Alt+Space, talk,
 
 Before the demo: run `backend/.venv/bin/python scripts/demo_seed.py --token-file <demo token>` 10 minutes ahead, and do not deploy in the last hour (a deploy cuts running requests). Each account can spend $10 of research a day (VALI_DAILY_CAP_USD); use a fresh account for the demo. The dmg is at desktop/dist/Vali-0.1.0-arm64.dmg.
 
-Known limits: phone calls need a Twilio number or SIP trunk; iMessage is built but needs a dedicated Apple ID; WhatsApp is blocked by Meta until business verification; payments always hand over to you.
+Known limits: phone calls need a Twilio number or SIP trunk; iMessage is built but needs a dedicated Apple ID; payments always hand over to you.
 
 
 Five tracks until 10:00, presented to mentors in the morning:
@@ -78,7 +78,7 @@ Rules for the loop: every item is verified live, not only with tests. Commits as
 - [x] F2 README: what Vali is, setup, partners used (Exa, Modal, Aiven, Jev, ElevenLabs, Codex).
 
 ## G. Focus from 05:10: backend + Mac app (WhatsApp parked)
-WhatsApp is parked: Meta blocks sending from unverified business portfolios (131031). The code stays; it is not on the demo path.
+Update 14 Nov evening: WhatsApp is live on a new Meta app and test number and is now the main channel.
 - [x] K1 Backend endpoints for easy input: POST /v1/voice (audio upload -> ElevenLabs STT -> text, optional create task) and POST /v1/letters (image or PDF -> read_letter -> task with the letter as context). Reuse vali_media. Tests.
 - [x] K2 Device linking: the desktop app and the extension share one account. POST /v1/link/code (signed in device gets a 6-digit code) and POST /v1/link (other device trades the code for the same user token). Tests.
 - [x] K3 Golden stays green every tick; add a fourth golden errand that goes through /v1/letters with a sample letter image in scripts/fixtures/.
@@ -128,7 +128,7 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 ## Needs Bogdan
 - Rotate the keys pasted in chat during the event (Exa, Anthropic, ElevenLabs, Meta, Aiven, Modal).
 - Codex runs: the permission classifier sometimes blocks `codex exec` (sends code to OpenAI). Allow it with a Bash permission rule if you want Codex workers; until then Claude workers take those tasks.
-- WhatsApp (parked): Meta rejects every outbound message with 131031 "Business Account locked". In WhatsApp Manager, check why the account is locked and request a review. Until then Vali receives messages but cannot reply (A1, plus a live check of A3-A5).
+- WhatsApp: live since 14 Nov evening (new Meta app and test number).
 
 ## Log
 - 04:40 Merged the sandbox. Golden 3/3 live. WhatsApp hardening (305 tests) and extension live view, approval and blockers (42 tests) committed. CI added, PR #1 open. Desktop app in progress.
