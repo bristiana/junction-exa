@@ -28,6 +28,7 @@ from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request
 from .jev import JevClient
 from .llm import make_fast_json
 from .router import route
+from .stats import pick_channel, summarize
 from .store import make_store, now
 from .uploads import oversized_request
 from .voice_agent import add_voice_routes
@@ -44,6 +45,7 @@ class TaskBody(BaseModel):
     page: dict | None = None
     effort: Literal['minimal', 'low', 'medium', 'high', 'xhigh', 'auto', 'ultra'] = 'low'
     previous_task_id: str | None = None
+    channel: str | None = Field(default=None, max_length=20)
 
 
 class LinkBody(BaseModel):
@@ -290,7 +292,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     application.add_middleware(CORSMiddleware,
         allow_origins=[o.strip() for o in config.allowed_origins.split(',') if o.strip() and o.strip() != 'extension'],
         allow_origin_regex=r'^(chrome-extension://[a-z]+|https?://(localhost|127\.0\.0\.1)(:\d+)?)$',
-        allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allow_headers=['Authorization', 'Content-Type'])
+        allow_methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allow_headers=['Authorization', 'Content-Type', 'X-Vali-Channel'])
 
     @application.middleware('http')
     async def guards(request, call_next):
@@ -411,7 +413,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         return JSONResponse({'token': token}, headers={'Cache-Control': 'no-store'})
 
     @application.post('/v1/voice')
-    def voice_upload(audio: UploadFile = File(...), create: str | None = Form(None), user=Depends(authenticate)):
+    def voice_upload(request: Request, audio: UploadFile = File(...), create: str | None = Form(None), user=Depends(authenticate)):
         from .uploads import AUDIO_TYPES, audio_mime, read_upload
         from vali_media.voice import transcribe, VoiceError
         check_task_budget(application, user)
@@ -427,11 +429,13 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if create == '1':
             if len(text) > 20000:
                 raise HTTPException(422, 'Transcript exceeds task length limit')
-            return {**create_task_for_user(TaskBody(task=text), user, budget_checked=True), 'text': text}
+            channel = pick_channel(request.headers.get('x-vali-channel'), default='voice')
+            return {**create_task_for_user(TaskBody(task=text), user, channel, budget_checked=True), 'text': text}
         return {'text': text}
 
     @application.post('/v1/letters')
-    def letter_upload(file: UploadFile = File(...), note: str | None = Form(None, max_length=20000), user=Depends(authenticate)):
+    def letter_upload(request: Request, file: UploadFile = File(...), note: str | None = Form(None, max_length=20000),
+                      user=Depends(authenticate)):
         from .uploads import LETTER_TYPES, read_upload, letter_summary
         from vali_media.letters import LetterError
         check_task_budget(application, user)
@@ -444,11 +448,16 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(502, 'Letter reading failed privacy validation or provider request') from None
         page = {'title': 'Uploaded letter', 'url': '', 'text': summary, 'selection': summary}
         body = TaskBody(task=(note or '').strip() or 'Explain this letter and tell me what to do', page=page)
-        return create_task_for_user(body, user, budget_checked=True)
+        return create_task_for_user(body, user, pick_channel(request.headers.get('x-vali-channel'), default='letter'),
+                                    budget_checked=True)
 
     @application.post('/v1/tasks')
-    def create_task(body: TaskBody, user=Depends(authenticate)):
-        return create_task_for_user(body, user)
+    def create_task(body: TaskBody, request: Request, user=Depends(authenticate)):
+        return create_task_for_user(body, user, pick_channel(request.headers.get('x-vali-channel'), body.channel))
+
+    @application.get('/v1/stats')
+    def stats(user=Depends(authenticate)):
+        return summarize(application.state.store.list_tasks(user['id'], 100000))
 
     @application.get('/v1/tasks')
     def list_tasks(limit: int = Query(30, ge=1, le=100), user=Depends(authenticate)):
