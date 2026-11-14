@@ -3,16 +3,34 @@
 const base = (document.querySelector('meta[name="vali-api"]')?.content || '').replace(/\/+$/, '');
 const TOKEN_KEY = 'vali.token:' + (base || location.origin);
 let token = load(TOKEN_KEY);
-// A shared demo link (#demo=<token>) opens that account, already full; the token leaves the address bar at once.
+const DEMO_KEY = 'vali.demo:' + (base || location.origin);
+const SIGNED_KEY = 'vali.signed:' + (base || location.origin);
+// A shared demo link (#demo=<token>) offers that account, already full, on the sign-in page;
+// the token leaves the address bar at once.
 const demo = String(globalThis.location?.hash || '').match(/(?:^#|&)demo=([A-Za-z0-9_-]{20,})/);
 if (demo) {
-  token = demo[1];
-  save(TOKEN_KEY, token);
-  globalThis.history?.replaceState(null, '', location.pathname + location.search + '#/dashboard');
+  save(DEMO_KEY, demo[1]);
+  globalThis.history?.replaceState(null, '', location.pathname + location.search + '#/login');
 }
+
+// Who is signed in on this browser. Signing in is a choice on #/login; the token is the account.
+export const session = {
+  signedIn: () => load(SIGNED_KEY) === '1' && Boolean(token),
+  hasAccount: () => Boolean(token),
+  hasDemo: () => Boolean(load(DEMO_KEY)) && load(DEMO_KEY) !== token,
+  useDemo() { token = load(DEMO_KEY); save(TOKEN_KEY, token); },
+  markSignedIn: () => save(SIGNED_KEY, '1'),
+  async ensureAccount() { if (!token) await signIn(); },
+  reset() { token = null; remove(TOKEN_KEY); },
+  signOut() { remove(SIGNED_KEY); },
+};
 
 function load(key) {
   try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function remove(key) {
+  try { localStorage.removeItem(key); } catch { /* nothing stored */ }
 }
 
 function save(key, value) {

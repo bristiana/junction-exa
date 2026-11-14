@@ -1,6 +1,6 @@
 // The state block on top of an errand: the path it takes, where it stands now, and the one thing that moves it on.
 import { h } from './dom.js';
-import { errandStage, primaryAction } from './model.js';
+import { domainOf, errandStage, linkActions, primaryAction, safeUrl } from './model.js';
 
 export function renderState(task, handlers) {
   const stage = errandStage(task);
@@ -19,7 +19,9 @@ function next(task, stage, { onExecute, onStop, onApprove, onReply, onFollowUp, 
   const action = primaryAction(task);
   const fill = (label, cls = 'btn') => action
     ? h('button', { type: 'button', class: cls, onclick: (e) => onExecute(action.index, e.currentTarget) }, label) : null;
-  const site = action ? h('a', { class: 'btn quiet', href: action.url, target: '_blank', rel: 'noopener noreferrer' }, `Open ${action.domain}`) : null;
+  // The page where Vali stopped, so date, time and choices are already picked when the site keeps them in the address.
+  const where = safeUrl(task.execution?.current_url) || action?.url;
+  const site = where ? h('a', { class: 'btn quiet', href: where, target: '_blank', rel: 'noopener noreferrer' }, `Open ${domainOf(where)}`) : null;
   if (kind === 'fill') return h('div', { class: 'actions' }, fill('Fill it for me'), site);
   if (kind === 'stop') return h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop'));
   if (kind === 'approve') {
@@ -33,6 +35,15 @@ function next(task, stage, { onExecute, onStop, onApprove, onReply, onFollowUp, 
     if (stage.next.question) return [answerBox('Your answer', (text, button) => onResume(text, button), 'Continue'), h('div', { class: 'actions' }, site)];
     return h('div', { class: 'actions' },
       h('button', { type: 'button', class: 'btn', onclick: (e) => onResume('', e.currentTarget) }, 'Continue'), site);
+  }
+  if (kind === 'done') {
+    const links = linkActions(task);
+    return [
+      links.length ? h('ul', { class: 'options' }, links.map((link) => h('li', {},
+        h('a', { class: 'option', href: link.url, target: '_blank', rel: 'noopener noreferrer' },
+          h('span', { class: 'option-label' }, link.label), h('span', { class: 'option-site' }, link.domain))))) : null,
+      answerBox('Ask a follow-up, e.g. “book the cheapest one”', (text) => onFollowUp(text), 'Ask'),
+    ];
   }
   if (kind === 'retry') return h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn', onclick: () => onFollowUp(task.task) }, 'Try again'));
   return null;

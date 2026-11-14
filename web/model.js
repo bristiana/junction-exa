@@ -300,7 +300,7 @@ export function errandStage(task) {
       return out(0, 'you', `Vali needs one thing from you: ${missingInfo(task)[0]}`, { kind: 'answer', question: missingInfo(task).join(' ') });
     }
     if (action) return out(0, 'ready', `Vali found it. Next: fill the form on ${action.domain}.`, { kind: 'fill' });
-    return out(done, 'done', 'Answered. Nothing left to do.', null);
+    return out(done, 'done', 'Done. Pick an option or ask Vali something else.', { kind: 'done' });
   }
   if (status === 'starting') return out(1, 'working', `Opening ${site}.`, { kind: 'stop' });
   if (status === 'running') {
@@ -309,7 +309,7 @@ export function errandStage(task) {
   }
   if (status === 'awaiting_approval') return out(2, 'you', `Everything is filled on ${site}. Nothing is sent until you approve.`, { kind: 'approve' });
   if (status === 'submitting') return out(2, 'working', `Sending it on ${site}.`, null);
-  if (status === 'done') return out(done, 'done', run.result || 'Done.', null);
+  if (status === 'done' || status === 'completed') return out(done, 'done', run.result || 'Done.', { kind: 'done' });
   const reached = run.approval ? 2 : 1;
   if (status === 'stopped') {
     const where = asked ? `while Vali was asking “${asked.replace(/[?.]\s*$/, '')}?”` : last ? `after “${last}”.` : `on ${site}.`;
@@ -352,4 +352,10 @@ export function webWork(task) {
   if (!parts.length) return '';
   const line = parts.join(', ');
   return line[0].toUpperCase() + line.slice(1) + '.';
+}
+
+// The links Vali prepared for this errand, for the buttons under a finished errand: [{label, url, domain}].
+export function linkActions(task, n = 3) {
+  return list(structured(task).actions).map((a) => ({ label: String(a?.label || '').trim(), url: safeUrl(a?.url) }))
+    .filter((a) => a.url && a.label).slice(0, n).map((a) => ({ ...a, domain: domainOf(a.url) }));
 }

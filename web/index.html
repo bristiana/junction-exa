@@ -15,11 +15,13 @@
 <header class="top">
   <a class="brand" href="#/">Vali</a>
   <div class="top-right">
-    <a href="#/dashboard" class="link-btn" data-view="dashboard">Dashboard</a>
-    <button type="button" id="to-errands" class="link-btn">Errands</button>
-    <button type="button" id="to-whatsapp" class="link-btn">WhatsApp</button>
-    <button type="button" id="to-details" class="link-btn">Details</button>
+    <a href="#/dashboard" class="link-btn signed" data-view="dashboard">Dashboard</a>
+    <button type="button" id="to-errands" class="link-btn signed">Errands</button>
+    <button type="button" id="to-whatsapp" class="link-btn signed">WhatsApp</button>
+    <button type="button" id="to-details" class="link-btn signed">Details</button>
+    <button type="button" id="to-logout" class="link-btn signed">Log out</button>
     <span class="by-exa">Search by <b>Exa</b></span>
+    <a href="#/login" id="to-login" class="btn login-btn guest">Log in</a>
     <div class="palette-picker">
       <button type="button" id="palette" class="palette-btn" aria-label="Vali's colours" aria-haspopup="menu"></button>
     </div>
@@ -140,7 +142,8 @@
   <section id="working" class="view working" hidden></section>
   <section id="answer" class="view answer" hidden></section>
   <section id="hub" class="view hub" hidden></section>
-  <section id="dashboard" class="view dashboard" hidden aria-label="Dashboard"></section>
+  <section id="login" class="view login-view" hidden aria-label="Sign in"></section>
+<section id="dashboard" class="view dashboard" hidden aria-label="Dashboard"></section>
 </main>
 
 <dialog id="trust" class="sheet" aria-labelledby="trust-title">
