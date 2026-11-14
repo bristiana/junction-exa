@@ -14,9 +14,10 @@ function save(key, value) {
 }
 
 export class ApiError extends Error {
-  constructor(status, detail) {
+  constructor(status, detail, retryAfter) {
     super(detail || `Request failed (${status})`);
     this.status = status;
+    this.retryAfter = retryAfter; // seconds, from a 429's Retry-After header
   }
 }
 
@@ -28,7 +29,10 @@ async function send(method, path, body, auth = true) {
     method, headers, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiError(response.status, typeof data.detail === 'string' ? data.detail : '');
+  if (!response.ok) {
+    const retryAfter = Number(response.headers.get('Retry-After')) || data.retry_after || null;
+    throw new ApiError(response.status, typeof data.detail === 'string' ? data.detail : '', retryAfter);
+  }
   return data;
 }
 

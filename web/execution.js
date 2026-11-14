@@ -1,7 +1,7 @@
 // The browser run behind "Fill it for me": the live frame, its steps, and Approve / Stop when it waits for you.
 import { api } from './api.js';
 import { h } from './dom.js';
-import { domainOf } from './model.js';
+import { domainOf, runStatus } from './model.js';
 import { questionBlock } from './working.js';
 
 const STATUS = {
@@ -15,12 +15,13 @@ export function renderExecution(task, { onApprove, onStop, onReply }) {
   clearInterval(frameTimer);
   const run = task.execution;
   if (!run) return null;
-  const live = LIVE.has(run.status);
-  const waiting = run.status === 'awaiting_approval';
+  const status = runStatus(task);
+  const live = LIVE.has(status);
+  const waiting = status === 'awaiting_approval';
   const steps = Array.isArray(run.steps) ? run.steps.slice(-6) : [];
   return h('section', { class: `run card ${waiting ? 'waiting' : ''}` },
     h('div', { class: 'run-head' },
-      h('span', { class: `badge ${live ? 'live' : run.status}` }, STATUS[run.status] || run.status),
+      h('span', { class: `badge ${live ? 'live' : status}` }, STATUS[status] || status),
       run.current_url ? h('span', { class: 'run-url' }, domainOf(run.current_url)) : null),
     frame(task, live),
     steps.length ? h('ol', { class: 'run-steps' }, steps.map((step) => h('li', {}, step.text))) : null,
@@ -39,7 +40,7 @@ function frame(task, live) {
   if (!src) return null;
   const img = h('img', { class: 'run-frame', alt: 'What the browser Vali drives shows now', src: src + (live ? `&ts=${Date.now()}` : '') });
   img.addEventListener('error', () => { if (last) img.src = shotSrc(last.url); else img.hidden = true; }, { once: true });
-  if (live) frameTimer = setInterval(() => { if (img.isConnected) img.src = src + `&ts=${Date.now()}`; }, 1200);
+  if (live) frameTimer = setInterval(() => { if (img.isConnected && !document.hidden) img.src = src + `&ts=${Date.now()}`; }, 1200);
   return img;
 }
 

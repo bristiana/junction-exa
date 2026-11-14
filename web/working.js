@@ -3,7 +3,7 @@ import { h, show } from './dom.js';
 import { activityLine, activityOf, clock, elapsedSeconds, questionOf } from './model.js';
 
 export function renderWorking(task, { onReply, onCancel }) {
-  const lines = activityOf(task);
+  const lines = activityOf(task).slice(-8);
   show('working',
     h('div', { class: 'stage-slot', 'data-slot': 'working' }),
     h('p', { class: 'eyebrow' }, 'Working on'),
