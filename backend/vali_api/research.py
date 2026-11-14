@@ -230,16 +230,18 @@ def map_find_output(response):
     output = response.get('output') or {}
     content = output.get('content') or {}
     options = content.get('options') or []
+    next_step = content.get('next_step') or ''
     structured = {'answer': content.get('answer', ''), 'status': 'info_only',
                   'key_facts': [{'label': o.get('name', ''), 'value': ' · '.join(filter(None, [o.get('detail'), o.get('price')]))} for o in options],
-                  'steps': [], 'actions': [{'type': 'open_link', 'label': o.get('name', ''), 'url': o.get('url'), 'body': o.get('detail', '')} for o in options], 'missing_info': []}
+                  'steps': [{'title': 'Next step', 'detail': next_step}] if next_step else [],
+                  'actions': [{'type': 'open_link', 'label': o.get('name', ''), 'url': o.get('url'), 'body': o.get('detail', '')} for o in options], 'missing_info': []}
     grounding = []
     for entry in output.get('grounding') or []:
-        entry = dict(entry)
-        entry['field'] = re.sub(r'^options\[(\d+)\](?:\..*)?$', r'actions[\1]', entry.get('field', ''))
-        if entry['field'] == 'next_step':
-            entry['field'] = 'answer'
-        grounding.append(entry)
+        field = entry.get('field', '')
+        option = re.match(r'^options\[(\d+)\]', field)
+        # An option is shown twice, as key_facts[i] (detail, price) and actions[i] (its link): both carry its citations.
+        fields = [f'key_facts[{option[1]}]', f'actions[{option[1]}]'] if option else ['steps[0]' if field == 'next_step' else field]
+        grounding.extend({**entry, 'field': name} for name in fields)
     return {'text': content.get('answer', ''), 'structured': structured, 'grounding': grounding}
 
 

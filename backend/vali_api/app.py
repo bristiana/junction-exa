@@ -17,12 +17,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
+from .citations import cite
 from .config import Config
 from .exa import ExaClient, ExaError
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update
 from .guard import SlidingWindow, authenticate, check_origin, check_task_budget
 from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
+from .llm import make_fast_json
 from .router import route
 from .store import make_store, now
 from .uploads import oversized_request
@@ -94,6 +96,8 @@ def poll_research_once(task_id, application=None):
             store.record_failure(task_id, 'research.poll', 'Research service is temporarily unavailable.')
             return False
         research = {**previous, 'status': 'failed', 'error': 'The run was not found.'}
+    if research['status'] == 'completed' and research.get('output'):
+        research['cost'] = (research.get('cost') or 0) + cite(research['output'], exa, application.state.llm, task['task'])
     if store.update_research(task_id, research, expected=previous) and research['status'] in {'completed', 'failed'}:
         push_task(application, task_id, render_result)
     return research['status'] in TERMINAL
@@ -243,7 +247,8 @@ TERMS_HTML = PAGE.format(title='terms', body=(
     '<p>Vali is a demo built for a hackathon. It prepares forms and bookings and always stops before the final '
     'button until you approve. You stay responsible for what you approve. No warranty.</p>'))
 
-def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None, whatsapp_api=None):
+def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None, whatsapp_api=None,
+               llm=None):
     config = config or Config()
 
     @asynccontextmanager
@@ -263,6 +268,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     application.state.store = store
     application.state.exa = exa or ExaClient(config.exa_api_key)
     application.state.jev = jev or (JevClient(config.jev_api_key) if config.jev_api_key else None)
+    application.state.llm = llm or make_fast_json(config.anthropic_api_key)
     application.state.limiter = SlidingWindow()
     application.state.spawn_research_poller = spawn_research_poller or (lambda tid: spawn_thread(research_poller_loop, tid, application))
     application.state.spawn_browser_session = spawn_browser_session or (lambda tid, goal, url, profile: spawn_thread(run_browser_session, tid, goal, url, profile, application))
@@ -343,7 +349,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             if kind == 'search':
                 response = state.exa.search(dict(query=build_query(body.task, body.page), type='auto', numResults=5,
                                                 contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT))
-                research.update(status='completed', output=map_find_output(response), cost=(response.get('costDollars') or {}).get('total'))
+                output = map_find_output(response)
+                extra = cite(output, state.exa, state.llm, body.task)
+                research.update(status='completed', output=output, cost=((response.get('costDollars') or {}).get('total') or 0) + extra)
             elif kind == 'agent':
                 run_request = build_run_request(body.task, body.page, effort=body.effort)
                 if previous_run:
