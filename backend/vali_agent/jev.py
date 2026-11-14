@@ -8,6 +8,7 @@ callers ask twice with reversed order and average.
 import os
 import re
 import httpx
+from .untrusted import untrusted
 
 JEV_URL = 'https://api.typesafe.ai/v1/systemone'
 
@@ -79,7 +80,7 @@ def final_submit_probability(jev, element_description, page_summary):
         return None
     state = (f'A browser agent fills a web form for a user and is about to click this element:\n{element_description[:800]}\n\n'
              f'Page:\n{page_summary[:3000]}')
-    return jev.yes(state, 'Would clicking this element make an irreversible commitment: submit the form, send a message, '
+    return jev.yes(untrusted(state), 'Would clicking this element make an irreversible commitment: submit the form, send a message, '
                           'confirm a booking or reservation, place an order or pay? (Moving to the next step of a form, '
                           'opening a menu, choosing a date or accepting cookies is not irreversible.)')
 
@@ -97,4 +98,4 @@ def find_element(jev, target, snapshot_text, limit=25):
     scored = sorted(enumerate(lines), key=lambda il: (-len(words & set(re.findall(r'\w+', il[1].lower()))), il[0]))
     options = {l.split(']')[0][1:]: l.split('] ', 1)[1][:200] for _, l in scored[:limit]}
     state = f'A web page that a browser agent is using. Visible text: {text[:1500]}'
-    return jev.choose(state, f'Which element is this: {target}?', options)
+    return jev.choose(untrusted(state), f'Which element is this: {target}?', options)

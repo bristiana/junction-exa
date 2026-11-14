@@ -5,6 +5,7 @@ import threading
 import time
 
 from .privacy import private_values
+from .guard import is_final_submit
 
 # Fields holding real profile values are blurred in every frame and screenshot that leaves the sandbox.
 _BLUR_STYLE = '[data-vali-private]{filter:blur(7px)!important}'
@@ -61,17 +62,23 @@ class Screencast:
             self.cdp.send('Page.screencastFrameAck', {'sessionId': event['sessionId']})
         except Exception:
             pass
+        if self._closed:
+            return
         now = time.monotonic()
         if now - self._last_sent < self.interval:
             return
         self._last_sent = now
         with self._lock:
+            if self._closed:
+                return
             self._latest = base64.b64decode(event['data'])
         self._wake.set()
 
     def push(self, jpeg):
         """Send a frame taken some other way (e.g. after an action) through the same writer."""
         with self._lock:
+            if self._closed:
+                return
             self._latest = jpeg
         self._wake.set()
 
@@ -80,7 +87,7 @@ class Screencast:
             self._wake.wait(1.0)
             self._wake.clear()
             with self._lock:
-                jpeg, self._latest = self._latest, None
+                jpeg, self._latest = self._latest if not self._closed else None, None
             if jpeg:
                 try:
                     self.on_frame(jpeg)
@@ -88,20 +95,22 @@ class Screencast:
                     pass
 
     def close(self):
+        with self._lock:
+            self._closed = True
+            self._latest = None
         try:
             self.cdp.send('Page.stopScreencast')
         except Exception:
             pass
-        self._closed = True
         self._wake.set()
         self._writer.join(timeout=3)
 
 
 # Minimal-consent buttons (en, fi, sv, de). Never "accept all".
 _MINIMAL = re.compile(
-    r'reject( all)?|decline( all)?|deny( all)?|refuse( all)?|only (strictly )?(necessary|essential|required)|'
+    r'accept (only )?(strictly )?(necessary|essential|required)( cookies)?|continue with only necessary cookies|reject( all)?|decline( all)?|deny( all)?|refuse( all)?|only (strictly )?(necessary|essential|required)|'
     r'(necessary|essential|required)( cookies)? only|continue without accepting|hylkää( kaikki)?|kiellä( kaikki)?|'
-    r'vain (välttämättömät|pakolliset|tarpeelliset)|välttämättömät evästeet|avvisa( alla)?|endast nödvändiga|alle ablehnen|nur notwendige', re.I)
+    r'(hyväksy )?vain (välttämättömät|pakolliset|tarpeelliset)|välttämättömät evästeet|avvisa( alla)?|endast nödvändiga|alle ablehnen|nur notwendige', re.I)
 _ACCEPT_ALL = re.compile(r'accept all|allow all|hyväksy kaikki|salli kaikki|godkänn alla|acceptera alla|alle akzeptieren', re.I)
 _BANNER = re.compile(r'cookie|eväst|kaka|kakor|consent|gdpr|privacy|tietosuoja', re.I)
 
@@ -117,7 +126,7 @@ _CANDIDATES = r'''() => {
       let box = el, around = '';
       for (let i = 0; i < 6 && box; i++, box = box.parentElement) around = box.innerText || around;
       el.setAttribute('data-vali-consent', String(out.length));
-      out.push({label, around: (around + ' ' + (el.closest('[id],[class]')?.id || '') + ' ' + (el.closest('[class]')?.className || '')).slice(0, 3000)});
+      out.push({label, description: el.outerHTML + (el.form && el.type === 'submit' ? ' button type=submit' : ''), around: (around + ' ' + (el.closest('[id],[class]')?.id || '') + ' ' + (el.closest('[class]')?.className || '')).slice(0, 3000)});
     }
     for (const el of root.querySelectorAll('*')) if (el.shadowRoot) walk(el.shadowRoot);
   };
@@ -131,7 +140,8 @@ def dismiss_cookie_banner(page):
     for frame in page.frames:
         try:
             for i, c in enumerate(frame.evaluate(_CANDIDATES)):
-                if _MINIMAL.search(c['label']) and not _ACCEPT_ALL.search(c['label']) and _BANNER.search(str(c['around'])):
+                if (_MINIMAL.search(c['label']) and not _ACCEPT_ALL.search(c['label'])
+                        and not is_final_submit(c.get('description', ''), c['label']) and _BANNER.search(str(c['around']))):
                     frame.locator(f'[data-vali-consent="{i}"]').first.click(timeout=2000)
                     page.wait_for_timeout(400)
                     return c['label']

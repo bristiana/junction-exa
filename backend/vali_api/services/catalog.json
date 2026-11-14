@@ -1,0 +1,567 @@
+[
+  {
+    "id": "residence-permit",
+    "name": "Residence permit for studies",
+    "organisation": "Migri",
+    "official_url": "https://migri.fi/en/studying-in-finland",
+    "group": "before_arrival",
+    "applies_to": {
+      "citizenship": [
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "organisation account",
+    "vali_help": "fill in the cloud browser",
+    "exa_query_template": "Residence permit for studies Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "eu-registration",
+    "name": "EU citizen right of residence",
+    "organisation": "Migri",
+    "official_url": "https://migri.fi/en/registration-of-right-of-residence",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "organisation account",
+    "vali_help": "fill in the cloud browser",
+    "exa_query_template": "EU citizen right of residence Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "student-housing",
+    "name": "Student housing in the Helsinki region",
+    "organisation": "HOAS",
+    "official_url": "https://hoas.fi/en/applicants/",
+    "group": "before_arrival",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "fill in the cloud browser",
+    "exa_query_template": "Student housing in the Helsinki region Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "student-housing-finland",
+    "name": "Student housing across Finland",
+    "organisation": "Finnish Association of Student Housing Organisations",
+    "official_url": "https://www.soa.fi/en/",
+    "group": "before_arrival",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "answer",
+    "exa_query_template": "Student housing across Finland Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "rental-deposit",
+    "name": "Rental agreements and deposits",
+    "organisation": "Finnish Competition and Consumer Authority",
+    "official_url": "https://www.kkv.fi/en/consumer-affairs/housing/rental-apartments/",
+    "group": "before_arrival",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "guide only",
+    "exa_query_template": "Rental agreements and deposits Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "university-registration",
+    "name": "University enrolment and accepting a study place",
+    "organisation": "Studyinfo / Finnish National Agency for Education",
+    "official_url": "https://opintopolku.fi/konfo/en/sivu/acceptance-of-an-offer-of-admission",
+    "group": "before_arrival",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "organisation account",
+    "vali_help": "fill in your own tab",
+    "exa_query_template": "University enrolment and accepting a study place Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "dvv-registration",
+    "name": "Registration and personal identity code",
+    "organisation": "Digital and Population Data Services Agency",
+    "official_url": "https://dvv.fi/en/foreigner-registration",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "fill in the cloud browser",
+    "exa_query_template": "Registration and personal identity code Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "municipality",
+    "name": "Municipality of residence",
+    "organisation": "Digital and Population Data Services Agency",
+    "official_url": "https://dvv.fi/en/municipality-of-residence",
+    "group": "first_month",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "fill in your own tab",
+    "exa_query_template": "Municipality of residence Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "tax-card",
+    "name": "Tax card for employment",
+    "organisation": "Finnish Tax Administration",
+    "official_url": "https://www.vero.fi/en/individuals/tax-cards-and-tax-returns/tax_card/",
+    "group": "first_month",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "fill in your own tab",
+    "exa_query_template": "Tax card for employment Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "bank-account",
+    "name": "Bank account and basic banking without a Finnish ID",
+    "organisation": "Finnish Financial Supervisory Authority",
+    "official_url": "https://www.finanssivalvonta.fi/en/consumers/basic-banking-services/",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "guide only",
+    "exa_query_template": "Basic banking services Finland without a Finnish identity card or personal identity code identification requirements consumer rights {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "strong-identification",
+    "name": "Finnish electronic identification",
+    "organisation": "Suomi.fi",
+    "official_url": "https://www.suomi.fi/instructions-and-support/identification",
+    "group": "first_month",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "guide only",
+    "exa_query_template": "Finnish electronic identification Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "kela-coverage",
+    "name": "Social security coverage when moving to Finland",
+    "organisation": "Kela",
+    "official_url": "https://www.kela.fi/moving-to-finland",
+    "group": "first_month",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "fill in your own tab",
+    "exa_query_template": "Social security coverage when moving to Finland Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "student-aid",
+    "name": "Student financial aid eligibility",
+    "organisation": "Kela",
+    "official_url": "https://www.kela.fi/financial-aid-for-students",
+    "group": "first_month",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "fill in your own tab",
+    "exa_query_template": "Student financial aid eligibility Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "meal-subsidy",
+    "name": "Higher education student meal subsidy",
+    "organisation": "Kela",
+    "official_url": "https://www.kela.fi/meal-subsidy",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "answer",
+    "exa_query_template": "Higher education student meal subsidy Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "housing-supplement",
+    "name": "Student housing supplement eligibility",
+    "organisation": "Kela",
+    "official_url": "https://www.kela.fi/financial-aid-for-students-housing-supplement",
+    "group": "first_month",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "fill in your own tab",
+    "exa_query_template": "Student housing supplement eligibility Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "student-health",
+    "name": "Student healthcare and FSHS eligibility",
+    "organisation": "Finnish Student Health Service",
+    "official_url": "https://www.yths.fi/en/using-services/who-can-use-our-services/",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "guide only",
+    "exa_query_template": "Student healthcare and FSHS eligibility Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "student-union",
+    "name": "Student union membership",
+    "organisation": "National Union of University Students in Finland",
+    "official_url": "https://syl.fi/en/",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "organisation account",
+    "vali_help": "guide only",
+    "exa_query_template": "Student union membership Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "student-card",
+    "name": "Student card and status verification",
+    "organisation": "Frank",
+    "official_url": "https://www.frank.fi/en/studentcard/",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "organisation account",
+    "vali_help": "fill in your own tab",
+    "exa_query_template": "Student card and status verification Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "transport-discount",
+    "name": "HSL student transport discount",
+    "organisation": "HSL",
+    "official_url": "https://www.hsl.fi/en/tickets-and-fares/discounted-travel/student-discount",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "fill in your own tab",
+    "exa_query_template": "HSL student transport discount Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": true
+  },
+  {
+    "id": "regional-transport",
+    "name": "Regional public transport and student fares",
+    "organisation": "Matkahuolto",
+    "official_url": "https://www.matkahuolto.fi/passengers/travel-tickets/student-ticket-and-student-discount",
+    "group": "ongoing",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "answer",
+    "exa_query_template": "Regional public transport and student fares Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "phone-sim",
+    "name": "Mobile SIM cards and subscription agreements",
+    "organisation": "Finnish Transport and Communications Agency",
+    "official_url": "https://www.traficom.fi/en/telephone-and-broadband/telephone-and-broadband-users/subscriber-connection-agreement",
+    "group": "first_week",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "guide only",
+    "exa_query_template": "Mobile SIM cards prepaid and telephone subscription agreements Finland consumer rights identification requirements {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "working-rights",
+    "name": "Student working rights and permitted hours",
+    "organisation": "Migri",
+    "official_url": "https://migri.fi/en/working-and-internships-during-studies",
+    "group": "ongoing",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "answer",
+    "exa_query_template": "Student working rights and permitted hours Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "permit-extension",
+    "name": "Extended permit for studies",
+    "organisation": "Migri / Enter Finland",
+    "official_url": "https://migri.fi/en/extended-permit-for-studies",
+    "group": "ongoing",
+    "applies_to": {
+      "citizenship": [
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "organisation account",
+    "vali_help": "fill in the cloud browser",
+    "exa_query_template": "Extended permit for studies Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "european-health-card",
+    "name": "European Health Insurance Card",
+    "organisation": "Kela",
+    "official_url": "https://www.kela.fi/european-health-insurance-card",
+    "group": "before_arrival",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "Finnish bank ID or mobile ID",
+    "vali_help": "guide only",
+    "exa_query_template": "European Health Insurance Card Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "emergency",
+    "name": "Emergency numbers and urgent help",
+    "organisation": "Emergency Response Centre Agency",
+    "official_url": "https://112.fi/en/erc-number",
+    "group": "before_arrival",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "answer",
+    "exa_query_template": "Emergency numbers and urgent help Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  },
+  {
+    "id": "find-doctor",
+    "name": "Find a public health station or doctor",
+    "organisation": "City of Helsinki",
+    "official_url": "https://www.hel.fi/en/health-and-social-services/health-care/health-stations",
+    "group": "ongoing",
+    "applies_to": {
+      "citizenship": [
+        "eu",
+        "non_eu"
+      ],
+      "study": [
+        "degree",
+        "exchange"
+      ]
+    },
+    "login_needed": "none",
+    "vali_help": "guide only",
+    "exa_query_template": "Find a public health station or doctor Finland official current eligibility application requirements fees deadlines opening hours {context}",
+    "unverified": false,
+    "verified_at": "2026-11-14"
+  }
+]

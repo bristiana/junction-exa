@@ -1,7 +1,10 @@
 """One persistent browser page with snapshot references."""
 import re
+from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright, expect, TimeoutError as BrowserTimeout
 from .privacy import private_values
+from .guard import is_final_submit
+from .scope import site, reject_placeholders
 
 _CAPTURE = r'''({start, limit}) => {
  const visible = el => { const r=el.getBoundingClientRect(), s=getComputedStyle(el);
@@ -87,9 +90,23 @@ _CAPTURE = r'''({start, limit}) => {
 }'''
 
 
+_ACTION_DESCRIPTION = r'''el => {
+    // Only recognized suggestions may omit the implicit HTML submit type.
+    const suggestion = el.matches('[role="option"]') ||
+        !!el.closest('typeahead-container,.pac-container,[class*="autocomplete"],[role="listbox"],[role="option"]');
+    const implicitChoice = suggestion && !el.hasAttribute('type');
+    return [el.outerHTML + ' ' +
+        [...(el.labels || [])].map(label => label.innerText).join(' ') + ' ' +
+        (el.localName === 'button' && !implicitChoice ? 'button type=' + el.type : ''),
+        el.getAttribute('aria-label') || el.innerText || el.value || ''];
+}'''
+
+
 class Browser:
     def __init__(self, headless=True):
         self._refs = {}
+        self._start_site = None
+        self._private_profile = {}
         self._runtime = sync_playwright().start()
         try:
             self._browser = self._runtime.chromium.launch(headless=headless)
@@ -171,9 +188,31 @@ class Browser:
             raise ValueError('Unknown element reference; call read_page')
         return frame.locator(f'[data-vali-ref="{ref}"]')
 
+    def _check_url(self, url):
+        reject_placeholders(url, self._private_profile)
+        return site(url)
+
+    def personal_field(self, ref, approved=False):
+        """Personal substitutions belong in ordinary fields on the authorized site only."""
+        frame = self._refs[ref]
+        if site(frame.url) != self._start_site and not approved:
+            raise ValueError('Personal placeholders outside the start site: call request_approval first for this site and field')
+        safe = self._element(ref).evaluate(r"""el => {
+          const metadata = [el.name, el.id, el.getAttribute('aria-label'), el.placeholder,
+            el.getAttribute('autocomplete')].filter(Boolean).join(' ');
+          return (el.localName === 'select' || el.localName === 'input' &&
+            ['text','email','tel','number','date','time','datetime-local'].includes(el.type)) &&
+            !/search|query|message|comment|chat|recipient|compose|url|website/i.test(metadata);
+        }""")
+        if not safe:
+            raise ValueError('Personal placeholders require a personal-data field, never search or messages')
+
     def goto(self, url):
+        destination = self._check_url(url)
         if not re.match(r'^https?://', url, re.I):
             raise ValueError('Only http and https URLs are supported')
+        if self._start_site is None:
+            self._start_site = destination
         self._refs = {}
         try:
             # Public-sector sites can take well over 5 s to load.
@@ -209,29 +248,16 @@ class Browser:
 
     def element_text(self, ref):
         try:
-            return self._element(ref).evaluate('''el => el.outerHTML + ' ' +
-              (el.localName==='button' ? 'button type='+el.type : '') + ' ' +
-              (el.innerText||'') + ' ' + (el.getAttribute('aria-label')||'')''', timeout=2500)
+            return ' '.join(self._element(ref).evaluate(_ACTION_DESCRIPTION, timeout=2500))
         except BrowserTimeout as exc:
             raise ValueError('That element is gone (the page changed); call read_page') from exc
 
     def element_info(self, ref):
-        """Visible label, whether it only opens a menu (toggle) or picks an autocomplete choice (suggestion, typeless button), and whether it sits in a cookie/consent banner."""
-        return self._element(ref).evaluate('''el => {
-          // An autocomplete or listbox choice, often a <button> with no type (so type=submit by default) in a form.
-          // The list must hold no fields itself, so a form that merely has an "autocomplete" class is not one.
-          const list = el.closest('[role=listbox],typeahead-container,[class*=typeahead i],[class*=autocomplete i],.pac-container');
-          return {
-          label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\\s+/g,' ').trim().slice(0,120),
-          tag: el.localName, href: el.getAttribute('href') || '', inForm: !!el.closest('form'),
-          // Only a plain menu button counts as a toggle: never a submit button or anything inside a form.
-          toggle: (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-haspopup')) && el.type !== 'submit' && !el.closest('form'),
-          suggestion: !!el.closest('[role=option]') || (!!list && !list.querySelector('input:not([type=hidden]),select,textarea')),
-          typeless: el.localName === 'button' && !el.hasAttribute('type'),
-          consent: !!el.closest('[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[data-testid*=cookie i],[data-testid*=consent i],[id*=usercentrics i],[id*=onetrust i],#CybotCookiebotDialog,[aria-label*=cookie i],[aria-label*=eväst i]')
-            || /cookie|eväste|kakor|consent/i.test((el.closest('dialog,[role=dialog],[aria-modal=true]')?.innerText || '').slice(0, 3000))
-            || (el.getRootNode() instanceof ShadowRoot && /usercentrics|cookie|consent/i.test(el.getRootNode().host.id + ' ' + el.getRootNode().host.className))
-        }; }''', timeout=2500)
+        """Visible label and whether the element only opens a menu."""
+        return self._element(ref).evaluate(r'''el => ({
+          label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\s+/g,' ').trim().slice(0,120),
+          toggle: (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-haspopup')) && el.type !== 'submit' && !el.closest('form')
+        })''', timeout=2500)
 
     def _fallback_click(self, el, exc):
         """Visually hidden radios/checkboxes are clicked through their label; covered or off-screen elements by a DOM click."""
@@ -245,16 +271,32 @@ class Browser:
         if how not in ('label', 'dom'):
             raise exc
 
-    def click(self, ref):
+    def _guard_click(self, el, approved=False):
+        href = el.evaluate("el => el.closest('a[href]')?.getAttribute('href') || ''")
+        if href:
+            self._check_url(urljoin(self.page.url, href))
+        description, label = el.evaluate(_ACTION_DESCRIPTION)
+        final = is_final_submit(description, label)
+        if final and not approved:
+            raise ValueError('Call request_approval first')
+        return final
+
+    def click(self, ref, approved=False):
         el = self._element(ref)
+        self._guard_click(el, approved)
         try:
             # Wizards often enable "Next" a moment after the last choice.
             expect(el).to_be_enabled(timeout=3000)
         except AssertionError:
             raise ValueError('This button is disabled: fill or choose the required fields first, then read_page')
+        final = self._guard_click(el, approved)
         try:
             el.click(timeout=3000)
         except BrowserTimeout as exc:
+            # A timeout may follow a successful submission; never retry a final action.
+            if final:
+                raise
+            self._guard_click(el)
             self._fallback_click(el, exc)
         self._settle()
 
@@ -299,17 +341,29 @@ class Browser:
         el.dispatch_event('change')
         return True
 
-    def select(self, ref, option):
+    def select(self, ref, option, approved=False):
         el = self._element(ref)
         if el.evaluate("el => el.localName==='select'"):
             options = el.locator('option').evaluate_all('(els)=>els.map(o=>({value:o.value,text:o.text}))')
             match = next((o for o in options if option.casefold() in (o['value'].casefold(),o['text'].casefold())), None)
             if not match:
                 raise ValueError('Option not found')
+            if is_final_submit('', match['text']) and not approved:
+                raise ValueError('Call request_approval first')
             el.select_option(value=match['value'])
         else:
-            # Popups may be portalled outside the control, including inside shadow roots.
+            if not el.evaluate(r'''el => {
+              const ids = (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\s+/).filter(Boolean);
+              const listbox = ids.some(id => el.getRootNode().getElementById(id)?.getAttribute('role') === 'listbox');
+              const adjacentList = el.matches('button[type=button]') &&
+                  el.nextElementSibling?.matches('ul,ol') && !!el.nextElementSibling.querySelector('li');
+              return el.getAttribute('role') === 'combobox' || listbox || adjacentList || el.getAttribute('aria-haspopup') === 'listbox';
+            }'''):
+                raise ValueError('Choose a native select or a validated combobox')
+            # Every internal click uses the same guard, with at most one approved final action.
             frame = self._refs[ref]
+            if self._guard_click(el, approved):
+                approved = False
             el.click()
             popup = el.evaluate("el => (el.getAttribute('aria-controls')||el.getAttribute('aria-owns')||'').split(/\\s+/).filter(Boolean).map(id=>'#'+CSS.escape(id)).join(',')")
             scope = frame.locator(popup) if popup else frame.locator('body')
@@ -327,11 +381,13 @@ class Browser:
             matches = exact or contains
             if not matches:
                 raise ValueError('Option not found')
+            self._guard_click(matches[0], approved)
             matches[0].click()
         self._settle()
 
-    def check(self, ref, checked):
+    def check(self, ref, checked, approved=False):
         el = self._element(ref)
+        self._guard_click(el, approved)
         # A native <input type=checkbox role=switch> keeps its state in .checked, not aria-checked.
         native = el.evaluate("el => el.localName === 'input'")
         if el.get_attribute('role') in ('checkbox','switch') and not native:
@@ -355,8 +411,8 @@ class Browser:
         self._settle()
 
     def press(self, key):
-        # Forms can submit implicitly even with focus in a text field.
-        if re.search(r'enter|return|space|\s', key, re.I) and any(frame.evaluate("""() => { let el=document.activeElement; while(el?.shadowRoot?.activeElement) el=el.shadowRoot.activeElement; return !!el?.closest('form,button,[role=button],a'); }""") for frame in self.page.frames):
+        # Activation keys can commit through custom widgets even outside a form.
+        if re.search(r'enter|return|space|\s', key, re.I):
             raise ValueError('Call request_approval first; use click for final submission')
         self.page.keyboard.press(key)
         self._settle()

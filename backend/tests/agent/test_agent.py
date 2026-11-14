@@ -50,7 +50,7 @@ def test_claim_privacy_and_approval(local_site, monkeypatch):
         ('select_option', {'ref': 'e4', 'option': 'Refund'}),
         ('set_checkbox', {'ref': 'e5', 'checked': True}),
         ('set_checkbox', {'ref': 'e7', 'checked': True}),
-        ('type_text', {'ref': 'e8', 'text': 'Contact {{name}} at {{email}}'}),
+        ('type_text', {'ref': 'e8', 'text': 'Please process this claim'}),
         ('click', {'ref': 'e9'}),
     ]
     def approve(messages):
@@ -65,7 +65,7 @@ def test_claim_privacy_and_approval(local_site, monkeypatch):
         return 'finish', {'result':'Claim submitted, reference FC-1234'}
     calls.append(finish)
     llm = ScriptedLLM(calls)
-    result = run_browser_agent('Claim for Test Person', local_site+'/claim.html', PROFILE, hooks(), llm)
+    result = run_browser_agent('Fill name, email and phone in the contact fields', local_site+'/claim.html', PROFILE, hooks(), llm)
     assert result.status == 'done', result
     assert 'FC-1234' in result.result
     assert all(value in instances[0].values for value in PROFILE.values())
@@ -96,12 +96,12 @@ def test_cookie_banner(local_site):
     assert result.status == 'done'
 
 
-@pytest.mark.parametrize('text', ['Submit claim','SEND','Pay now','Confirm booking','Book','Reserve','Place order','Complete','Finish','Lähetä','Maksa','Vahvista','Varaa','Tilaa','Jatka maksamaan','<button type="submit">Continue</button>','<input type=submit value=Continue>'])
+@pytest.mark.parametrize('text', ['Submit claim','SEND','Pay now','Confirm booking','Book','Reserve','Place order','Complete','Finish','Lähetä','Maksa','Vahvista','Varaa','Tilaa','Jatka maksamaan'])
 def test_final_submit(text):
     assert is_final_submit(text)
 
 
-@pytest.mark.parametrize('text', ['Next page','Reject optional cookies','Full name','Select country'])
+@pytest.mark.parametrize('text', ['Next page','Reject optional cookies','Full name','Select country', '<button type="submit">Continue</button>', '<input type=submit value=Continue>'])
 def test_not_final_submit(text):
     assert not is_final_submit(text)
 
