@@ -551,3 +551,32 @@ def test_booking_provider_navigation_and_personal_field_approval(local_site):
     assert result.status == 'done'
     assert result.filled == [{'label': 'Email', 'value': '{{email}}'}]
     assert 'Navigated to ' + provider in steps
+
+
+def test_unnamed_details_need_the_users_yes(local_site):
+    asked = []
+
+    def typed(messages):
+        assert 'May I use' not in messages[-1]['content'][0]['content']
+        return 'type_text', {'ref': 'e1', 'text': '{{email}}'}
+
+    def refused(messages):
+        assert 'did not allow their email' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'ok'}
+    # The request names no detail: the saved name is typed only after a yes, the email is refused after a no.
+    answers = iter(['Yes, go ahead', 'no'])
+    llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{name}}'}), typed, refused])
+    hooks = plain_hooks(ask_user=lambda q: asked.append(q) or next(answers))
+    result = run_browser_agent('Book a sauna', local_site + '/claim.html', PROFILE, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done' and len(asked) == 2
+    assert asked[0].startswith('May I use your saved name on ') and 'email' in asked[1]
+    assert '{{email}}' in llm.received[0][0] and 'With the user' in llm.received[0][0]
+
+
+def test_without_ask_user_unnamed_details_stay_refused(local_site):
+    def refused(messages):
+        assert 'Missing profile placeholder: email' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'ok'}
+    llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{email}}'}), refused])
+    result = run_browser_agent('Book a sauna', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done' and 'With the user' not in llm.received[0][0]
