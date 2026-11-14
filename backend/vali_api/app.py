@@ -21,7 +21,7 @@ from .config import Config
 from .exa import ExaClient, ExaError
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update
 from .guard import SlidingWindow, authenticate, check_origin, check_task_budget
-from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, map_find_output, progress_from_events
+from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .router import route
 from .store import make_store, now
@@ -67,7 +67,7 @@ ACTIVE_EXECUTION = {'starting', 'running', 'awaiting_approval', 'submitting'}
 def research_from_run(run, kind='agent'):
     error = run.get('error')
     return dict(kind=kind, status=run.get('status', 'queued'), run_id=run.get('id'), progress=[],
-                output=run.get('output'), cost=(run.get('costDollars') or {}).get('total'),
+                output=guard_recipients(run.get('output')), cost=(run.get('costDollars') or {}).get('total'),
                 stop_reason=run.get('stopReason'), error=error.get('message') if isinstance(error, dict) else error)
 
 

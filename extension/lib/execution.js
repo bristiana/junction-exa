@@ -82,10 +82,12 @@ const rows = (list, profile) =>
 export function executionView(t, { profile = {}, answered = null } = {}) {
   const x = t?.execution;
   if (!x?.status) return null;
+  // The server only ever holds {{placeholders}}; the user's own details go back in here, on the device.
+  const fill = (s) => fillPlaceholders(String(s || ""), profile);
   const steps = Array.isArray(x.steps) ? x.steps : [];
-  const step = steps.length ? String(steps[steps.length - 1]?.text || "") : "";
+  const step = steps.length ? fill(steps[steps.length - 1]?.text) : "";
   const q = x.question && typeof x.question === "object" ? x.question : x.question ? { text: String(x.question) } : null;
-  const question = q?.text && LIVE.has(x.status) ? { text: String(q.text), at: q.at || q.text, answered: answered != null && answered === (q.at || q.text) } : null;
+  const question = q?.text && LIVE.has(x.status) ? { text: fill(q.text), at: q.at || q.text, answered: answered != null && answered === (q.at || q.text) } : null;
   const blocker = blockerOf(x);
   const phase =
     x.status === "awaiting_approval" ? "approval"
@@ -101,12 +103,12 @@ export function executionView(t, { profile = {}, answered = null } = {}) {
     stepCount: steps.length,
     lastShot,
     question,
-    summary: String(x.approval?.summary || ""),
+    summary: fill(x.approval?.summary),
     approval: rows(x.approval?.filled, profile),
     blocker,
     filled: rows(x.filled, profile),
     url: http(x.current_url) || http(x.start_url),
-    result: String(x.result || ""),
-    error: String(x.error || ""),
+    result: fill(x.result),
+    error: fill(x.error),
   };
 }

@@ -723,8 +723,8 @@ function renderCard(t) {
   card.querySelector(".card-head").addEventListener("click", () => selectTask(t));
   card.dataset.id = t.id;
   const actions = card.querySelector(".v-row__actions");
-  const v = executionView(t, { answered: answered.get(t.id) ?? null });
-  const detail = [statusDetail(t, v)].filter(Boolean).join(" · ");
+  const v = executionView(t, { profile: state.profile, answered: answered.get(t.id) ?? null });
+  const detail = fillPlaceholders(statusDetail(t, v) || "", state.profile);
   card.querySelector(".meta").textContent = detail ? " · " + detail : "";
   card.querySelector(".v-row__status").title = label + card.querySelector(".meta").textContent;
   if ((v?.question && !v.question.answered) || (!v && t.output?.structured?.missing_info?.length)) {
@@ -790,7 +790,7 @@ function renderDetail(t) {
     else body.append(...result);
   }
   else if (t.status === "failed") {
-    body.append(h("p", { class: "exec-reason", text: t.error || "I couldn’t finish this errand." }),
+    body.append(h("p", { class: "exec-reason", text: fillPlaceholders(t.error, state.profile) || "I couldn’t finish this errand." }),
       h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Try again", onclick: async () => {
         try { open.add((await send({ type: "start", task: t.task, tabId: t.tabId, usePage: !!t.page })).id); } catch (e) { toast(e.message); }
       } })));

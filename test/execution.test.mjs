@@ -176,3 +176,13 @@ test("ensureConnected gets a token on first use of the server, once", async (t) 
   assert.equal(await ensureConnected(), null);
   assert.equal(store.backendToken, undefined);
 });
+
+test("the done result and the approval summary get the saved details on the device; unknown placeholders stay visible", () => {
+  const profile = { name: "Testi Testinen", phone: "+358 40 000 0000", email: "testi@example.com" };
+  const done = executionView(task({ status: "done", result: "Form sent for {{name}} ({{phone}}, {{email}}), ref {{booking_reference}}" }), { profile });
+  assert.equal(done.result, "Form sent for Testi Testinen (+358 40 000 0000, testi@example.com), ref {{booking_reference}}");
+  assert.equal(executionView(task({ status: "done", result: "Sent for {{name}}" })).result, "Sent for {{name}}");
+  const asking = executionView(task({ status: "awaiting_approval", approval: { summary: "Send as {{name}}" }, steps: [{ text: "Typed {{email}}" }] }), { profile });
+  assert.equal(asking.summary, "Send as Testi Testinen");
+  assert.equal(asking.step, "Typed testi@example.com");
+});

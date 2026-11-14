@@ -85,12 +85,63 @@ def test_identity_and_email_defense_in_depth(monkeypatch):
     output = letters.read_letter(b"image", "image/jpeg")
     assert "demo@example.invalid" not in output
     assert "010101A000A" not in output
-    assert "{{email}}" in output and "{{id_code}}" in output
+    assert "{{sender_email}}" in output and "{{id_code}}" in output
+
+
+def test_sender_contact_never_becomes_the_users_own_placeholder(monkeypatch):
+    # A company landlord keeps its reply address; a private sender's address and any unmapped one get sender placeholders.
+    text = ("Esimerkki Kodit Oy raises the rent. Contact vuokra@example.com, +358 40 000 0001 or "
+            "private@example.invalid.\nErrand: Reply to vuokra@example.com.")
+    fake_client(monkeypatch, json.dumps({"text": text, "redactions": {"private@example.invalid": "{{sender_email}}"},
+                                         "public": ["vuokra@example.com", "private@example.invalid"]}))
+    output = letters.read_letter(b"image", "image/png")
+    assert "vuokra@example.com" in output and output.endswith("Errand: Reply to vuokra@example.com.")
+    assert "private@example.invalid" not in output and "{{sender_email}}" in output
+    assert "{{sender_phone}}" in output and "{{email}}" not in output and "{{phone}}" not in output
+
+
+
+def public_output(monkeypatch, text, public, redactions=None):
+    fake_client(monkeypatch, json.dumps({"text": text + "\nErrand: Reply.", "redactions": redactions or {}, "public": public}))
+    return letters.read_letter(b"image", "image/png")
+
+
+def test_public_entry_not_in_the_text_or_not_a_contact_is_dropped(monkeypatch):
+    output = public_output(monkeypatch, "Write to info@example.com or Esimerkki Kodit Oy.",
+                           ["other@example.com", "Esimerkki Kodit Oy", "Testikatu 12", "info@example.com"])
+    assert "info@example.com" in output and "{{sender_email}}" not in output
+    output = public_output(monkeypatch, "Write to info@example.com.", ["INFO@example.com is the address"])
+    assert "info@example.com" not in output and "{{sender_email}}" in output
+
+
+def test_public_is_capped_at_five(monkeypatch):
+    emails = [f"office{n}@example.com" for n in range(7)]
+    output = public_output(monkeypatch, "Contacts: " + ", ".join(emails) + ".", emails)
+    assert [e in output for e in emails] == [True] * 5 + [False] * 2
+    assert output.count("{{sender_email}}") == 2
+
+
+def test_a_redacted_private_email_listed_as_public_stays_masked(monkeypatch):
+    output = public_output(monkeypatch, "Your landlord Sample Person: sample@example.invalid, +358 40 000 0003.",
+                           ["sample@example.invalid", "+358 40 000 0003"],
+                           {"Sample Person": "{{sender_name}}", "sample@example.invalid": "{{sender_email}}",
+                            "+358 40 000 0003": "{{name}}"})
+    assert "sample@example.invalid" not in output and "+358 40 000 0003" not in output
+    assert output.startswith("Your landlord {{sender_name}}: {{sender_email}}, {{name}}.")
+
+
+def test_a_model_that_still_says_email_gets_the_sender_placeholder(monkeypatch):
+    # The golden letter regression: the landlord's address came back as the user's {{email}} and the draft went to the user.
+    fake_client(monkeypatch, envelope("Ask the landlord at landlord@example.invalid or {{email}}.\nErrand: Email {{ EMAIL }}.",
+                                      {"landlord@example.invalid": "{{ Email }}", "+358 40 000 0002": "{{PHONE}}"}))
+    output = letters.read_letter(b"image", "image/png")
+    assert output == "Ask the landlord at {{sender_email}} or {{sender_email}}.\nErrand: Email {{sender_email}}."
 
 
 @pytest.mark.parametrize("raw", [
     "unstructured response", '{}', '{"text": "Errand: Reply."}',
     envelope("No final errand"), envelope("Errand: Reply.", {"Sample": "unsafe"}),
+    json.dumps({"text": "Errand: Reply.", "redactions": {}, "public": "vuokra@example.com"}),
 ])
 def test_invalid_output_never_returned(monkeypatch, raw):
     fake_client(monkeypatch, raw)
