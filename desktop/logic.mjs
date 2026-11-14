@@ -146,15 +146,16 @@ export function openConfig(saved, decrypt) {
 
 // ---------- the glance list beside the mascot ----------
 // One plain line per errand, in the same words as the extension panel (extension/lib/panel-state.js):
-// Waiting for your OK, Needs login, Working, Done, Stopped, Couldn't finish. needsYou: Vali waits on the user.
+// Waiting for your OK, Needs your answer, Needs login, Needs you, Working, Done, Stopped, Couldn't finish.
+// needsYou: Vali waits on the user.
 export function plainStatus(t) {
   const x = t?.execution, v = executionView(t);
   const you = (label, needsYou = true, active = false) => ({ label, tone: 'you', needsYou, active });
-  if (v?.question && !v.question.answered) return you('Waiting for your OK', true, true);
+  if (v?.question && !v.question.answered) return you('Needs your answer', true, true);
   if (v?.phase === 'approval' && !x.approval_decision) return you('Waiting for your OK', true, true);
   if (v?.phase === 'blocked') {
     if (v.blocker.kind === 'suspicious') return { label: 'Couldn’t finish', tone: 'bad', needsYou: false, active: false };
-    return you(['login', 'suomifi'].includes(v.blocker.kind) ? 'Needs login' : 'Waiting for your OK', !t.seen);
+    return you(['login', 'suomifi'].includes(v.blocker.kind) ? 'Needs login' : 'Needs you', !t.seen);
   }
   if (v?.live) return { label: 'Working', tone: 'busy', needsYou: false, active: true };
   if (x?.status === 'done') return { label: 'Done', tone: 'done', needsYou: false, active: false };
@@ -164,7 +165,7 @@ export function plainStatus(t) {
   if (t?.status === 'cancelled') return { label: 'Stopped', tone: 'quiet', needsYou: false, active: false };
   const s = t?.output?.structured?.status;
   if (t?.status === 'failed' || s === 'not_possible') return { label: 'Couldn’t finish', tone: 'bad', needsYou: false, active: false };
-  if (s === 'ready_to_approve' || s === 'needs_info') return you('Waiting for your OK', !t.seen);
+  if (s === 'ready_to_approve' || s === 'needs_info') return you(s === 'needs_info' ? 'Needs your answer' : 'Waiting for your OK', !t.seen);
   return { label: 'Done', tone: 'done', needsYou: false, active: false };
 }
 

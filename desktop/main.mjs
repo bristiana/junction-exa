@@ -1,5 +1,5 @@
-import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, globalShortcut, Notification, shell, safeStorage, systemPreferences, session as electronSession, clipboard, powerMonitor } from 'electron';
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
+import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, globalShortcut, Notification, shell, safeStorage, systemPreferences, session as electronSession, clipboard, powerMonitor, nativeTheme } from 'electron';
+import { readFile, writeFile, rename, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeBaseUrl, toLocalTask, isActive } from './vendor/lib/backend.js';
@@ -247,6 +247,7 @@ ipcMain.handle('vali', async (event, op, arg) => {
   if (op === 'talkSession') return event.sender === mascot.webContents ? talkSession() : { ok: false, error: 'Talk from the mascot.' };
   if (op === 'talk') { if (event.sender !== mascot.webContents) throw new Error('Talk from the mascot.');
     if (TALK_MODES.has(arg) && arg !== talking) { talking = arg; wake(); trayMenu(); publish(); } return; }
+  if (op === 'talkToggle') { toggleTalk(); return; }
   if (op === 'chat') { openChat(arg); return; }
   if (op === 'hideQuick') { quick.hide(); return; }
   if (op === 'newErrand') { showQuick(); return; }
@@ -422,6 +423,11 @@ async function capture(w, out, name) {
   const image = await w.webContents.capturePage(); if (image.isEmpty()) throw new Error(`${name} capture is empty`);
   await writeFile(path.join(out, `${name}.png`), image.toPNG());
 }
+// The same window in the light theme too (the OS theme otherwise decides), saved as <name>-light.png.
+async function captureLight(w, out, name) {
+  nativeTheme.themeSource = 'light'; await new Promise(r => setTimeout(r, 300));
+  try { await capture(w, out, `${name}-light`); } finally { nativeTheme.themeSource = 'system'; await new Promise(r => setTimeout(r, 300)); }
+}
 async function runSmoke() {
   const out = process.env.SMOKE_OUT;
   if (!out) throw new Error('--smoke requires SMOKE_OUT.');
@@ -447,7 +453,15 @@ async function runSmoke() {
   showGlance({ focus: true });
   await waitFor(glance, `document.querySelector('.item.you .answer input')`, 'Glance answer box missing');
   await capture(glance, out, 'glance-question');
+  // Every kind of errand at once: waiting for your OK, needs your answer, running with the live view, needs login, done.
+  const before = tasks;
+  updateTasks(smokeAll());
+  showGlance({ focus: true });
+  await waitFor(glance, `document.querySelectorAll('.item').length >= 6 && document.querySelector('.live img')?.naturalWidth > 0`, 'Glance with every state missing');
+  await capture(glance, out, 'glance-all'); await captureLight(glance, out, 'glance-all');
+  updateTasks(before);
   openChat();
+  await captureLight(chat, out, 'chat');
   // Settings: link with the extension, profile with the personal ID, advanced server settings folded away.
   await chat.webContents.executeJavaScript(`document.getElementById('settingsBtn').click()`);
   await waitFor(chat, `document.querySelector('.desktop-link') && document.querySelector('[data-k="personal_id"]')`, 'Settings link/profile missing');
@@ -455,6 +469,18 @@ async function runSmoke() {
   await capture(chat, out, 'settings');
   await chat.webContents.executeJavaScript(`document.querySelector('.desktop-link').scrollIntoView({block:'start'})`);
   await capture(chat, out, 'settings-profile');
+  await chat.webContents.executeJavaScript(`document.querySelector('.desktop-imessage').scrollIntoView({block:'start'})`);
+  await capture(chat, out, 'settings-imessage');
+  // The quick box: empty, then typing with a suggestion picked by arrow key, then a dropped letter.
+  showQuick('type', {});
+  await waitFor(quick, `document.querySelectorAll('.suggestion').length > 0 && !document.querySelector('.chip')`, 'Empty quick box missing');
+  await capture(quick, out, 'quick-empty');
+  await quick.webContents.executeJavaScript(`(() => { const i = document.getElementById('errand'); i.value = 'sauna'; i.dispatchEvent(new Event('input')); i.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })); })()`);
+  await waitFor(quick, `document.querySelector('.suggestion[aria-selected=true]')`, 'Arrow key did not pick a suggestion');
+  await capture(quick, out, 'quick-pick'); await captureLight(quick, out, 'quick-pick');
+  await quick.webContents.executeJavaScript(`(() => { const d = new DataTransfer(); d.items.add(new File([new Uint8Array(2000)], 'kela-letter.pdf', { type: 'application/pdf' })); window.dispatchEvent(new DragEvent('drop', { dataTransfer: d, cancelable: true })); })()`);
+  await waitFor(quick, `document.querySelector('.chip')?.textContent.includes('kela-letter.pdf')`, 'Letter chip missing');
+  await capture(quick, out, 'quick-letter');
   // The quick box with page and selection context and suggestions, then the listening state.
   showQuick('ask', { selection: 'Eräpäivä 30.11. Maksa 45 € viitteellä 12345.', page: { url: 'https://www.kela.fi/opiskelijat', title: 'Kela: students', app: 'Safari' }, via: 'selection' });
   await waitFor(quick, `document.querySelectorAll('.chip').length >= 2 && document.querySelectorAll('.suggestion').length > 0`, 'Quick box context missing');
@@ -463,7 +489,7 @@ async function runSmoke() {
   await capture(quick, out, 'quick-listening');
   quick.hide(); glance.hide();
   await smokeValet(out);
-  console.log(`Smoke captures in ${out}: mascot, chat, glance, chat-question, glance-question, settings, settings-profile, quick, quick-listening, mascot-talk, mascot-done, mascot-error, mascot-sleep`);
+  console.log(`Smoke captures in ${out}: ${(await readdir(out)).filter(f => f.endsWith('.png')).sort().join(', ')}`);
   app.quit();
 }
 // The mascot's reactions, the talking state and the walk to the edge (window positions are checked, not captured).
@@ -474,8 +500,12 @@ async function smokeValet(out) {
   await mascot.webContents.executeJavaScript(`window.__smokeTalk('speaking', 'Hei! I found two saunas open on Saturday. Shall I book the one in Kallio?')`);
   await mascotHas(`document.getElementById('wrap').classList.contains('speaking') && document.getElementById('talk').textContent.includes('Stop')`, 'Talking state missing');
   await pose(); await capture(mascot, out, 'mascot-talk');
+  await captureLight(mascot, out, 'mascot-talk');
   await mascot.webContents.executeJavaScript(`window.__smokeTalk('')`);
   const fixture = tasks;
+  updateTasks(fixture.filter(t => t.id === 'smoke-research'));
+  await mascotHas(`document.getElementById('line').textContent.includes('on it')`, 'mascot-working line missing');
+  await pose(); await capture(mascot, out, 'mascot-working'); await captureLight(mascot, out, 'mascot-working');
   for (const [name, keep, words] of [['mascot-done', 'smoke-done', 'All done'], ['mascot-error', 'smoke-done', 'couldn']]) {
     updateTasks(fixture.filter(t => t.id === keep).map(t => name === 'mascot-error' ? { ...t, status: 'failed' } : t));
     await mascotHas(`document.getElementById('line').textContent.includes(${JSON.stringify(words)})`, `${name} line missing`);
@@ -524,6 +554,17 @@ function smokeTasks() {
     execution: { status: 'awaiting_approval', approval: { summary: 'Confirm the sauna booking for 8 people at 18:00.', url: 'https://example.com/booking' }, steps: [{ text: 'Selected your requested time and group size.' }] } },
   { id: 'smoke-research', remoteId: 'smoke-research', task: 'Which Kela benefits can I get as a student?', createdAt: now - 20000, status: 'running', backend: true, progress: [{ kind: 'search', text: 'Kela student financial aid' }] },
   { id: 'smoke-done', remoteId: 'smoke-done', task: 'Find a pharmacy open now near Kamppi', createdAt: now - 3600000, completedAt: now - 3500000, status: 'completed', backend: true, seen: true, output: { structured: { status: 'info_only', answer: 'Yliopiston Apteekki Kamppi is open until 22:00.' } } }];
+}
+// Every state the glance list can show, for one capture.
+function smokeAll() {
+  const now = Date.now(), [approval, research, done] = smokeTasks();
+  return [approval, research, done,
+    { id: 'smoke-ask', remoteId: 'smoke-ask', task: 'Report a pothole at Mannerheimintie 5 to the city', createdAt: now - 30000, status: 'completed', backend: true, seen: true,
+      execution: { status: 'running', question: { text: 'Should the city reply by email or by phone?', at: 'smoke-ask-q' }, steps: [{ text: 'Filled in the location.' }] } },
+    { id: 'smoke-live', remoteId: 'smoke-live', task: 'Buy 2 adult tickets for Allas Sea Pool on Sunday', createdAt: now - 10000, status: 'completed', backend: true, seen: true,
+      execution: { status: 'running', steps: [{ text: 'Choosing 2 adult tickets for Sunday afternoon' }] } },
+    { id: 'smoke-login', remoteId: 'smoke-login', task: 'Apply for Kela housing benefit', createdAt: now - 600000, status: 'completed', backend: true,
+      execution: { status: 'failed', result: 'needs login: finish by hand at https://www.kela.fi/asiointi', current_url: 'https://www.kela.fi/asiointi' } }];
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {

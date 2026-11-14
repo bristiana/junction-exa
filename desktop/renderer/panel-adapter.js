@@ -43,6 +43,13 @@ for (const node of [serverHeading, serverHeading.nextElementSibling, $('backendU
 advanced.append(credentials, $('effort').closest('.field'));
 $('saveSettings').closest('.row').before(advanced);
 
+// The extension's own "Link with Vali on your Mac" block makes no sense inside the Mac app: the block below replaces it.
+const macHeading = $('showMacCode').previousElementSibling.previousElementSibling;
+for (const node of [macHeading, macHeading.nextElementSibling, $('showMacCode'), $('macCode'), $('macLinkStatus'), $('macCodeInput').closest('.field')]) node.hidden = true;
+// Talk in the chat composer starts Talk to Vali on the mascot (the extension shows a hint pointing here instead).
+const talkBtn = $('talk').cloneNode(true); $('talk').replaceWith(talkBtn);
+talkBtn.removeAttribute('aria-expanded'); talkBtn.onclick = () => window.vali.call('talkToggle');
+
 // Link with the extension: type the extension's code here, or show this Mac's code to type there.
 const link = el('div', '', 'desktop-link');
 const linkInfo = el('p', '', 'muted small'); linkInfo.id = 'linkInfo'; linkInfo.setAttribute('role', 'status');
@@ -77,7 +84,7 @@ async function addPersonalId() {
   if (!box.children.length || box.querySelector('[data-k="personal_id"]')) return;
   const { profile = {} } = await window.vali.call('storage:get', { area: 'local', keys: ['profile'] });
   if (box.querySelector('[data-k="personal_id"]')) return;
-  const label = el('label'), input = el('input');
+  const label = el('label'), input = el('input', '', 'v-input');
   input.type = 'password'; input.autocomplete = 'off'; input.dataset.k = PERSONAL_ID[0]; input.value = profile[PERSONAL_ID[0]] || ''; input.placeholder = 'Only for forms that ask for it';
   label.append(el('span', PERSONAL_ID[1]), input);
   const dob = box.querySelector('[data-k="date_of_birth"]')?.closest('label');
@@ -86,8 +93,8 @@ async function addPersonalId() {
 new MutationObserver(addPersonalId).observe($('profileFields'), { childList: true });
 
 // iMessage stays in the main process; this panel receives status and public handles only.
-const imessageBox = el('section', '', 'desktop-link');
-const imessageLabel = el('label', 'iMessage bridge');
+const imessageBox = el('section', '', 'desktop-link desktop-imessage');
+const imessageLabel = el('label', 'Errands over iMessage', 'check toggle');
 const imessageToggle = el('input'); imessageToggle.type = 'checkbox';
 imessageLabel.prepend(imessageToggle);
 const imessageMode = el('select', '', 'v-input'); imessageMode.setAttribute('aria-label', 'iMessage sender policy');
