@@ -198,6 +198,27 @@ def test_image_redaction(local_site, monkeypatch):
         browser.close()
 
 
+def test_final_picture_masks_every_field(local_site, monkeypatch):
+    browser = Browser()
+    try:
+        browser.goto(local_site+'/claim.html')
+        browser.snapshot()
+        browser.type('e3', '+358 40 123 4567')  # the page's own format: no profile value matches it
+        original = browser.page.screenshot
+        seen = []
+        def capture(**kwargs):
+            seen.append(sorted(el.get_attribute('name') or '' for el in browser.page.locator('[data-vali-private]').all()))
+            return original(**kwargs)
+        monkeypatch.setattr(browser.page, 'screenshot', capture)
+        assert browser.screenshot_jpeg(profile=PROFILE, all_fields=True).startswith(b'\xff\xd8')
+        assert seen == [['details', 'email', 'kind', 'name', 'phone']]  # radios and the checkbox stay visible
+        browser.page.set_content('<iframe srcdoc="<input name=x>"></iframe>')
+        browser.page.wait_for_timeout(100)
+        assert browser.screenshot_jpeg(profile=PROFILE, all_fields=True) is None
+    finally:
+        browser.close()
+
+
 @pytest.mark.parametrize('markup,expected', [
     ('<div>Please solve the CAPTCHA</div>', 'captcha'),
     ('<input autocomplete="cc-number">', 'payment'),

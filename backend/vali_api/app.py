@@ -44,7 +44,10 @@ from .wa_channel import ChannelAPI, push_task, log_failure, logger as whatsapp_l
 
 logger = logging.getLogger('vali.api')
 TERMINAL = {'completed', 'failed', 'cancelled'}
-CARRIED = ('question', 'activity_head', 'cost_before', 'effort')  # research fields that outlive a run poll
+CARRIED = ('question', 'activity_head', 'cost_before', 'effort', 'known_details')  # research fields that outlive a run poll
+
+
+KnownDetail = Literal['name', 'email', 'phone', 'address', 'postal_code', 'city', 'country', 'date_of_birth', 'nationality']
 
 
 class TaskBody(BaseModel):
@@ -53,6 +56,8 @@ class TaskBody(BaseModel):
     effort: Literal['minimal', 'low', 'medium', 'high', 'xhigh', 'auto', 'ultra'] = 'low'
     previous_task_id: str | None = None
     channel: str | None = Field(default=None, max_length=20)
+    # Names of the details saved on the device, never their values: the research writes {{name}} instead of asking.
+    known_details: list[KnownDetail] = Field(default_factory=list, max_length=9)
 
 
 class LinkBody(BaseModel):
@@ -181,9 +186,9 @@ def missing_info_question(output):
     return {'text': missing[0].strip()[:300], 'options': [], 'answer': None} if missing else None
 
 
-def find_research(state, task, text):
+def find_research(state, task, text, known_details=()):
     """One Exa search+answer call; the quote check follows in the poller, off the request."""
-    response = state.exa.search(dict(query=build_query(text, task['page']), type='auto', numResults=5,
+    response = state.exa.search(dict(query=build_query(text, task['page'], known_details=known_details), type='auto', numResults=5,
                                      contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST + FIND_RULES))
     found = dict(output=map_find_output(response), cost=(response.get('costDollars') or {}).get('total') or 0,
                  activity=activity.from_search(task, text, response))
@@ -198,7 +203,7 @@ def refine_research(application, task, answer):
     head = (research.get('activity') or []) + [
         activity.entry(task['created_at'], 'think', f'Got your answer: {question["answer"]}. Refining')]
     if research['kind'] == 'search':
-        found = find_research(state, task, text)
+        found = find_research(state, task, text, research.get('known_details') or ())
         refined = {**research, **found, 'question': question, 'activity': head + found['activity'][1:],
                    'cost': (research.get('cost') or 0) + found['cost']}
     elif research['kind'] == 'agent':
@@ -207,10 +212,11 @@ def refine_research(application, task, answer):
                 state.exa.cancel_run(research['run_id'])
             except ExaError:
                 pass
-        run_request = build_run_request(text, task['page'])
+        run_request = build_run_request(text, task['page'], known_details=research.get('known_details') or ())
         if research['status'] == 'completed' and research.get('run_id'):
             run_request['previousRunId'] = research['run_id']
         refined = {**research_from_run(state.exa.create_run(run_request)), 'question': question, 'activity': head,
+                   'known_details': research.get('known_details', []),
                    'activity_head': head, 'cost_before': research.get('cost') or 0}
     else:
         refined = {**research, 'question': question}
@@ -474,7 +480,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if body.previous_task_id:
             previous_run = owned(body.previous_task_id, user)['research'].get('run_id')
         research = dict(kind=kind, status='queued', run_id=None, progress=[], output=None, cost=None, stop_reason=None, error=None,
-                        question=early_question(body.task, mode), effort=body.effort)
+                        question=early_question(body.task, mode), effort=body.effort, known_details=sorted(set(body.known_details)))
         reusable = not (body.page or previous_run or kind == 'monitor' or TIME_SENSITIVE.search(body.task))
         reused = reusable and state.store.recent_research(
             user['id'], body.task, mode, body.effort, (datetime.now(timezone.utc) - REUSE_FOR).isoformat())
@@ -486,13 +492,13 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             return state.store.get_task(task['id'])
         try:
             if kind == 'search':
-                research.update(find_research(state, task, body.task))
+                research.update(find_research(state, task, body.task, research['known_details']))
             elif kind == 'agent':
-                run_request = build_run_request(body.task, body.page, effort=body.effort)
+                run_request = build_run_request(body.task, body.page, effort=body.effort, known_details=research['known_details'])
                 if previous_run:
                     run_request['previousRunId'] = previous_run
                 research = {**research_from_run(state.exa.create_run(run_request)), 'activity': [activity.opening(task)],
-                            'question': research['question'], 'effort': body.effort}
+                            'question': research['question'], 'effort': body.effort, 'known_details': research['known_details']}
             else:
                 watch, message = provision_watch(config, state.store, state.exa, user['id'], body.task, task['id'])
                 if watch is None:

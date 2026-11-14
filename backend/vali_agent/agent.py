@@ -200,9 +200,15 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
             except Exception:
                 screencast = None
 
-    def shot():
+    def shot(final=False):
         if personal_visible:
-            return None
+            # The live view stays paused. A run that ends gets one last picture with every field masked (or none).
+            if not (final and profile):
+                return None
+            try:
+                return browser.screenshot_jpeg(profile=profile, all_fields=True)
+            except Exception:
+                return None
         follow_page()
         jpeg = browser.screenshot_jpeg()
         if screencast:
@@ -479,7 +485,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                         if final_url != previous_url:
                             hooks.on_step('Navigated to ' + mask(final_url, profile), None)
                         if name not in ('exa_search', 'exa_read', 'ask_user'):
-                            hooks.on_step(step_text, shot())
+                            hooks.on_step(step_text, shot(final=name == 'finish'))
                     except Exception as exc:
                         approved = False
                         error = True

@@ -40,7 +40,7 @@ async function ask(text, previousTaskId) {
   notice('');
   $('ask').classList.add('busy');
   try {
-    const task = await api.createTask(errand, previousTaskId);
+    const task = await api.createTask(errand, previousTaskId, Object.keys(loadProfile()));
     $('errand').value = '';
     location.hash = '#/t/' + task.id;
   } catch (error) {
