@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from contextvars import ContextVar
 import hmac
 import json
+import logging
 from io import BytesIO
 from urllib.parse import urlsplit, unquote
 import threading
@@ -18,12 +19,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Res
 from pydantic import BaseModel, Field
 
 from . import activity
-from .citations import cite
+from .citations import cite, unchecked
 from .companion import CompanionBody, companion_tip, make_cache
 from .config import Config
-from .exa import ExaClient, ExaError
+from .exa import ExaClient, ExaError, TTLCache
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update
-from .guard import RateLimited, SlidingWindow, authenticate, check_origin, check_task_budget
+from .guard import RateLimited, SlidingWindow, authenticate, check_origin, check_task_budget, client_ip
 from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .llm import make_fast_json
@@ -38,6 +39,7 @@ from vali_wa.webhook import parse_webhook, verify_signature
 from vali_wa.render import render_result, render_execution_update, render_error
 from .wa_channel import ChannelAPI, push_task, log_failure, logger as whatsapp_logger
 
+logger = logging.getLogger('vali.api')
 TERMINAL = {'completed', 'failed', 'cancelled'}
 CARRIED = ('question', 'activity_head', 'cost_before')  # research fields that outlive a run poll
 
@@ -84,6 +86,37 @@ def user_profile(store, uid):
     return json.loads(user['profile_json']) if user else {}
 
 
+QUOTE_TIMEOUT = timedelta(seconds=90)
+
+
+def quoting(task, research):
+    """Research whose answer is in, waiting for the quote check (status stays running until it is done)."""
+    return {**research, 'status': 'running', 'quoting': 'pending',
+            'activity': (research.get('activity') or []) + [activity.checking(task, research['output'])]}
+
+
+def check_quotes(application, task, research):
+    """Claim the quote check, run it, and complete the task whatever happens: it never stays running."""
+    store = application.state.store
+    started = research['quoting']
+    if started != 'pending' and datetime.now(timezone.utc) - datetime.fromisoformat(started) < QUOTE_TIMEOUT:
+        return False  # another poller is checking; a stale claim is taken over
+    claimed = {**research, 'quoting': now()}
+    if not store.update_research(task['id'], claimed, expected=research):
+        return False
+    final = {k: v for k, v in copy.deepcopy(claimed).items() if k != 'quoting'}
+    final['status'] = 'completed'
+    try:
+        final['cost'] = (final.get('cost') or 0) + cite(final['output'], application.state.exa, application.state.llm, task['task'])
+    except Exception:
+        logger.exception('quote check failed for %s', task['id'])
+        unchecked(final['output'], task['task'])
+    final['activity'] = final['activity'] + [activity.done(task, final['output'])]
+    if store.update_research(task['id'], final, expected=claimed):
+        push_task(application, task['id'], render_result)
+    return True
+
+
 def poll_research_once(task_id, application=None):
     application = application or app
     store, exa = application.state.store, application.state.exa
@@ -91,6 +124,8 @@ def poll_research_once(task_id, application=None):
     if not task or task['research']['status'] in TERMINAL:
         return True
     previous = task['research']
+    if previous.get('quoting'):
+        return check_quotes(application, task, previous)
     try:
         run = exa.get_run(previous['run_id'])
         research = {**research_from_run(run), **{k: previous[k] for k in CARRIED if k in previous}}
@@ -112,27 +147,22 @@ def poll_research_once(task_id, application=None):
             return False
         research = {**previous, 'status': 'failed', 'error': 'The run was not found.'}
     if research['status'] == 'completed' and research.get('output'):
-        # Shown while the quotes are checked; the web page polls every second.
-        quoting = {**research, 'status': 'running', 'activity': research['activity'] + [activity.checking(task, research['output'])]}
-        if not store.update_research(task_id, quoting, expected=previous):
+        waiting = quoting(task, research)  # shown while the quotes are checked; the web page polls every second
+        if not store.update_research(task_id, waiting, expected=previous):
             return False
-        previous, research = quoting, {**copy.deepcopy(quoting), 'status': 'completed'}
-        research['cost'] = (research.get('cost') or 0) + cite(research['output'], exa, application.state.llm, task['task'])
-        research['activity'] = research['activity'] + [activity.done(task, research['output'])]
+        return check_quotes(application, task, waiting)
     if store.update_research(task_id, research, expected=previous) and research['status'] in {'completed', 'failed'}:
         push_task(application, task_id, render_result)
     return research['status'] in TERMINAL
 
 
 def find_research(state, task, text, profile):
-    """One Exa search+answer call, then the quote check: the whole find errand."""
+    """One Exa search+answer call; the quote check follows in the poller, off the request."""
     response = state.exa.search(dict(query=build_query(text, task['page']), type='auto', numResults=5,
                                      contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT))
-    output = map_find_output(response)
-    trail = activity.from_search(task, text, response, profile) + [activity.checking(task, output)]
-    extra = cite(output, state.exa, state.llm, text)
-    return dict(status='completed', output=output, cost=((response.get('costDollars') or {}).get('total') or 0) + extra,
-                activity=trail + [activity.done(task, output)])
+    found = dict(output=map_find_output(response), cost=(response.get('costDollars') or {}).get('total') or 0,
+                 activity=activity.from_search(task, text, response, profile))
+    return quoting(task, found)
 
 
 def refine_research(application, task, answer, profile):
@@ -161,8 +191,8 @@ def refine_research(application, task, answer, profile):
         refined = {**research, 'question': question}
     if not state.store.update_research(task['id'], refined, expected=research):
         raise HTTPException(409, 'Research changed meanwhile; try again')
-    if research['kind'] == 'agent' and research['status'] in TERMINAL:
-        state.spawn_research_poller(task['id'])  # a running poller follows the new run by itself
+    if research['kind'] == 'search' or (research['kind'] == 'agent' and research['status'] in TERMINAL):
+        state.spawn_research_poller(task['id'])  # a running agent poller follows the new run by itself
     return state.store.get_task(task['id'])
 
 
@@ -333,6 +363,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     application.state.jev = jev or (JevClient(config.jev_api_key) if config.jev_api_key else None)
     application.state.llm = llm or make_fast_json(config.anthropic_api_key)
     application.state.companion_cache = make_cache()
+    application.state.stats_cache = TTLCache(ttl=5, max_entries=1024)
     application.state.limiter = SlidingWindow()
     application.state.spawn_research_poller = spawn_research_poller or (lambda tid: spawn_thread(research_poller_loop, tid, application))
     application.state.spawn_browser_session = spawn_browser_session or (lambda tid, goal, url, profile: spawn_thread(run_browser_session, tid, goal, url, profile, application))
@@ -348,9 +379,11 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             check_origin(request.headers.get('origin'), config.allowed_origins)
             if oversized_request(request.url.path, request.headers.get('content-length')):
                 raise HTTPException(413, 'Upload exceeds 10 MB')
-            if request.method == 'POST' and request.url.path == '/v1/users':
-                limiter, ip = application.state.limiter, request.client.host if request.client else 'unknown'
-                limiter.check('signup:' + ip, limiter.signup_limit, limiter.signup_seconds, what='new accounts')
+            if request.method not in ('GET', 'HEAD', 'OPTIONS'):
+                limiter, ip = application.state.limiter, client_ip(request)
+                limiter.check('ip:' + ip, limiter.ip_limit, limiter.ip_seconds)
+                if request.url.path == '/v1/users':
+                    limiter.check('signup:' + ip, limiter.signup_limit, limiter.signup_seconds, what='new accounts')
         except RateLimited as exc:
             return await rate_limited(request, exc)
         except HTTPException as exc:
@@ -441,7 +474,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise
         if research['status'] in {'completed', 'failed'}:
             push_task(application, task['id'], render_result)
-        if kind == 'agent' and research['status'] not in TERMINAL:
+        if kind in ('agent', 'search') and research['status'] not in TERMINAL:
             state.spawn_research_poller(task['id'])
         return state.store.get_task(task['id'])
 
@@ -510,7 +543,11 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.get('/v1/stats')
     def stats(user=Depends(authenticate)):
-        return summarize(application.state.store.list_tasks(user['id'], 100000))
+        cached = application.state.stats_cache.get(user['id'])
+        if cached is None:  # the latest 1000 errands, recomputed at most every 5 s per user
+            cached = summarize(application.state.store.list_tasks(user['id'], 1000))
+            application.state.stats_cache.put(user['id'], cached)
+        return cached
 
     @application.get('/v1/tasks')
     def list_tasks(limit: int = Query(30, ge=1, le=100), user=Depends(authenticate)):

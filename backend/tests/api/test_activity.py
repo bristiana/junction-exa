@@ -54,7 +54,8 @@ def test_agent_activity_is_stored_while_running_and_ends_with_done():
                   'grounding': [{'field': 'structured.answer', 'citations': [{'url': 'https://www.dvv.fi/en/move', 'title': 'DVV'}]}]}
         return httpx.Response(200, json={'id': 'run_1', 'status': state['status'], 'output': output if state['status'] == 'completed' else None})
     store, exa = SQLiteStore(':memory:'), ExaClient('k', transport=httpx.MockTransport(respond))
-    application = create_app(Config(sqlite_path=':memory:', anthropic_api_key=''), store, exa, lambda tid: None, lambda *a: None)
+    llm = lambda *a: {'claims': [{'i': 0, 'verdict': 'yes', 'support': [{'page': 0, 'quote': 'Notify DVV within one week of moving.'}]}]}
+    application = create_app(Config(sqlite_path=':memory:', anthropic_api_key=''), store, exa, lambda tid: None, lambda *a: None, llm=llm)
     with TestClient(application) as client:
         client.headers['Authorization'] = 'Bearer ' + client.post('/v1/users').json()['token']
         task = client.post('/v1/tasks', json={'task': 'how do I register my move?'}).json()
@@ -69,3 +70,8 @@ def test_agent_activity_is_stored_while_running_and_ends_with_done():
         assert done['activity'][-1]['text'] == 'Answer ready: 1 of 1 sentences quoted from 1 sources'
         assert done['output']['claims'][0]['supported'] is True
     store.close()
+
+
+def test_dates_and_year_ranges_are_not_phone_numbers():
+    text = 'Deadline 2025-10-12, academic year 2024-2026, call 09 310 12345 or 040 123 4567'
+    assert activity.scrub(text) == 'Deadline 2025-10-12, academic year 2024-2026, call {{phone}} or {{phone}}'

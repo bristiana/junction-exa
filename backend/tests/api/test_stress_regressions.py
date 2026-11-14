@@ -61,8 +61,8 @@ def task_budget(monkeypatch):
     limiter = SlidingWindow()
     application = SimpleNamespace(state=SimpleNamespace(
         limiter=limiter,
-        store=SimpleNamespace(daily_spend=lambda user_id: 0.0),
-        config=SimpleNamespace(daily_cap_usd=1.0),
+        store=SimpleNamespace(daily_spend=lambda user_id=None: 0.0),
+        config=SimpleNamespace(daily_cap_usd=1.0, global_daily_cap_usd=60.0),
     ))
     return application, {'id': 'stress40-account'}
 

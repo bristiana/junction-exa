@@ -37,13 +37,14 @@ def detect(text):
     """ISO 639-1 code, or None when the text gives no evidence (one-word errands such as "Kela" or "sauna")."""
     text = _URL.sub(' ', str(text or ''))
     for code, pattern in _SCRIPTS:
-        if len(re.findall(pattern, text)) >= 2:
+        if len(re.findall(pattern, text)) >= (1 if code == 'uk' else 2):  # one і/ї/є/ґ already rules out Russian
             return code
     lowered = text.lower()
     words = re.findall(r"[\w']+", lowered)
     scores = {code: sum(w in vocabulary for w in words) for code, vocabulary in _WORDS.items()}
     for code, letters in _LETTERS.items():
         scores[code] = scores.get(code, 0) + 2 * sum(ch in lowered for ch in letters)
-    best = max(scores, key=lambda code: (scores[code], code == 'en'))
-    return best if scores[best] > 0 else None
+    ranked = sorted(scores.values(), reverse=True)
+    best = max(scores, key=scores.get)
+    return best if ranked[0] > ranked[1] else None  # a tie is no evidence
 

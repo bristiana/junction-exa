@@ -55,11 +55,12 @@ def is_official(domain, context=''):
     return len(brand) >= 4 and bool(re.search(r'(?<!\w)' + re.escape(brand) + r'(?!\w)', named))
 
 
-def split_sentences(text):
+def split_sentences(text, strip_markers=True):
+    """Sentences of an answer ([n] markers dropped) or of a page (kept, so quotes stay verbatim)."""
     sentences = []
     for line in str(text or '').splitlines():
         current = ''
-        for piece in re.split(r'(?<=[.!?])\s+', squash(_MARKER.sub('', line)).lstrip('-•* ')):
+        for piece in re.split(r'(?<=[.!?])\s+', squash(_MARKER.sub('', line) if strip_markers else line).lstrip('-•* ')):
             if current and (_ABBREVIATION.search(current) or len(piece) < 15):
                 current += ' ' + piece
             else:
@@ -124,7 +125,7 @@ def _words(text):
 
 
 def _page_sentences(text):
-    return [s for s in split_sentences(text) if 20 <= len(s) <= 400]
+    return [s for s in split_sentences(text, strip_markers=False) if 20 <= len(s) <= 400]
 
 
 def map_lexical(claims, pages):
@@ -182,23 +183,38 @@ def number_sources(claims, support, pages, context):
     return out, sources
 
 
+def answer_claims(output):
+    structured = output.get('structured') or {}
+    return split_sentences(structured.get('answer') or output.get('text') or '')
+
+
+def context_of(output, task_text):
+    return ' '.join([task_text, (output.get('structured') or {}).get('answer') or ''])
+
+
+def unchecked(output, task_text=''):
+    """Claims and the cited sources without any quote check: support unknown."""
+    claims, pages = answer_claims(output), cited_pages(output)
+    output['claims'], output['sources'] = number_sources(claims, [[] for _ in claims], pages, context_of(output, task_text))
+    for claim in output['claims']:
+        claim['supported'] = None
+
+
 def cite(output, exa, llm=None, task_text=''):
     """Add `claims` and `sources` to a research output; returns the extra cost in dollars."""
     if not isinstance(output, dict):
         return 0
-    structured = output.get('structured') or {}
-    claims = split_sentences(structured.get('answer') or output.get('text') or '')
-    pages = cited_pages(output)
+    claims, pages = answer_claims(output), cited_pages(output)
     cost = fetch_texts(exa, pages)
     readable = [p for p in pages if p['text']]
-    support = None
-    if claims and readable and llm:
-        support = map_with_llm(llm, claims, readable)
-    if support is None:
-        support = map_lexical(claims, readable)
-    context = ' '.join([task_text, structured.get('answer') or ''])
-    output['claims'], output['sources'] = number_sources(claims, support, readable or pages, context)
-    if not readable:  # nothing could be read: the sources are listed, support is unknown
+    if not readable:
+        unchecked(output, task_text)
+        return cost
+    support = map_with_llm(llm, claims, readable) if claims and llm else None
+    judged = support is not None
+    output['claims'], output['sources'] = number_sources(claims, support if judged else map_lexical(claims, readable),
+                                                         readable, context_of(output, task_text))
+    if not judged:  # word overlap finds a quote; it cannot judge that the quote backs the claim
         for claim in output['claims']:
             claim['supported'] = None
     return cost
