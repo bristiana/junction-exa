@@ -24,6 +24,9 @@ MAP_SYSTEM = """You check an answer against its source pages, claim by claim. Be
 For every claim, list the pages that state it, and for each such page copy ONE exact sentence from the page text
 that states it: character for character, in the page's own language; never translate, shorten or paraphrase.
 A page that is only about the same topic, or states a different number, date or condition, must not be listed.
+A list page (showtimes, timetable, opening hours, menu, price list) has no such sentence: there a line belongs to
+the headings above it (a film's times are under its title, under the day), and a claim naming several items gets
+one quote per item from the same page, each a line as written (the item's title or row), not text you join up.
 verdict: "yes" when the listed quotes state every fact in the claim, "partly" when they state only some of it,
 "no" when no page states it. A sentence about what the assistant did or knows is still judged on what it says
 about the world ("I can confirm the fee is 50 euros" is the claim "the fee is 50 euros").
@@ -202,23 +205,59 @@ def _facts(text):
     return found
 
 
+_HEADING = re.compile(r'^(#{1,6})\s')
+
+
+def _sections(text, size=800):
+    """Passages with the headings above them: a heading and the lines under it stay one passage (a film with its
+    showtimes, a weekday with its hours), cut at line ends to `size`; a long paragraph is cut into sentences."""
+    blocks, heads = [], {}
+    for line in (b for b in re.split(r'\n+', text) if b.strip()):
+        level = _HEADING.match(line)
+        if level:
+            depth = len(level[1])
+            heads = {d: h for d, h in heads.items() if d < depth}
+            blocks.append([line, list(heads.values())])
+            heads[depth] = line
+        elif heads and len(blocks[-1][0]) + len(line) < size:
+            blocks[-1][0] += '\n' + line  # a line under a heading joins it
+        else:
+            blocks += [[part, list(heads.values())] for part in (_chunks(line) if len(line) > size else [line])]
+    return blocks
+
+
 def excerpt(text, claim, limit=PAGE_CHARS):
-    """The page as the judge reads it: all of it when short, else its start and the passages nearest the claim."""
+    """The page as the judge reads it: all of it when short, else its start and the passages that between them
+    cover most of what the claim names (every film of a list, not five copies of one), each under its headings."""
     if len(text) <= limit:
         return text
-    blocks = [b for b in re.split(r'\n+', text) if b.strip()]
-    blocks = [part for block in blocks for part in (_chunks(block) if len(block) > 800 else [block])]
+    blocks = _sections(text)
     words, facts = _words(claim), _facts(claim)
-    def score(i):
-        return len(words & _words(blocks[i])) + 3 * len(facts & _facts(blocks[i]))
+    found = [(_words(b) & words, _facts(b) & facts) for b, _ in blocks]
+    def score(i, seen=(set(), set())):
+        return len(found[i][0] - seen[0]) + 3 * len(found[i][1] - seen[1])
+    order, seen, left = [], (set(), set()), set(range(len(blocks)))
+    while left:  # what names something not yet shown first, then the rest by how much it shares
+        best = max(left, key=lambda i: (score(i, seen), score(i), -i))
+        if not score(best, seen):
+            break
+        order.append(best)
+        left.discard(best)
+        seen = (seen[0] | found[best][0], seen[1] | found[best][1])
+    order += sorted(left, key=lambda i: (-score(i), i))
+    start = [i for i in range(len(blocks)) if sum(len(b) for b, _ in blocks[:i]) < 800]
     keep, used = set(), 0
-    for i in [i for i in range(len(blocks)) if sum(map(len, blocks[:i])) < 800] + sorted(range(len(blocks)), key=lambda i: -score(i)):
-        if i not in keep and used + len(blocks[i]) <= limit:
+    for i in start + order:
+        cost = len(blocks[i][0]) + sum(len(h) + 1 for h in blocks[i][1])
+        if i not in keep and used + cost <= limit:
             keep.add(i)
-            used += len(blocks[i]) + 1
-    picked, last = [], -1
+            used += cost + 1
+    picked, last, shown = [], -1, set()
     for i in sorted(keep):
-        picked.append(('…\n' if i > last + 1 else '') + blocks[i])
+        block, heads = blocks[i]
+        heads = [h for h in heads if h not in shown]
+        shown.update(heads + [block.split('\n')[0]])
+        picked.append(('…\n' if i > last + 1 else '') + '\n'.join(heads + [block]))
         last = i
     return '\n'.join(picked)
 
@@ -431,7 +470,7 @@ def number_sources(claims, support, pages, context):
                 refs.append(source['n'])
             if verbatim(quote, pages[index]['text']):
                 supported = True
-                source.setdefault('quote', squash(quote))
+                source.setdefault('quote', squash(re.sub(r'^\s*#{1,6}\s+', '', quote)))  # a heading shows as its words
         out.append({'text': text, 'sources': refs, 'supported': supported})
     for index in range(len(pages)):
         source_for(index)
