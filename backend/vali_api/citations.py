@@ -1,11 +1,13 @@
 """Per-sentence claims, numbered sources and verbatim quotes for a finished research output."""
 import re
 import unicodedata
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
 from .exa import ExaError
 
 MAX_PAGES = 5
+STALE_AFTER = timedelta(days=548)  # 18 months
 PAGE_CHARS = 6000
 OFFICIAL_DOMAINS = (
     'suomi.fi', 'kela.fi', 'migri.fi', 'vero.fi', 'dvv.fi', 'hel.fi', 'espoo.fi', 'vantaa.fi', 'tampere.fi',
@@ -70,6 +72,16 @@ def split_sentences(text):
 def verbatim(quote, page_text):
     quote = squash(quote)
     return len(quote) >= 12 and quote in squash(page_text)
+
+
+def freshness(published, today=None):
+    """{published: ISO date, stale: bool} from Exa's publishedDate; empty when the page has no date."""
+    try:
+        day = datetime.fromisoformat(str(published).replace('Z', '+00:00')).date()
+    except ValueError:
+        return {}
+    today = today or datetime.now(timezone.utc).date()
+    return {'published': day.isoformat(), 'stale': today - day > STALE_AFTER}
 
 
 def cited_pages(output):
@@ -153,7 +165,7 @@ def number_sources(claims, support, pages, context):
             numbers[index] = len(sources) + 1
             domain = domain_of(page['url'])
             sources.append({'n': numbers[index], 'url': page['url'], 'title': page['title'] or domain,
-                            'domain': domain, 'official': is_official(domain, context)})
+                            'domain': domain, 'official': is_official(domain, context), **freshness(page.get('published'))})
         return sources[numbers[index] - 1]
     for text, found in zip(claims, support):
         refs, supported = [], False
