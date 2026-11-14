@@ -11,6 +11,16 @@ export function isActive(task) {
   return !TERMINAL.has(task?.research?.status) || LIVE_EXECUTION.has(task?.execution?.status);
 }
 
+// The run's status as the user sees it: an approved run is already submitting, a stop request already stopped,
+// even before the browser worker picks the decision up.
+export function runStatus(task) {
+  const run = task?.execution;
+  if (!run) return null;
+  if (run.status === 'awaiting_approval' && run.approval_decision === 'approved') return 'submitting';
+  if (LIVE_EXECUTION.has(run.status) && run.approval_decision === 'stopped') return 'stopped';
+  return run.status;
+}
+
 export function domainOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
 }
@@ -179,7 +189,7 @@ export function channelOf(task) {
 // One status word, a tone (working | you | done | failed) and one line of detail.
 export function errandStatus(task) {
   const research = task?.research || {};
-  const run = task?.execution?.status;
+  const run = runStatus(task);
   const question = questionOf(task);
   if (run === 'awaiting_approval') return { word: 'Waiting for your OK', tone: 'you', detail: task.execution.approval?.summary || '' };
   if (['starting', 'running', 'submitting'].includes(run)) return { word: 'Filling the form', tone: 'working', detail: lastStep(task) };
@@ -231,7 +241,7 @@ export function pagesTouched(task) {
 
 // The mascot's pose for an errand (states of vendor/butler.js).
 export function moodOf(task) {
-  const run = task?.execution?.status;
+  const run = runStatus(task);
   if (run === 'awaiting_approval') return 'needs_approval';
   if (['starting', 'running', 'submitting'].includes(run)) return 'working';
   if (questionOf(task)) return 'listening';

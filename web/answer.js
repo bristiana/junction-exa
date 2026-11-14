@@ -1,6 +1,6 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, factsOf, findStats, missingInfo, primaryAction, publishedStamp, readStamp, sourcesOf, stepsOf } from './model.js';
+import { claimsOf, factsOf, runStatus, findStats, missingInfo, primaryAction, publishedStamp, readStamp, sourcesOf, stepsOf } from './model.js';
 import { renderExecution } from './execution.js';
 import { citePill } from './cite.js';
 
@@ -83,7 +83,7 @@ function steps(items) {
 function actions(task, { onExecute }) {
   const action = primaryAction(task);
   if (!action) return null;
-  const busy = ['starting', 'running', 'awaiting_approval', 'submitting'].includes(task.execution?.status);
+  const busy = ['starting', 'running', 'awaiting_approval', 'submitting'].includes(runStatus(task));
   return h('div', { class: 'actions' },
     h('button', { type: 'button', class: 'btn', disabled: busy, onclick: () => onExecute(action.index) }, 'Fill it for me'),
     h('a', { class: 'btn soft', href: action.url, target: '_blank', rel: 'noopener noreferrer' }, `Open ${action.domain}`));
