@@ -221,7 +221,7 @@
     {
       "id": "execute-lookup-httpbin",
       "site": "httpbin test order form, facts looked up with Exa",
-      "text": "Order a medium margherita pizza on the httpbin test order form at https://httpbin.org/forms/post, delivered to the Allas Sea Pool in Helsinki at the time it opens on Sunday. Use my name, phone and email.",
+      "text": "Order a medium margherita pizza on the httpbin test order form at https://httpbin.org/forms/post for 12:00, delivered to the Allas Sea Pool in Helsinki. Put its street address and its Sunday opening hours in the delivery instructions. Use my name, phone and email.",
       "mode": [
         "write",
         "book",
@@ -231,12 +231,12 @@
       "pass": {},
       "execute": {
         "start_url": "https://httpbin.org/forms/post",
-        "goal": "Fill the httpbin test order form: customer name {{name}}, telephone {{phone}}, email {{email}}, size Medium, no toppings. Preferred delivery time: the time the Allas Sea Pool in Helsinki opens on Sunday. Delivery instructions: the Allas Sea Pool's street address and postcode. Then request approval before Submit order.",
+        "goal": "Fill the httpbin test order form: customer name {{name}}, telephone {{phone}}, email {{email}}, size Medium, no toppings, preferred delivery time 12:00. Delivery instructions: the Allas Sea Pool's street address and postcode, and its Sunday opening hours. Then request approval before Submit order.",
         "accept": [
           "approval"
         ]
       },
-      "pass_note": "the opening time and street address are in neither the profile nor the page: the sandbox looks them up with Exa, then stops at the approval gate"
+      "pass_note": "the street address and opening hours are in neither the profile nor the page: the sandbox looks them up with Exa, then stops at the approval gate"
     },
     {
       "id": "claim-ta-defect",
