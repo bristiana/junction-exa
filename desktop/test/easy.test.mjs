@@ -77,7 +77,7 @@ test('glance: plain words, what needs you first, finished today only; badge coun
   const old = { id: 'o', task: 'Old', createdAt: now - 3 * 86400000, completedAt: now - 3 * 86400000, status: 'completed', seen: true };
   const blocked = { id: 'b', task: 'Login', createdAt: now - 4000, status: 'completed', seen: false, execution: { status: 'failed', result: 'needs login: finish by hand at https://x.fi' } };
   assert.equal(plainStatus(approval).label, 'Waiting for your OK');
-  assert.equal(plainStatus(question).label, 'Waiting for your OK');
+  assert.equal(plainStatus(question).label, 'Needs your answer');
   assert.equal(plainStatus(research).label, 'Working');
   assert.equal(plainStatus(blocked).label, 'Needs login');
   assert.equal(plainStatus({ ...research, status: 'failed' }).label, 'Couldn’t finish');

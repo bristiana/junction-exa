@@ -9,7 +9,7 @@ npm start
 npm test
 ```
 
-The lilac mascot starts at the bottom right and stays above windows on all macOS Spaces (including fullscreen). Drag its dotted handle to move it; Vali remembers the spot (if that display is still connected). A badge shows how many errands are running, and a ring with a ringing bell means one needs you. A speech bubble says what he is doing in one line. Hover or click the mascot for the list of every errand (running, waiting for you, done today) with Approve, Stop and Answer right there, plus the live view of the run in progress; double-click opens the chat. The menu bar offers Open chat, New errand, Talk to Vali, Say an errand, Pause/Resume and Quit.
+The lilac mascot starts at the bottom right and stays above windows on all macOS Spaces (including fullscreen). Drag its dotted handle to move it; Vali remembers the spot (if that display is still connected). A badge shows how many errands are running, and a ring with a ringing bell means one needs you. A speech bubble says what he is doing in one line. Hover or click the mascot for the list of every errand (what needs you first, then what is working, then what is done today), each with one status line in the words the extension uses (Waiting for your OK, Needs your answer, Needs login, Working, Done, Couldn't finish) and Approve, Stop, Answer or Open the site right there; the live view of the run in progress sits inside its errand; double-click opens the chat. The menu bar offers Open chat, New errand, Talk to Vali, Say an errand, Pause/Resume and Quit.
 
 Vali on screen (`valet.mjs` decides, `stage.mjs` moves the window):
 
@@ -57,7 +57,7 @@ Starts one real conversation on a throwaway account in that folder, with Chromiu
 SMOKE_OUT=/private/tmp/vali-desktop npm start -- --smoke
 ```
 
-Smoke uses isolated temporary userData and a clearly local fixture, sends no API requests and registers no shortcuts. It writes `mascot.png`, `chat.png`, `glance.png`, `chat-question.png`, `glance-question.png`, `settings.png`, `settings-profile.png`, `quick.png`, `quick-listening.png`, `mascot-talk.png`, `mascot-done.png`, `mascot-error.png` and `mascot-sleep.png`, checks that Vali walks to the edge and back, then quits. Missing output, renderer errors, empty captures, or timeout fail the command. It checks the UI only; it does not prove live API calls, the microphone, AppleScript permissions, notifications or all-Spaces behavior.
+Smoke uses isolated temporary userData and a clearly local fixture, sends no API requests and registers no shortcuts. It writes the mascot (`mascot`, `mascot-working`, `mascot-talk`, `mascot-done`, `mascot-error`, `mascot-sleep`), the list (`glance`, `glance-question`, `glance-all` with every status at once), the chat and settings (`chat`, `chat-question`, `settings`, `settings-profile`, `settings-imessage`) and the quick box (`quick`, `quick-empty`, `quick-pick`, `quick-letter`, `quick-listening`) as PNGs, plus `-light` copies of `glance-all`, `chat`, `quick-pick`, `mascot-working` and `mascot-talk`, checks that Vali walks to the edge and back, then quits. Missing output, renderer errors, empty captures, or timeout fail the command. It checks the UI only; it does not prove live API calls, the microphone, AppleScript permissions, notifications or all-Spaces behavior.
 
 ## Package with electron-builder
 

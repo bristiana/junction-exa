@@ -1,8 +1,8 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"><title>Your errands</title><link rel="stylesheet" href="glance.css"></head>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"><title>Your errands</title><link rel="stylesheet" href="../vendor/shared/tokens.css"><link rel="stylesheet" href="glance.css"></head>
 <body><div id="box" class="box">
-  <header><h1>Your errands</h1><button id="new" class="btn" type="button">New errand</button></header>
+  <header><div><h1>Your errands</h1><p id="summary" class="summary"></p></div><button id="new" class="btn" type="button">New errand</button></header>
   <div id="live" class="live" hidden><img alt="What Vali sees in the browser"><span id="liveStep"></span></div>
   <ul id="list" class="list" aria-live="polite"></ul>
-  <p id="empty" class="empty" hidden></p>
+  <div id="empty" class="empty" hidden><img src="../vendor/mascot/idle.svg" alt="" width="72" height="72"><b>All clear</b><span id="emptyText"></span></div>
   <footer><button id="chat" class="link" type="button">Open chat</button><span id="toast" role="status"></span></footer>
 </div><script type="module" src="glance.js"></script></body></html>

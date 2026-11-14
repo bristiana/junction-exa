@@ -29,7 +29,7 @@ function render() {
   chips();
   items = suggest(input.value, { selection: !!ctx.selection, page: !!ctx.page, letter: !!letter });
   if (picked >= items.length) picked = -1;
-  $('suggestions').replaceChildren(...items.map((s, i) => el('li', { class: 'suggestion', role: 'option', 'aria-selected': String(i === picked), text: s, onmousedown: e => { e.preventDefault(); input.value = s; picked = -1; submit(); } })));
+  $('suggestions').replaceChildren(...items.map((s, i) => el('li', { class: 'suggestion', role: 'option', 'aria-selected': String(i === picked), onmousedown: e => { e.preventDefault(); input.value = s; picked = -1; submit(); } }, el('span', { text: s }))));
 }
 function reset() { ctx = {}; letter = null; picked = -1; input.value = ''; note(''); render(); }
 const close = () => { stopRecording(true); window.vali.call('hideQuick'); };
@@ -131,7 +131,7 @@ window.addEventListener('drop', async e => {
   const t = letterType(file);
   if (t.error) { note(t.error, { error: true }); return; }
   letter = { name: file.name, mime: t.mime, size: file.size, bytes: await file.arrayBuffer() };
-  render(); note('Add a note if you like, then press Enter.'); input.focus();
+  picked = -1; render(); note('Add a note if you like, then press Enter.'); input.focus();
 });
 
 // ---------- from the main process ----------

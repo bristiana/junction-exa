@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:"><title>Ask Vali</title><link rel="stylesheet" href="quick.css"></head>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:"><title>Ask Vali</title><link rel="stylesheet" href="../vendor/shared/tokens.css"><link rel="stylesheet" href="quick.css"></head>
 <body><div id="box" class="box">
   <form id="form" autocomplete="off">
     <img class="face" src="../vendor/mascot/idle.svg" alt="" width="40" height="40">
@@ -9,6 +9,6 @@
   <div id="chips" class="chips" hidden></div>
   <ul id="suggestions" class="suggestions" role="listbox" aria-label="Suggestions"></ul>
   <p id="note" class="note" role="status" hidden></p>
-  <footer><span>↵ Send</span><span>⌥⇧Space Talk</span><span>Drop a letter here</span><span>Esc Close</span></footer>
+  <footer><span><kbd>↵</kbd> Send</span><span><kbd>↑</kbd><kbd>↓</kbd> Pick</span><span><kbd>⌥⇧Space</kbd> Talk</span><span><kbd>esc</kbd> Close</span><span class="end">Drop a letter here</span></footer>
   <div id="drop" class="drop" hidden>Drop the letter to send it to Vali</div>
 </div><script type="module" src="quick.js"></script></body></html>
