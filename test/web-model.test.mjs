@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, activityLine, channelOf, claimsOf, countersOf, errandStatus, factsOf, findStats, primaryAction, publishedStamp, questionOf, sourcesOf, stepsOf } from "../web/model.js";
+import { activityOf, activityLine, channelOf, claimsOf, countersOf, errandStatus, factsOf, moodOf, findStats, primaryAction, publishedStamp, questionOf, sourcesOf, stepsOf } from "../web/model.js";
 
 const legacy = {
   created_at: "2026-11-14T10:00:00Z", updated_at: "2026-11-14T10:00:20Z",
@@ -72,3 +72,9 @@ test("errand rows: who acts next, which channel, and counters with or without /v
   assert.equal(countersOf(null, [{ research: { status: "completed" } }]).searches, null);
 });
 
+test("the mascot's pose follows the errand", () => {
+  assert.equal(moodOf({ research: { status: "running", progress: [] } }), "thinking");
+  assert.equal(moodOf(legacy), "success");
+  assert.equal(moodOf({ ...legacy, execution: { status: "awaiting_approval" } }), "needs_approval");
+  assert.equal(moodOf({ research: { status: "failed" } }), "error");
+});

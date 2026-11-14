@@ -1,20 +1,24 @@
 // The page controller: routes (#/ home, #/t/<id> one errand), the ask box, and polling the open errand.
 import { api } from './api.js';
 import { $ } from './dom.js';
-import { TERMINAL, isActive } from './model.js';
+import { TERMINAL, isActive, moodOf } from './model.js';
 import { renderWorking, tickClock } from './working.js';
 import { renderAnswer } from './answer.js';
 import { startMic } from './mic.js';
 import { renderDashboard } from './dashboard.js';
+import { createMascot, mountPalettePicker } from './mascot.js';
 
 const POLL_MS = 1500;
 const DASHBOARD_MS = 10000;
 let followed = null; // { id, task, timer, clock }
 let dashboardTimer = 0;
+const mascot = window.Butler ? createMascot() : null;
+if (mascot) mountPalettePicker($('palette'), mascot);
 
 function showView(name) {
   for (const id of ['home', 'working', 'answer']) $(id).hidden = id !== name;
   window.scrollTo({ top: 0 });
+  mascot?.relayout();
 }
 
 function notice(text) {
@@ -69,6 +73,7 @@ function render(task) {
     && followed.task.research?.status === task.research?.status;
   followed.task = task;
   if (same) return;
+  mascot?.setMood(moodOf(task));
   const researching = !TERMINAL.has(task.research?.status);
   if (researching) renderWorking(task, handlers);
   else renderAnswer(task, handlers);
@@ -127,6 +132,7 @@ function route() {
   if (match) return follow(match[1]);
   unfollow();
   showView('home');
+  mascot?.setMood('idle');
   loadDashboard();
 }
 

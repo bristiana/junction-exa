@@ -214,6 +214,19 @@ export function countersOf(stats, tasks) {
   };
 }
 
+// The mascot's pose for an errand (states of vendor/butler.js).
+export function moodOf(task) {
+  const run = task?.execution?.status;
+  if (run === 'awaiting_approval') return 'needs_approval';
+  if (['starting', 'running', 'submitting'].includes(run)) return 'working';
+  if (questionOf(task)) return 'listening';
+  const research = task?.research?.status;
+  if (!TERMINAL.has(research)) return activityOf(task).length ? 'searching' : 'thinking';
+  if (research === 'failed' || run === 'failed') return 'error';
+  if (research === 'cancelled' || run === 'stopped') return 'idle';
+  return 'success';
+}
+
 export function timeAgo(iso, now = Date.now()) {
   const seconds = (now - Date.parse(iso)) / 1000;
   if (!Number.isFinite(seconds)) return '';
