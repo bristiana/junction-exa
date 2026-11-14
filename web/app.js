@@ -68,6 +68,10 @@ $('ask').addEventListener('submit', (event) => { event.preventDefault(); ask($('
 for (const chip of document.querySelectorAll('#examples button.chip')) chip.addEventListener('click', () => ask(chip.textContent));
 startMic($('mic'), { onText: (text) => { $('errand').value = text; $('errand').focus(); }, onError: notice });
 createAskDock({ start: (text) => startErrand(text), mascot });
+$('landing-try').addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  $('errand').focus({ preventScroll: true });
+});
 
 // ---------- one errand ----------
 // Only the open errand is polled: every 2 s while it runs, never while the tab is hidden, and after a 429 it waits
