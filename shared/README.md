@@ -11,6 +11,6 @@ Load `tokens.css` then `components.css`; put `.v-app` on `body`. No build step. 
 7. `.v-live` shows the cloud browser; its chip says what happens now. Add `--waiting` when it is held for the user's OK.
 8. `.v-bubble` is the mascot talking: one or two short sentences, first person, never a question it cannot act on.
 9. `.v-empty` gets a mascot, a 3-word title, one sentence, one button.
-10. Copy is plain and short: "Working", "Waiting for your OK", "Needs login", "Done", "Couldn't finish", "Stopped". Say what was or wasn't sent.
+10. Copy is plain and short: "Working", "Waiting for your OK", "Needs your answer", "Needs login", "Done", "Couldn't finish", "Stopped". Say what was or wasn't sent.
 
 Theme: follows the OS; set `data-theme="light|dark"` on any element to force it. Motion turns off under `prefers-reduced-motion`.

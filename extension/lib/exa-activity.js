@@ -39,11 +39,13 @@ export function exaActivity(task) {
   if (contents !== null) parts.push(`${contents} page read${contents === 1 ? "" : "s"}`);
   parts.push(`${sources.length} source${sources.length === 1 ? "" : "s"}`);
   const mode = task.mode;
-  const method = mode === "find" ? "Exa search finds pages for this errand."
-    : ["check", "claim", "write"].includes(mode) || task.research?.kind === "agent" ? "Exa research checks sources for this errand."
+  const method = mode === "find" ? "Found with Exa search on the live web."
+    : ["check", "claim", "write"].includes(mode) || task.research?.kind === "agent" ? "Checked with Exa research, which searched and read these sources."
     : mode === "execute" ? "Vali can use Exa search and page contents while filling the form."
     : "Vali uses Exa to find and read sources for this errand.";
-  return { summary: `Exa: ${parts.join(", ")}`, method, sources,
-    note: searches === null && contents === null ? "Exa call counts were not returned."
+  // The queries Exa ran, as the research progress reported them (the newest few, not a count).
+  const queries = [...new Set(asArray(task.progress).filter((p) => p?.kind === "search" && p.text).map((p) => String(p.text)))];
+  return { summary: `Exa: ${parts.join(", ")}`, method, sources, queries,
+    note: searches === null && contents === null ? (sources.length || queries.length ? "" : "Exa call counts were not returned.")
       : mode === "execute" ? "Counts cover form filling; research call counts were not returned." : "" };
 }

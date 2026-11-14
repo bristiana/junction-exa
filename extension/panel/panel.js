@@ -2,7 +2,7 @@
 // Everything the agent returns is rendered with textContent, never as HTML.
 
 import { PROFILE_FIELDS } from "../lib/task.js";
-import { numberSources, citesFor, resolveAction, fillPlaceholders, unfilledPlaceholders } from "../lib/actions.js";
+import { numberSources, citesFor, resolveAction, fillPlaceholders, unfilledPlaceholders, hostOf } from "../lib/actions.js";
 import { search } from "../lib/exa.js";
 import { connect, me as serverMe, pair, normalizeBaseUrl, ensureConnected, liveUrl, shotUrl, DEFAULT_BASE_URL, linkCode } from "../lib/backend.js";
 import { taskMascot, headerMascot, finishFlash, FLASH_MS } from "../lib/mascot.js";
@@ -98,7 +98,6 @@ function updateMascot() {
   const says = SAYS[pose] || "";
   if ($("mascotSays").textContent !== says) $("mascotSays").textContent = says;
 }
-$("newErrand").addEventListener("click", () => $("task").focus());
 $("task").addEventListener("focus", updateMascot);
 $("task").addEventListener("blur", () => setTimeout(updateMascot)); // after the blur, so hasFocus() is current
 
@@ -309,7 +308,7 @@ $("talk").addEventListener("click", () => {
 
 // ---------- composer ----------
 $("presets").replaceChildren(
-  ...PRESETS.map(([label, text]) => h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => { $("task").value = text; $("settings").hidden = true; $("task").focus(); } }))
+  ...PRESETS.map(([label, text]) => h("button", { type: "button", class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => { $("task").value = text; $("task").focus(); } }))
 );
 
 async function refreshActiveTab() {
@@ -355,6 +354,7 @@ $("task").addEventListener("keydown", (e) => {
 // ---------- cards ----------
 function elapsed(t) {
   const s = Math.round(((t.completedAt || Date.now()) - t.createdAt) / 1000);
+  if (!(s >= 1)) return null;
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
 }
 
@@ -388,7 +388,7 @@ function renderAction(t, a, i, map) {
   if (a.type === "email" && r.action.to) sub.push("To " + r.action.to);
   if (a.subject) sub.push(r.action.subject);
   if (a.type === "calendar" && a.start) sub.push(a.start + (a.location ? " · " + a.location : ""));
-  if ((a.type === "open_link") && a.url) sub.push(a.url);
+  if (a.type === "open_link" && a.url) sub.push(hostOf(a.url) || a.url);
   if (a.type === "phone_call" && a.to) sub.push(a.to);
   if (sub.length) head.firstChild.append(h("div", { class: "sub", text: sub.join(" · ") }));
 
@@ -413,7 +413,7 @@ function renderAction(t, a, i, map) {
     if (a.type === "open_link") btns.append(doItButton(t, { actionIndex: i }) || "");
   }
   box.append(btns);
-  if (r.missing.length) box.append(h("div", { class: "warn-note", text: `Fill in before sending: ${r.missing.join(", ")}. Add them in settings or edit the draft.` }));
+  if (r.missing.length) box.append(h("div", { class: "warn-note", text: `Fill in before sending: ${r.missing.join(", ").replace(/_/g, " ")}. Add them in settings or edit the draft.` }));
   return box;
 }
 
@@ -438,7 +438,7 @@ function renderFormFill(t, fills) {
       },
     }), /^https?:/.test(t.page?.url || "") ? doItButton(t, { startUrl: t.page.url, goal: "Fill in the form on this page" }) : null)
   );
-  if (missing.length) box.append(h("div", { class: "warn-note", text: `Still empty: ${missing.join(", ")}. Add them in settings.` }));
+  if (missing.length) box.append(h("div", { class: "warn-note", text: `Still empty: ${missing.join(", ").replace(/_/g, " ")}. Add them in settings.` }));
   return box;
 }
 
@@ -448,7 +448,7 @@ function renderMissing(t, questions) {
     h("h4", { text: "Vali needs" }),
     ...questions.map((q, i) => h("label", {}, q, inputs[i])),
     h("div", { class: "btns row end", style: "margin-top:8px" }, h("button", {
-      class: "v-btn v-btn--quiet v-btn--sm",
+      class: "v-btn v-btn--sm",
       text: "Continue",
       onclick: async () => {
         const answers = questions.map((q, i) => `${q} ${inputs[i].value.trim() || "(no answer)"}`).join("\n");
@@ -563,7 +563,7 @@ function renderQuestion(t, q) {
   const ta = h("textarea", { class: "v-textarea edit answer-box", rows: "2", "aria-label": "Your answer", placeholder: "Your answer" });
   ta.value = drafts.get(key) || "";
   ta.addEventListener("input", () => drafts.set(key, ta.value));
-  const btn = h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Send answer" });
+  const btn = h("button", { class: "v-btn v-btn--sm", type: "button", text: "Send answer" });
   const submit = async () => {
     const text = ta.value.trim();
     if (!text) { ta.focus(); return; }
@@ -584,8 +584,8 @@ function renderQuestion(t, q) {
   return h("div", { class: "exec-question" }, h("strong", { text: "Vali asks" }), h("p", { text: q.text }), ta, h("div", { class: "btns row end" }, btn));
 }
 
-function inlineButton(t, text, cls, action) {
-  const key = `${t.id}:${text}`;
+function inlineButton(t, text, cls, action, name = text) {
+  const key = `${t.id}:${name}`;
   const b = h("button", { class: cls, type: "button", text, "aria-label": `${text}: ${t.task.split("\n\nMy answers:")[0]}`, "data-inline-action": key });
   b.disabled = pendingInline.has(key);
   b.addEventListener("click", async () => {
@@ -606,11 +606,11 @@ function inlineButton(t, text, cls, action) {
   return b;
 }
 
-function serverButton(text, cls, msg, done, task = null) {
+function serverButton(text, cls, msg, done, task = null, name = text) {
   if (task) return inlineButton(task, text, cls, async () => {
     await send(msg);
     if (done) toast(done);
-  });
+  }, name);
   const b = h("button", { class: cls, type: "button", text });
   b.addEventListener("click", async () => {
     b.disabled = true;
@@ -636,22 +636,26 @@ function renderExecution(t) {
   const v = executionView(t, { profile: state.profile, answered: answered.get(t.id) ?? null });
   if (!v) return null;
   const box = h("section", { class: `exec exec-${v.phase}` });
+  const stop = v.live ? serverButton("Stop", "v-btn v-btn--danger v-btn--sm", { type: "stop", taskId: t.id }, null, t) : null;
   if (v.live) {
     const [status, tone] = errandStatus(t);
     const frame = h("div", { class: "v-live" + (v.phase === "approval" ? " v-live--waiting" : ""), "data-empty": frames.has(t.id) ? null : "Waiting for the first picture…" },
       liveImg(t), h("span", { class: `v-badge v-badge--dot ${tone ? "v-badge--" + tone : "v-badge--live"}`, text: status }));
-    box.append(frame, h("div", { class: "exec-step" }, v.phase === "live" ? h("i", { class: "dot" }) : null, h("span", { text: v.step || (v.status === "starting" ? "Opening the browser…" : "Working…") }), v.stepCount ? h("span", { class: "muted n", text: `step ${v.stepCount}` }) : null));
+    box.append(frame, h("div", { class: "exec-step" }, v.phase === "live" ? h("i", { class: "dot" }) : null, h("span", { text: v.step || (v.status === "starting" ? "Opening the browser…" : "Working…") }), v.stepCount ? h("span", { class: "muted n", text: `step ${v.stepCount}` }) : null,
+      v.phase === "approval" ? null : stop));
     if (v.question) box.append(renderQuestion(t, v.question));
   }
   if (v.phase === "approval") {
     box.append(h("h4", { text: "Ready to send" }));
     if (v.summary) box.append(h("p", { class: "exec-summary", text: v.summary }));
     if (v.approval.length) box.append(filledList(v.approval));
+    box.append(h("div", { class: "btns row end exec-actions" }, stop,
+      serverButton("Approve and send", "v-btn v-btn--sm", { type: "approve", taskId: t.id }, APPROVED, t, "Approve")));
   } else if (v.phase === "blocked" || v.phase === "failed") {
     const reason = v.blocker?.reason || v.result || v.error || "I couldn’t finish this errand.";
     box.append(h("p", { class: "exec-reason", text: reason }));
     const url = v.blocker?.url || v.url;
-    if (url) box.append(h("div", { class: "btns row" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
+    if (url) box.append(h("div", { class: "btns row" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
     if (v.filled.length) {
       box.append(h("h4", { text: "Filled so far" }), filledList(v.filled, { copy: true }),
         h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
@@ -665,6 +669,8 @@ function renderExecution(t) {
   }
   return box;
 }
+
+const APPROVED = "Approved. I’m sending it now.";
 
 // "Let Vali do it": start the cloud browser on a prepared link or on the page the errand came from.
 function doItButton(t, opts) {
@@ -691,13 +697,13 @@ function renderCard(t) {
   card.querySelector(".task-text").textContent = t.parentId ? "↳ " + t.task.split("\n\nMy answers:")[0] : t.task;
   card.querySelector(".meta").textContent = t.source === "whatsapp" ? " · WhatsApp" : "";
   card.querySelector(".card-head").addEventListener("click", () => selectTask(t));
-  card.querySelector(".card-head").setAttribute("aria-expanded", String(t.id === selectedTask()?.id));
+  card.dataset.id = t.id;
   const actions = card.querySelector(".v-row__actions");
   const v = executionView(t, { answered: answered.get(t.id) ?? null });
   if ((v?.question && !v.question.answered) || (!v && t.output?.structured?.missing_info?.length)) {
     actions.append(inlineButton(t, "Answer", "v-btn v-btn--quiet v-btn--sm", () => selectTask(t, true)));
   } else if (v?.phase === "approval") {
-    actions.append(serverButton("Approve", "v-btn v-btn--quiet v-btn--sm", { type: "approve", taskId: t.id }, "Approved. I’m sending it now.", t));
+    actions.append(serverButton("Approve", "v-btn v-btn--quiet v-btn--sm", { type: "approve", taskId: t.id }, APPROVED, t));
   }
   if (v?.live || t.status === "queued" || t.status === "running") {
     actions.append(serverButton("Stop", "v-btn v-btn--danger v-btn--sm", { type: v?.live ? "stop" : "cancel", taskId: t.id }, null, t));
@@ -712,13 +718,16 @@ function selectedTask() {
 
 function renderExaActivity(t, expanded) {
   const view = exaActivity(t);
+  if (!view.sources.length && !view.queries.length && view.note) return null; // nothing to show yet
+  const hosts = new Map();
+  for (const s of view.sources) if (!hosts.has(s.host)) hosts.set(s.host, s);
   return h("details", { class: "result-details exa-activity", open: expanded },
     h("summary", {}, h("span", { text: "How Vali found this" }), h("span", { class: "muted small exa-summary", text: view.summary })),
     h("p", { class: "small", text: view.method }),
-    h("p", { class: "muted small", text: view.note }),
-    view.sources.length ? h("ul", { class: "sources" }, ...view.sources.map((s) => h("li", {},
-      h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer", text: s.title }), " · ", h("span", { class: "host", text: s.host }))))
-      : h("p", { class: "muted small", text: "No sources returned yet." }));
+    view.note ? h("p", { class: "muted small", text: view.note }) : null,
+    view.queries.length ? [h("h4", { text: "Searched for" }), h("ul", { class: "exa-queries" }, ...view.queries.map((q) => h("li", { text: q })))] : null,
+    hosts.size ? [h("h4", { text: "Read" }), h("div", { class: "exa-hosts" }, ...[...hosts.values()].map((s) =>
+      h("a", { class: "exa-host", href: s.url, target: "_blank", rel: "noopener noreferrer", title: s.title }, h("span", { class: "host", text: s.host }))))] : null);
 }
 
 function renderDetail(t) {
@@ -729,10 +738,12 @@ function renderDetail(t) {
   body.hidden = !t;
   body.replaceChildren();
   if (!t) return;
-  const [, tone] = errandStatus(t);
+  const [label, tone] = errandStatus(t);
   body.classList.toggle("v-card--attention", tone === "warning");
-  body.append(h("h2", { class: "v-card__title", text: t.task.split("\n\nMy answers:")[0] }));
   const exec = renderExecution(t);
+  if (!exec?.querySelector(".v-live:not(.done)")) body.append(h("span", { class: `v-badge v-badge--dot detail-status ${tone ? "v-badge--" + tone : "v-badge--live"}`, text: label }));
+  const title = t.task.split("\n\nMy answers:")[0];
+  body.append(h("h2", { class: "v-card__title detail-title", text: title, title }));
   if (exec) body.append(exec);
   if (t.status === "queued" || t.status === "running") body.append(renderWorking(t));
   else if (t.status === "completed") {
@@ -740,8 +751,15 @@ function renderDetail(t) {
     if (exec) body.append(h("details", { class: "result-details", open: expanded }, h("summary", { text: "Details and sources" }), ...result));
     else body.append(...result);
   }
-  else body.append(h("p", { class: "error", text: t.error || "Stopped." }));
-  body.append(renderExaActivity(t, exaExpanded));
+  else if (t.status === "failed") {
+    body.append(h("p", { class: "exec-reason exec-reason--bad", text: t.error || "I couldn’t finish this errand." }),
+      h("div", { class: "btns row" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Try again", onclick: async () => {
+        try { open.add((await send({ type: "start", task: t.task, tabId: t.tabId, usePage: !!t.page })).id); } catch (e) { toast(e.message); }
+      } })));
+  }
+  else body.append(h("p", { class: "muted exec-result", text: "Stopped. Nothing was sent." }));
+  const exa = renderExaActivity(t, exaExpanded);
+  if (exa) body.append(exa);
   if (t.status !== "queued" && t.status !== "running") {
     body.append(h("div", { class: "foot" }, h("span", { class: "muted", text: [elapsed(t), t.page?.title, t.cost != null ? "$" + Number(t.cost).toFixed(3) : null].filter(Boolean).join(" · ") }),
       serverButton("Remove", "v-btn v-btn--quiet v-btn--sm", { type: "remove", taskId: t.id })));
@@ -762,7 +780,12 @@ function render() {
   if (focused && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT")) return;
   if (!list.contains(document.activeElement)) list.replaceChildren(...state.tasks.map(renderCard));
   $("list").hidden = !state.tasks.length;
-  renderDetail(selectedTask());
+  const selected = selectedTask();
+  for (const card of list.children) { // also when the list kept its nodes because a row has focus
+    card.classList.toggle("is-selected", card.dataset.id === selected?.id);
+    card.querySelector(".card-head").setAttribute("aria-expanded", String(card.dataset.id === selected?.id));
+  }
+  renderDetail(selected);
   $("empty").hidden = state.tasks.length > 0;
 }
 
