@@ -44,7 +44,7 @@ def api():
     store = SQLiteStore(':memory:')
     exa = ExaClient('fake-key', transport=httpx.MockTransport(respond))
     def spawn_poller(tid):
-        if store.get_task(tid)['research']['kind'] == 'search':
+        if store.get_task(tid)['research']['kind'] != 'agent':
             poll_research_once(tid, application)  # the fake poller finishes a search errand's quote check at once
         else:
             polls.append(tid)

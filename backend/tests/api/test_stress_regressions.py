@@ -43,10 +43,6 @@ def test_stress40_keyword_fallback(errand):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='stress40: deadline question accepts watch classification without answering the deadline',
-)
 def test_deadline_question_overrides_live_watch_classification():
     # Reproduce the observed classifier decision rather than call the provider.
     assert route(ERRANDS[39]['text'], classify=lambda task, page: ('watch', 0.9, 0.5)) == (

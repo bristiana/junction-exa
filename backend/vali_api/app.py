@@ -23,7 +23,7 @@ from .citations import cite, unchecked
 from .companion import CompanionBody, companion_tip, make_cache
 from .config import Config
 from .exa import ExaClient, ExaError, TTLCache
-from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update
+from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
 from .guard import RateLimited, SlidingWindow, authenticate, check_origin, check_task_budget, client_ip
 from .research import ANSWER_FIRST, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
@@ -474,6 +474,11 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                     output={'text': message, 'structured': {
                         'answer': message, 'status': 'info_only',
                         'key_facts': [], 'steps': [], 'actions': [], 'missing_info': []}, 'grounding': []})
+                try:  # answer what is true today first; the watch reports what changes later
+                    found = find_research(state, task, watch_criteria(body.task), profile)
+                    research.update(found, output=with_watch(found['output'], watch_criteria(body.task), message))
+                except ExaError:
+                    pass
             state.store.update_research(task['id'], research)
         except ExaError:
             state.store.update_research(task['id'], {**research, 'status': 'failed', 'error': 'Research service request failed.'})
@@ -481,7 +486,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise
         if research['status'] in {'completed', 'failed'}:
             push_task(application, task['id'], render_result)
-        if kind in ('agent', 'search') and research['status'] not in TERMINAL:
+        if research['status'] not in TERMINAL:
             state.spawn_research_poller(task['id'])
         return state.store.get_task(task['id'])
 
