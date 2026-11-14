@@ -3,6 +3,7 @@ import base64
 import re
 from dataclasses import dataclass
 from typing import Literal
+from urllib.parse import urlsplit
 from vali_api.config import vali_env
 from .browser import Browser
 from .guard import is_final_submit
@@ -123,6 +124,23 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                       headless: bool = True, exa: ExaTools | None = None, jev: Jev | None = None,
                       cookies: list[dict] | None = None, max_model_calls: int = 30) -> AgentResult:
     allowed_profile = permitted_profile(goal, profile)
+    declined = set()
+
+    def ask_consent(text):
+        # A saved detail the request did not name is used only after the user says yes, once per run.
+        wanted = [k for k in dict.fromkeys(re.findall(r'\{\{([^{}]+)\}\}', text))
+                  if k not in allowed_profile and profile.get(k) and k not in declined]
+        if not wanted or hooks.ask_user is None:
+            return
+        site_name = (urlsplit(browser.page.url).hostname or 'this site') if browser else 'this site'
+        names = ' and '.join(k.replace('_', ' ') for k in wanted)
+        hooks.on_step(f'Asked you: may I use your {names} on {site_name}?', None)
+        answer = hooks.ask_user(f'May I use your saved {names} on {site_name} for this? Reply yes or no.') or ''
+        if re.match(r'\s*(yes|y|ok|okay|sure|go|kyllä|joo|ja|da|sí|si|oui)\b', answer, re.I):
+            allowed_profile.update({k: profile[k] for k in wanted})
+        else:
+            declined.update(wanted)
+            raise ValueError(f'The user did not allow their {names}; leave the field or ask the user what to do')
     browser = None
     screencast = None
     personal_visible = False
@@ -143,6 +161,9 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         f"You are Vali's browser hand. Goal: {goal}\n"
         f"At most {max_steps} actions. Never invent personal data. Use these placeholders: "
         + ', '.join('{{'+key+'}}' for key in allowed_profile)
+        + ('. With the user\'s yes (asked for you when you type one): '
+           + ', '.join('{{'+key+'}}' for key in profile if key not in allowed_profile and profile[key])
+           if hooks.ask_user and any(k not in allowed_profile and profile[k] for k in profile) else '')
         + '. Never submit without request_approval; approval permits one final action. '
         'Personal placeholders belong on the start site. Before typing them on a booking provider, '
         'request_approval naming the new site and the fields and values to type; approval permits one field action. '
@@ -444,6 +465,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                 text = mask(args['text'], profile)
                                 if '{{' in text:
                                     browser.personal_field(args['ref'], approved=approved)
+                                ask_consent(text)
                                 resolved = substitute(text, allowed_profile)
                                 if resolved != text:
                                     pause_capture()
@@ -454,6 +476,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                 option = mask(args['option'], profile)
                                 if '{{' in option:
                                     browser.personal_field(args['ref'], approved=approved)
+                                ask_consent(option)
                                 resolved = substitute(option, allowed_profile)
                                 if resolved != option:
                                     pause_capture()
