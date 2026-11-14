@@ -53,7 +53,7 @@ function update(s) {
   if (override) return;
   mascot.setState(poseNow(s));
   if (talkMode) line(lastCaption || (talkMode === 'connecting' ? 'One moment…' : 'I’m listening. Tell me the errand.'));
-  else line(bubbleLine({ pose: s.pose, paused: s.paused, sleeping, badge: s.badge }));
+  else line(bubbleLine({ pose: s.pose, paused: s.paused, sleeping, welcome: s.welcome, badge: s.badge }));
 }
 function say(text, ms = 3000, pose, action) {
   override = text; line(text, action); if (pose) mascot.setState(pose); settle();

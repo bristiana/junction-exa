@@ -1,5 +1,17 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"><title>Your errands</title><link rel="stylesheet" href="../vendor/shared/tokens.css"><link rel="stylesheet" href="glance.css"></head>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"><title>Your errands</title><link rel="stylesheet" href="../vendor/shared/tokens.css"><link rel="stylesheet" href="../vendor/shared/components.css"><link rel="stylesheet" href="glance.css"><link rel="stylesheet" href="welcome.css"></head>
 <body><div id="box" class="box">
+  <section id="welcome" class="welcome" aria-labelledby="welcomeTitle" hidden>
+    <button id="welcomeClose" class="welcome-close v-btn v-btn--quiet v-btn--sm" type="button" aria-label="Close the welcome" title="Close">×</button>
+    <h1 id="welcomeTitle" class="v-card__title">Welcome to Vali</h1>
+    <p class="welcome-what">I run errands in Finland for you: I find out, fill in the forms and ask your OK before anything is sent.</p>
+    <ul class="welcome-ways" aria-label="Three ways to give me an errand">
+      <li><kbd id="welcomeType">⌥Space</kbd><span>Type an errand</span></li>
+      <li><kbd id="welcomeTalk">⌥⇧Space</kbd><span>Hold and say it</span></li>
+      <li><kbd aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V9h5.5L13 3.5ZM8 13h8v1.5H8V13Zm0 3.5h8V18H8v-1.5Z"/></svg></kbd><span>Drop a letter on me</span></li>
+    </ul>
+    <div class="v-card__actions"><button id="welcomeSample" class="v-btn v-btn--block" type="button">Try a sample errand</button></div>
+    <button id="welcomeLink" class="welcome-link v-btn v-btn--quiet v-btn--sm" type="button">Link with the Chrome extension</button>
+  </section>
   <header><div><h1>Your errands</h1><p id="summary" class="summary"></p></div><button id="new" class="btn" type="button">New errand</button></header>
   <div id="live" class="live" hidden><img alt="What Vali sees in the browser"><span id="liveStep"></span></div>
   <ul id="list" class="list" aria-live="polite"></ul>

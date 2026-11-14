@@ -7,6 +7,7 @@ import { makeApi } from './api.mjs';
 import { frontTab, grabSelection } from './mac.mjs';
 import { mascotState, notificationEvents, buildErrand, comingSoon, voiceOutcome, letterType, sealConfig, openConfig, badgeOf, MAX_VOICE_BYTES, talkError, redactSecrets } from './logic.mjs';
 import { asleep, restoreSpot } from './valet.mjs';
+import { welcomeStep, SAMPLE_ERRAND, WELCOME_LINE } from './welcome.mjs';
 import { createStage } from './stage.mjs';
 import { makeMessageBridge } from './imessage/runtime.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -26,13 +27,15 @@ const shortcuts = { quick: '', voice: '', ask: '', talk: '' };
 // Talk to Vali runs in the mascot window; it reports '', 'connecting', 'listening' or 'speaking'.
 let talking = '', facing = '', sleeping = false, lastBusyAt = Date.now();
 let persistChain = Promise.resolve();
+// First run: the welcome card beside the mascot, until the first errand or a close click (welcome.mjs decides).
+let welcoming = false, freshInstall = false, polledOnce = false;
 let imessage;
 const imessageView = () => imessage?.view() || { enabled: false, status: 'off', mode: 'open', allowed: [], linked: [] };
 // Saved settings that could not be decrypted stay untouched on disk until the user links an account on purpose.
 const LOCKED = 'Could not unlock saved settings. Unlock your login keychain and restart Vali, or link again in Settings.';
 let settingsLocked = false;
 const windows = () => [mascot, chat, quick, glance].filter(w => w && !w.isDestroyed());
-const state = () => ({ pose: mascotState(tasks, paused), paused, shortcut: shortcuts.quick, shortcuts, badge: badgeOf(tasks), talking,
+const state = () => ({ pose: mascotState(tasks, paused), paused, shortcut: shortcuts.quick, shortcuts, badge: badgeOf(tasks), talking, welcome: welcoming,
   valet: { place: stage?.place || 'home', edge: stage?.edge || 'right', facing, sleeping } });
 function publish() {
   const badge = badgeOf(tasks);
@@ -100,7 +103,23 @@ function notify(previous, next) {
 function updateTasks(next) {
   const old = tasks;
   tasks = next.sort((a, b) => b.createdAt - a.createdAt);
-  changes({ tasks }, { tasks: old }); publish();
+  changes({ tasks }, { tasks: old }); refreshWelcome(); publish();
+}
+function refreshWelcome() {
+  const step = welcomeStep({ dismissed: !!config.welcomeDone, freshInstall, polled: polledOnce, taskCount: tasks.length });
+  if (step === 'done') dismissWelcome();
+  else if (step === 'show' && !welcoming) { welcoming = true; publish(); showGlance(); }
+}
+// For good: saved in settings.json (smoke keeps it in memory, like the mascot's spot).
+function dismissWelcome() {
+  welcoming = false; publish();
+  if (config.welcomeDone) return;
+  if (smoke) config.welcomeDone = true; else setConfig({ welcomeDone: true }).catch(() => { config.welcomeDone = true; });
+}
+function welcomeAction(what) {
+  if (what === 'sample') showQuick('type', { text: SAMPLE_ERRAND });
+  else if (what === 'link') { openChat(); setSession({ openLink: Date.now() }); }
+  else if (what === 'close') { dismissWelcome(); glance.hide(); }
 }
 function addTask(remote) {
   const t = toLocalTask(remote); updateTasks([t, ...tasks.filter(x => x.id !== t.id)]); return t;
@@ -115,6 +134,7 @@ async function poll() {
     for (const t of tasks.filter(t => isActive(t) && !listed.has(t.remoteId))) {
       try { remote.push(await api().getTask(t.remoteId)); } catch (e) { if (e.status !== 404) throw e; }
     }
+    polledOnce = true;
     const next = remote.filter(t => !(config.hiddenTasks || []).includes(t.id)).map(r => {
       const previous = tasks.find(t => t.remoteId === r.id);
       const t = toLocalTask(r, previous); notify(previous, t); return t;
@@ -251,6 +271,7 @@ ipcMain.handle('vali', async (event, op, arg) => {
   if (op === 'chat') { openChat(arg); return; }
   if (op === 'hideQuick') { quick.hide(); return; }
   if (op === 'newErrand') { showQuick(); return; }
+  if (op === 'welcome') { welcomeAction(arg); return; }
   if (op === 'quickSize') { const [w] = quick.getSize(); quick.setSize(w, Math.max(90, Math.min(620, Math.round(arg)))); return; }
   if (op === 'glance') { if (arg === 'hover' || arg === 'toggle') { wake(); stage?.hover(); }
     if (arg === 'hover') hoverGlance(true); else if (arg === 'leave') hoverGlance(false); else if (arg === 'toggle') toggleGlance(); else if (arg === 'hide') glance.hide(); return; }
@@ -398,7 +419,7 @@ function showGlance({ focus = false, flash = false } = {}) {
 function hoverGlance(inside) {
   clearTimeout(glanceTimer);
   if (inside) glanceTimer = setTimeout(() => showGlance(), glance.isVisible() ? 0 : 350);
-  else glanceTimer = setTimeout(() => { if (!glance.isFocused()) glance.hide(); }, 700);
+  else glanceTimer = setTimeout(() => { if (!glance.isFocused() && !welcoming) glance.hide(); }, 700);
 }
 function toggleGlance() { if (glance.isVisible() && glance.isFocused()) glance.hide(); else showGlance({ focus: true }); }
 function trayMenu() {
@@ -423,11 +444,13 @@ async function capture(w, out, name) {
   const image = await w.webContents.capturePage(); if (image.isEmpty()) throw new Error(`${name} capture is empty`);
   await writeFile(path.join(out, `${name}.png`), image.toPNG());
 }
-// The same window in the light theme too (the OS theme otherwise decides), saved as <name>-light.png.
-async function captureLight(w, out, name) {
-  nativeTheme.themeSource = 'light'; await new Promise(r => setTimeout(r, 300));
-  try { await capture(w, out, `${name}-light`); } finally { nativeTheme.themeSource = 'system'; await new Promise(r => setTimeout(r, 300)); }
+// The window in a given theme (the OS theme otherwise decides).
+async function captureIn(theme, w, out, name) {
+  nativeTheme.themeSource = theme; await new Promise(r => setTimeout(r, 300));
+  try { await capture(w, out, name); } finally { nativeTheme.themeSource = 'system'; await new Promise(r => setTimeout(r, 300)); }
 }
+// The same window in the light theme too, saved as <name>-light.png.
+const captureLight = (w, out, name) => captureIn('light', w, out, `${name}-light`);
 async function runSmoke() {
   const out = process.env.SMOKE_OUT;
   if (!out) throw new Error('--smoke requires SMOKE_OUT.');
@@ -491,9 +514,33 @@ async function runSmoke() {
   await quick.webContents.executeJavaScript(`window.__smokeListening()`);
   await capture(quick, out, 'quick-listening');
   quick.hide(); glance.hide();
+  await smokeWelcome(out);
   await smokeValet(out);
   console.log(`Smoke captures in ${out}: ${(await readdir(out)).filter(f => f.endsWith('.png')).sort().join(', ')}`);
   app.quit();
+}
+// First run: no errands yet, so the welcome card shows beside the mascot (dark and light), the sample errand fills the
+// quick box, the link opens Settings > Link with the extension, and closing dismisses it for good.
+async function smokeWelcome(out) {
+  const fixture = tasks;
+  config.welcomeDone = false; freshInstall = true; updateTasks([]);
+  await waitFor(glance, `!document.getElementById('welcome').hidden && document.getElementById('welcomeType').textContent === '⌥Space'`, 'Welcome card missing');
+  await waitFor(mascot, `document.getElementById('line').textContent === ${JSON.stringify(WELCOME_LINE)}`, 'Welcome bubble missing');
+  if (!glance.isVisible()) throw new Error('Welcome card is not shown beside the mascot.');
+  await captureIn('dark', glance, out, 'welcome'); await captureLight(glance, out, 'welcome');
+  await captureIn('dark', mascot, out, 'mascot-welcome');
+  const click = id => glance.webContents.executeJavaScript(`document.getElementById(${JSON.stringify(id)}).click()`);
+  await click('welcomeSample');
+  await waitFor(quick, `document.getElementById('errand').value === ${JSON.stringify(SAMPLE_ERRAND)}`, 'Sample errand not in the quick box');
+  quick.hide();
+  await click('welcomeLink');
+  await waitFor(chat, `!document.getElementById('settings').hidden && document.activeElement?.id === 'linkInput'`, 'Link settings did not open');
+  await click('welcomeClose');
+  await waitFor(glance, `document.getElementById('welcome').hidden`, 'Welcome card did not close');
+  if (!config.welcomeDone || welcoming) throw new Error('Closing the welcome did not dismiss it for good.');
+  updateTasks(fixture); refreshWelcome();
+  if (welcoming) throw new Error('Welcome came back after it was dismissed.');
+  console.log('Welcome: card, sample errand, link and dismiss checked');
 }
 // The mascot's reactions, the talking state and the walk to the edge (window positions are checked, not captured).
 async function smokeValet(out) {
@@ -582,6 +629,7 @@ else {
     await mkdir(app.getPath('userData'), { recursive: true });
     try { config = { ...config, ...openConfig(JSON.parse(await readFile(configFile, 'utf8')), s => safeStorage.decryptString(Buffer.from(s, 'base64'))) }; }
     catch (e) { if (e.code !== 'ENOENT') { settingsLocked = true; config.connectionError = LOCKED; } }
+    freshInstall = !config.backendToken && !settingsLocked;
     if (smoke) { config.backendToken = 'smoke-fixture'; config.backendTokenUrl = config.backendUrl; tasks = smokeTasks(); }
     // Only the quick box (dictation) and the mascot (Talk to Vali) may use the microphone, and only for audio.
     // Copy buttons may write the clipboard.
@@ -606,7 +654,7 @@ else {
     quick.setAlwaysOnTop(true, 'floating'); quick.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     glance = makeWindow({ width: 380, height: 420, frame: false, resizable: false, transparent: true, hasShadow: false, alwaysOnTop: true, skipTaskbar: true, acceptFirstMouse: true });
     glance.setAlwaysOnTop(true, 'floating'); glance.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    glance.on('blur', () => { if (!smoke) glance.hide(); });
+    glance.on('blur', () => { if (!smoke && !welcoming) glance.hide(); });
     mascot.on('moved', () => { if (glance.isVisible()) positionGlance(); });
     const pixels = Buffer.alloc(18 * 18 * 4);
     for (let y = 3; y < 15; y++) for (let x = 2; x < 16; x++) {
@@ -637,12 +685,12 @@ else {
     trayMenu();
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Vali', submenu: [{ label: 'Open chat', click: () => openChat() }, { role: 'quit' }] }, { role: 'editMenu' }, { role: 'windowMenu' }]));
     await Promise.all([mascot.loadFile(path.join(root, 'renderer/mascot.html'), smoke || talkCheck ? { query: { check: '1' } } : {}), chat.loadFile(path.join(root, 'vendor/panel/panel.html')), quick.loadFile(path.join(root, 'renderer/quick.html')), glance.loadFile(path.join(root, 'renderer/glance.html'))]);
-    mascot.showInactive(); publish();
+    mascot.showInactive(); publish(); refreshWelcome();
     if (smoke) { setTimeout(() => { console.error('Smoke timed out.'); app.exit(1); }, 60000).unref(); await runSmoke(); }
     else if (talkCheck) { setTimeout(() => { console.error('Talk check timed out.'); app.exit(1); }, 90000).unref(); await runTalkCheck(); }
     else {
       stageTimer = setInterval(() => { stage.tick({ hold: !!talking || glance.isVisible() || windows().some(w => w.isFocused()) }); wakeCheck(); }, 400);
-      openChat();
+      if (!welcoming) openChat();
       connect().then(async () => { if (config.imessage?.enabled) await imessage.enable(); await poll(); }).catch(e => { config.connectionError = e.message; changes({ connectionError: e.message }, {}); });
       pollTimer = setInterval(() => poll().catch(() => {}), 4000);
     }
