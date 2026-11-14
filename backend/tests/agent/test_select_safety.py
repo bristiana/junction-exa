@@ -77,3 +77,15 @@ def test_native_selection_guards_only_chosen_option(chosen, blocked):
     else:
         browser.select('e1', chosen)
         element.select_option.assert_called_once_with(value='morning')
+
+
+def test_native_selection_picks_by_position_when_values_repeat():
+    element = Mock()
+    element.evaluate.return_value = True
+    element.locator.return_value.evaluate_all.return_value = [
+        {'value': '', 'text': '-- Make a choice --'}, {'value': '5', 'text': 'NAINEN / WOMAN'}, {'value': '5', 'text': 'MIES / MAN'}]
+    browser = Browser.__new__(Browser)
+    browser._element = lambda ref: element
+    browser._settle = Mock()
+    browser.select('e1', 'MIES / MAN')
+    element.select_option.assert_called_once_with(index=2)

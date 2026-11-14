@@ -441,12 +441,19 @@ class Browser:
         el = self._element(ref)
         if el.evaluate("el => el.localName==='select'"):
             options = el.locator('option').evaluate_all('(els)=>els.map(o=>({value:o.value,text:o.text}))')
-            match = next((o for o in options if option.casefold() in (o['value'].casefold(),o['text'].casefold())), None)
-            if not match:
+            # Text first: some sites give several options the same value (Kulttuurisauna: WOMAN and MAN are both "5").
+            index = next((i for i, o in enumerate(options) if option.casefold() == o['text'].casefold()), None)
+            if index is None:
+                index = next((i for i, o in enumerate(options) if option.casefold() == o['value'].casefold()), None)
+            if index is None:
                 raise ValueError('Option not found')
+            match = options[index]
             if is_final_submit('', match['text']) and not approved:
                 raise ValueError('Call request_approval first')
-            el.select_option(value=match['value'])
+            if sum(o['value'] == match['value'] for o in options) > 1:
+                el.select_option(index=index)
+            else:
+                el.select_option(value=match['value'])
         else:
             if not el.evaluate(r'''el => {
               const ids = (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\s+/).filter(Boolean);
