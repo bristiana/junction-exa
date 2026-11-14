@@ -420,7 +420,7 @@ function renderAction(t, a, i, map) {
   if (r.kind === "link" && r.url) {
     const label = a.type === "calendar" ? "Add to calendar" : a.type === "phone_call" ? "Call" : "Open";
     btns.prepend(h("button", { class: "v-btn v-btn--quiet v-btn--sm", text: label, onclick: () => chrome.tabs.create({ url: r.url }) }));
-    if (a.type === "open_link") btns.append(doItButton(t, { actionIndex: i }) || "");
+    if (a.type === "open_link") btns.append(doItButton(t, { actionIndex: i }) || "", fillHereButton(t));
   }
   box.append(btns);
   if (r.missing.length) box.append(h("div", { class: "warn-note", text: `Fill in before sending: ${r.missing.join(", ").replace(/_/g, " ")}. Add them in settings or edit the draft.` }));
@@ -665,7 +665,7 @@ function renderExecution(t) {
     const reason = v.blocker?.reason || v.result || v.error || "I couldn’t finish this errand.";
     box.append(h("p", { class: "exec-reason", text: reason }));
     const url = v.blocker?.url || v.url;
-    if (url) box.append(h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
+    if (url) box.append(h("div", { class: "btns row end" }, fillHereButton(t), h("button", { class: "v-btn v-btn--sm", type: "button", text: "Finish in your tab", title: url, onclick: () => chrome.tabs.create({ url }) })));
     if (v.filled.length) {
       box.append(h("h4", { text: "Filled so far" }), filledList(v.filled, { copy: true }),
         h("div", { class: "btns row end" }, h("button", { class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Copy all", onclick: () => navigator.clipboard.writeText(v.filled.map((r) => `${r.label}: ${r.value}`).join("\n")).then(() => toast("Copied")) })));
@@ -681,6 +681,20 @@ function renderExecution(t) {
 }
 
 const APPROVED = "Approved. I’m sending it now.";
+
+// "Fill it here": the form on the tab you are on (behind your own login, say), filled on this device. You send it.
+function fillHereButton(t) {
+  return h("button", {
+    class: "v-btn v-btn--quiet v-btn--sm", type: "button", text: "Fill it here",
+    title: "Fill the form on the tab you’re on with your details. Vali never sends it.",
+    onclick: async () => {
+      try {
+        const res = await send({ type: "fillHere", taskId: t.id, tabId: activeTab?.id });
+        toast(res.error || `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check and send it yourself.`);
+      } catch (e) { toast(e.message); }
+    },
+  });
+}
 
 // "Let Vali do it": start the cloud browser on a prepared link or on the page the errand came from.
 function doItButton(t, opts) {

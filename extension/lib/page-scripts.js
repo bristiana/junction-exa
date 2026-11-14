@@ -224,7 +224,8 @@ export function capturePage(mode) {
     }
     const id = "h" + ++n;
     el.setAttribute("data-vali-id", id);
-    const f = { id, type, label: clip(labelOf(el), 120), required: !!el.required };
+    // hint (autocomplete, name, id) stays in the browser: backendPage() does not send it.
+    const f = { id, type, label: clip(labelOf(el), 120), required: !!el.required, hint: clip(`${el.getAttribute("autocomplete") || ""} ${el.name || ""} ${el.id || ""}`, 120) };
     if (el.localName === "select") f.options = [...el.options].map((o) => clip(o.text, 60)).filter(Boolean);
     if (el.value && type !== "checkbox") f.current = clip(el.value, 60);
     fields.push(f);
@@ -256,9 +257,9 @@ export function fillPage(values) {
   };
   const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
   const mark = (el) => {
-    el.style.outline = "2px solid #6d5dfc";
+    el.style.outline = "2px solid #8b76e0";
     el.style.outlineOffset = "2px";
-    el.style.backgroundColor = "rgba(109, 93, 252, 0.08)";
+    el.style.backgroundColor = "#f6effa";
     el.setAttribute("data-vali-filled", "1");
   };
 
