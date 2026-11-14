@@ -10,7 +10,7 @@ import { executionView, LIVE } from "../lib/execution.js";
 
 import { linkCodeInput, codeCountdown, linkError } from "../lib/device-link.js";
 import { exaActivity } from "../lib/exa-activity.js";
-import { errandStatus } from "../lib/panel-state.js";
+import { panelStatus as errandStatus } from "./errand-status.js";
 
 const $ = (id) => document.getElementById(id);
 const PRESETS = [

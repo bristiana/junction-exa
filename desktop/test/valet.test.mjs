@@ -89,7 +89,7 @@ test('bubble distinguishes approval, question and research requests', () => {
   assert.equal(lineFor([question]), 'I have a question about an errand.');
   assert.equal(lineFor([{ ...approval, execution: { ...approval.execution, question: { text: 'When?' } } }]), 'I have a question about an errand.');
   for (const [status, line] of [['ready_to_approve', 'I need your OK on an errand.'], ['needs_info', 'I have a question about an errand.']]) {
-    assert.equal(lineFor([{ status: 'completed', output: { structured: { status } } }]), line);
+    assert.equal(lineFor([{ status: 'completed', mode: 'claim', output: { structured: { status } } }]), line);
   }
   assert.equal(lineFor([question, approval]), 'I have a question about an errand.');
   assert.equal(lineFor([approval, question]), 'I need your OK on an errand.');

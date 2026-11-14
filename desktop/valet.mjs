@@ -78,7 +78,7 @@ export function bubbleLine({ pose = 'idle', paused = false, sleeping = false, we
   }
   if (sleeping) return 'Resting. Hover to wake me.';
   if (welcome) return WELCOME_LINE;
-  if (pose === 'working' || pose === 'thinking') return badge.exa || (count > 1 ? `I’m on ${count} errands.` : 'I’m on it.');
+  if (['working', 'thinking', 'searching'].includes(pose)) return badge.exa || (count > 1 ? `I’m on ${count} errands.` : 'I’m on it.');
   if (pose === 'success') return 'All done. Have a look.';
   if (pose === 'error') return 'I couldn’t finish one. Have a look.';
   if (pose === 'listening') return 'I’m listening.';

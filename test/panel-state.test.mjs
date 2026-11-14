@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { errandStatus } from "../extension/lib/panel-state.js";
+import { panelStatus, hasNextStep } from "../extension/panel/errand-status.js";
+
+test("panel says Waiting for your OK only with something to approve", () => {
+  const done = (extra, structured = {}) => ({ status: "completed", output: { structured: { status: "ready_to_approve", ...structured } }, ...extra });
+  assert.deepEqual(panelStatus(done({ seen: true })), ["Done", "success"]);
+  assert.deepEqual(panelStatus(done({ seen: false, mode: "find" })), ["New answer", "success"]);
+  assert.deepEqual(panelStatus(done({ mode: "check" }, { actions: [] })), ["New answer", "success"]);
+  assert.deepEqual(panelStatus(done({ mode: "check" }, { actions: [{ type: "email", label: "Send" }] })), ["Waiting for your OK", "warning"]);
+  for (const mode of ["claim", "book", "write"]) assert.deepEqual(panelStatus(done({ mode })), ["Waiting for your OK", "warning"]);
+  assert.equal(hasNextStep(done({ mode: "find" })), false);
+  assert.deepEqual(panelStatus(done({ mode: "find" }, { status: "needs_info" })), ["Needs your answer", "warning"]);
+  assert.deepEqual(panelStatus(done({ execution: { status: "awaiting_approval" }, mode: "find" })), ["Waiting for your OK", "warning"]);
+});
 
 test("panel status gives the browser run priority over completed research", () => {
   const view = (execution) => errandStatus({ status: "completed", execution });
