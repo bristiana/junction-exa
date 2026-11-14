@@ -689,7 +689,7 @@ function fillHereButton(t) {
     title: "Fill the form on the tab you’re on with your details. Vali never sends it.",
     onclick: async () => {
       try {
-        const res = await send({ type: "fillHere", taskId: t.id, tabId: activeTab?.id });
+        const res = await send({ type: "fillHere", taskId: t.id, tabId: activeTab?.id, url: activeTab?.url });
         toast(res.error || `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check and send it yourself.`);
       } catch (e) { toast(e.message); }
     },

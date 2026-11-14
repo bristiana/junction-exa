@@ -72,7 +72,6 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
     linkCode: () => call("/v1/link/code", { method: "POST", body: {} }),
     redeemLink: (code) => call("/v1/link", { method: "POST", body: { code }, auth: false }),
     pair: () => call("/v1/pair", { method: "POST", body: {} }),
-    syncProfile: (profile) => call("/v1/profile", { method: "PUT", body: { profile: profile || {} } }),
     createTask: ({ task, page, effort, previous_task_id } = {}) =>
       call("/v1/tasks", { method: "POST", body: clean({ task, page, effort, previous_task_id }) }),
     // A tip for the page the user is on (lib/companion.js builds the body): { tip } or { tip: null }.
@@ -80,6 +79,7 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
     listTasks: (limit = 30) => call(`/v1/tasks?limit=${limit}`),
     getTask: (taskId) => call(`/v1/tasks/${id(taskId)}`),
     cancel: (taskId) => call(`/v1/tasks/${id(taskId)}/cancel`, { method: "POST", body: {} }),
+    // The only request that carries the profile: the cloud browser types it into the form the user approved.
     execute: (taskId, { action_index, start_url, goal, profile } = {}) =>
       call(`/v1/tasks/${id(taskId)}/execute`, { method: "POST", body: clean({ action_index, start_url, goal, profile }) }),
     approve: (taskId) => call(`/v1/tasks/${id(taskId)}/approve`, { method: "POST", body: {} }),
@@ -131,7 +131,6 @@ export const createUser = async () => (await configured()).createUser();
 export const me = async () => (await configured()).me();
 export const linkCode = async () => (await configured()).linkCode();
 export const pair = async () => (await configured()).pair();
-export const syncProfile = async (profile) => (await configured()).syncProfile(profile);
 export const createTask = async (body) => (await configured()).createTask(body);
 export const companion = async (page) => (await configured()).companion(page);
 export const listTasks = async (limit) => (await configured()).listTasks(limit);
