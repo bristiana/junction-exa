@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 from .browser import Browser
-from .guard import is_final_submit
+from .guard import is_final_submit, is_navigation
 from .hooks import AgentHooks
 from .jev import Jev, final_submit_probability
 from .live import Screencast, dismiss_cookie_banner, mark_private
@@ -308,7 +308,9 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                             content += '\n' + snapshot()
                         elif name == 'exa_search':
                             hooks.on_step('Searched the web with Exa: ' + mask(args['query'], profile)[:160], None)
-                            content = exa.search(args['query'], args['include_domains'])
+                            # The city is not identifying and local search needs it; nothing else is substituted.
+                            query = args['query'].replace('{{city}}', str(profile.get('city', '{{city}}')))
+                            content = mask(exa.search(query, args['include_domains']), profile)
                         elif name == 'exa_read':
                             hooks.on_step('Read with Exa: ' + mask(args['url'], profile)[:200], None)
                             content = exa.read(args['url'], args['question'])
@@ -332,7 +334,8 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                 described = browser.element_text(args['ref'])
                                 info = browser.element_info(args['ref'])
                                 # Cookie consent is never an irreversible commitment ("Confirm my choices").
-                                final = False if info['consent'] else is_final_submit(described, info['label'])
+                                final = False if info['consent'] or is_navigation(info['tag'], info['href'], info['inForm'], info['label']) \
+                                    else is_final_submit(described, info['label'])
                                 if not final and not approved and not info['consent']:
                                     # Jev can only make the guard stricter: a confident "irreversible" blocks the click.
                                     p = final_submit_probability(jev, mask(described, profile), last_snapshot)

@@ -96,10 +96,10 @@ class Screencast:
 
 # Minimal-consent buttons (en, fi, sv, de). Never "accept all".
 _MINIMAL = re.compile(
-    r'^\s*(reject( all)?|decline( all)?|deny( all)?|refuse( all)?|(use |allow |accept )?(only )?(strictly )?necessary( cookies)?( only)?|'
-    r'essential (cookies )?only|continue without accepting|hylkää( kaikki)?|kiellä( kaikki)?|vain välttämättömät|'
-    r'(salli|hyväksy) vain välttämättömät( evästeet)?|vain pakolliset|avvisa( alla)?|endast nödvändiga|'
-    r'tillåt endast nödvändiga|alle ablehnen|nur notwendige)\s*$', re.I)
+    r'reject( all)?|decline( all)?|deny( all)?|refuse( all)?|only (strictly )?(necessary|essential|required)|'
+    r'(necessary|essential|required)( cookies)? only|continue without accepting|hylkää( kaikki)?|kiellä( kaikki)?|'
+    r'vain (välttämättömät|pakolliset|tarpeelliset)|välttämättömät evästeet|avvisa( alla)?|endast nödvändiga|alle ablehnen|nur notwendige', re.I)
+_ACCEPT_ALL = re.compile(r'accept all|allow all|hyväksy kaikki|salli kaikki|godkänn alla|acceptera alla|alle akzeptieren', re.I)
 _BANNER = re.compile(r'cookie|eväst|kaka|kakor|consent|gdpr|privacy|tietosuoja', re.I)
 
 
@@ -128,7 +128,7 @@ def dismiss_cookie_banner(page):
     for frame in page.frames:
         try:
             for i, c in enumerate(frame.evaluate(_CANDIDATES)):
-                if _MINIMAL.match(c['label']) and _BANNER.search(str(c['around'])):
+                if _MINIMAL.search(c['label']) and not _ACCEPT_ALL.search(c['label']) and _BANNER.search(str(c['around'])):
                     frame.locator(f'[data-hoida-consent="{i}"]').first.click(timeout=2000)
                     page.wait_for_timeout(400)
                     return c['label']

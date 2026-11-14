@@ -76,6 +76,9 @@ def smoke(scenario: str = 'claim', url: str = '', goal: str = '', approve: bool 
                 execution = store.get_task(tid)['execution'] or {}
             except Exception:
                 return
+            if execution.get('question') and len(execution.get('inbox') or []) == int(execution.get('inbox_read') or 0):
+                # Nobody is watching a smoke run: answer questions so the run does not wait 5 minutes.
+                store.patch_execution(tid, message={'at': '', 'text': 'Pick the option closest to the goal yourself.', 'source': 'smoke'})
             if execution.get('status') == 'awaiting_approval' and not execution.get('approval_decision'):
                 store.patch_execution(tid, {'approval_decision': 'approved' if approve else 'stopped'})
             if execution.get('status') in ('done', 'failed', 'stopped'):
@@ -87,10 +90,12 @@ def smoke(scenario: str = 'claim', url: str = '', goal: str = '', approve: bool 
     elapsed = time.monotonic() - started
     execution = store.get_task(tid)['execution']
     span = (frames[-1] - frames[0]) if len(frames) > 1 else 0
-    report = dict(status=execution['status'], result=execution.get('result'), error=execution.get('error'),
+    import os
+    report = dict(jev=bool(os.environ.get('JEV_API_KEY')), status=execution['status'], result=execution.get('result'), error=execution.get('error'),
                   final_url=execution.get('current_url'), seconds=round(elapsed, 1), steps=[s['text'] for s in execution['steps']],
                   shots=len(execution['shots']), live_frames=len(frames), frames_per_second=round(len(frames) / span, 2) if span else None,
-                  approval=execution.get('approval'), usage=execution.get('usage'), sources=execution.get('sources'))
+                  approval=execution.get('approval'), usage=execution.get('usage'), sources=execution.get('sources'),
+                  filled=execution.get('filled'))
     exa.close()
     store.close()
     return report

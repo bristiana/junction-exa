@@ -205,3 +205,24 @@ def test_filled_values_kept_for_handoff(local_site):
     result = run_browser_agent('x', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert result.status == 'failed'
     assert result.filled == [{'label': 'Full name', 'value': '{{name}}'}, {'label': 'Claim type', 'value': 'Refund'}]
+
+
+from hoida_agent.guard import is_navigation
+from hoida_agent.live import _MINIMAL, _ACCEPT_ALL
+
+
+def test_landing_page_links_are_not_final_but_paying_links_are():
+    assert is_navigation('a', '/en/saunas/helsinki/booking', False, 'Book now')
+    assert is_navigation('a', 'https://example.com/varaa', False, 'Varaa aika')
+    assert not is_navigation('a', '/checkout/pay', False, 'Pay now')
+    assert not is_navigation('a', '#', False, 'Book now')
+    assert not is_navigation('button', '', True, 'Book now')
+    assert not is_navigation('a', '/x', True, 'Book now')
+
+
+@pytest.mark.parametrize('label,minimal', [
+    ('Continue with only necessary cookies', True), ('Only necessary', True), ('Vain välttämättömät', True), ('Reject all', True),
+    ('Hylkää kaikki', True), ('Accept all cookies', False), ('Hyväksy kaikki', False), ('Settings', False),
+])
+def test_minimal_consent_labels(label, minimal):
+    assert (bool(_MINIMAL.search(label)) and not _ACCEPT_ALL.search(label)) is minimal

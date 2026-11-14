@@ -20,3 +20,15 @@ def is_final_submit(element_description: str, label: str | None = None) -> bool:
         if _NON_FINAL.match(label):
             return False
     return bool(_FINAL.search(element_description) or _SUBMIT.search(element_description))
+
+
+# Words that stay final even on a plain link ("Book now" on a landing page only opens the booking flow).
+_STRONG_FINAL = re.compile(r"\b(submit|send|pay|payment|checkout|confirm|place\s+order|lähetä|maksa|maksuun|kassalle|vahvista|"
+                           r"tilaa|jatka\s+maksamaan|skicka|bekräfta|betala)\b", re.I)
+
+
+def is_navigation(tag: str, href: str, in_form: bool, label: str) -> bool:
+    """A real link outside a form that does not pay, confirm or send: opening it is not irreversible."""
+    href = (href or '').strip().lower()
+    real = href and not href.startswith(('#', 'javascript:', 'mailto:', 'tel:'))
+    return tag == 'a' and bool(real) and not in_form and not _STRONG_FINAL.search(label or '')

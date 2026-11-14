@@ -147,7 +147,9 @@ class Browser:
         """Visible label and whether the element sits inside a cookie/consent banner."""
         return self._element(ref).evaluate('''el => ({
           label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\\s+/g,' ').trim().slice(0,120),
-          consent: !!el.closest('[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[id*=usercentrics i],[id*=onetrust i],#CybotCookiebotDialog,[aria-label*=cookie i],[aria-label*=eväst i]')
+          tag: el.localName, href: el.getAttribute('href') || '', inForm: !!el.closest('form'),
+          consent: !!el.closest('[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[data-testid*=cookie i],[data-testid*=consent i],[id*=usercentrics i],[id*=onetrust i],#CybotCookiebotDialog,[aria-label*=cookie i],[aria-label*=eväst i]')
+            || /cookie|eväste|kakor|consent/i.test((el.closest('dialog,[role=dialog],[aria-modal=true]')?.innerText || '').slice(0, 3000))
             || (el.getRootNode() instanceof ShadowRoot && /usercentrics|cookie|consent/i.test(el.getRootNode().host.id + ' ' + el.getRootNode().host.className))
         })''')
 
