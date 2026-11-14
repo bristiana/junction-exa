@@ -79,10 +79,6 @@ def test_one_account_allows_ten_task_burst(task_budget):
     admit_burst(*task_budget)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='stress40: 30-request account window rejects a ten-task burst after 27 recent tasks',
-)
 def test_one_account_allows_ten_task_burst_after_recent_activity(task_budget):
     application, user = task_budget
     for _ in range(27):

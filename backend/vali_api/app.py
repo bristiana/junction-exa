@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from contextvars import ContextVar
 import hmac
 import json
-import re
 from io import BytesIO
 from urllib.parse import urlsplit, unquote
 import threading
@@ -23,7 +22,7 @@ from .citations import cite
 from .config import Config
 from .exa import ExaClient, ExaError
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update
-from .guard import SlidingWindow, authenticate, check_origin, check_task_budget
+from .guard import RateLimited, SlidingWindow, authenticate, check_origin, check_task_budget
 from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .llm import make_fast_json
@@ -300,14 +299,18 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             check_origin(request.headers.get('origin'), config.allowed_origins)
             if oversized_request(request.url.path, request.headers.get('content-length')):
                 raise HTTPException(413, 'Upload exceeds 10 MB')
-            image_get = request.method == 'GET' and re.fullmatch(
-                r'/v1/tasks/[^/]+/(?:live\.jpg|shots/[0-9]+\.jpg)', request.url.path)
-            if not image_get:
-                ip = request.client.host if request.client else 'unknown'
-                application.state.limiter.check('ip:' + ip, application.state.limiter.ip_limit)
+            if request.method == 'POST' and request.url.path == '/v1/users':
+                limiter, ip = application.state.limiter, request.client.host if request.client else 'unknown'
+                limiter.check('signup:' + ip, limiter.signup_limit, limiter.signup_seconds, what='new accounts')
+        except RateLimited as exc:
+            return await rate_limited(request, exc)
         except HTTPException as exc:
             return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
         return await call_next(request)
+
+    @application.exception_handler(RateLimited)
+    async def rate_limited(request, exc):
+        return JSONResponse({'detail': exc.detail, 'retry_after': exc.retry_after}, status_code=429, headers=exc.headers)
 
     @application.exception_handler(ExaError)
     async def exa_error(request, exc):
