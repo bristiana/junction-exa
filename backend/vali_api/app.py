@@ -25,7 +25,7 @@ from .config import Config
 from .exa import ExaClient, ExaError, TTLCache
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update
 from .guard import RateLimited, SlidingWindow, authenticate, check_origin, check_task_budget, client_ip
-from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
+from .research import ANSWER_FIRST, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .llm import make_fast_json
 from .questions import early_question, with_answer
@@ -112,6 +112,7 @@ def check_quotes(application, task, research):
         logger.exception('quote check failed for %s', task['id'])
         unchecked(final['output'], task['task'])
     final['activity'] = final['activity'] + [activity.done(task, final['output'])]
+    final['question'] = final.get('question') or missing_info_question(final['output'])
     if store.update_research(task['id'], final, expected=claimed):
         push_task(application, task['id'], render_result)
     return True
@@ -156,10 +157,16 @@ def poll_research_once(task_id, application=None):
     return research['status'] in TERMINAL
 
 
+def missing_info_question(output):
+    """What the answer says is still missing becomes an optional question; the answer itself is already there."""
+    missing = [m for m in ((output or {}).get('structured') or {}).get('missing_info') or [] if isinstance(m, str) and m.strip()]
+    return {'text': missing[0].strip()[:300], 'options': [], 'answer': None} if missing else None
+
+
 def find_research(state, task, text, profile):
     """One Exa search+answer call; the quote check follows in the poller, off the request."""
     response = state.exa.search(dict(query=build_query(text, task['page']), type='auto', numResults=5,
-                                     contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT))
+                                     contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST))
     found = dict(output=map_find_output(response), cost=(response.get('costDollars') or {}).get('total') or 0,
                  activity=activity.from_search(task, text, response, profile))
     return quoting(task, found)

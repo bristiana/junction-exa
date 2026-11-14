@@ -109,3 +109,33 @@ def test_find_answer_reruns_the_search(api):
     searches = [c[2] for c in calls if c[1] == '/search']
     assert len(searches) == 2 and 'The user answered "Which city?": Tampere' in searches[1]['query']
     assert refined['question']['answer'] == 'Tampere' and refined['cost'] == 0.02
+
+
+def test_missing_info_becomes_an_optional_question_after_the_answer(api):
+    client, application, calls, polls, state = api
+    state['status'] = 'completed'
+    from vali_api import app as module
+    original = module.research_from_run
+    def with_missing(run, kind='agent'):
+        research = original(run, kind)
+        if research.get('output'):
+            research['output']['structured']['missing_info'] = ['Which train do you take?', 'x']
+        return research
+    module.research_from_run = with_missing
+    try:
+        task = client.post('/v1/tasks', json={'task': 'check if my train from Tampere to Helsinki is on time'}).json()
+        assert task['research']['question'] is None
+        assert poll_research_once(task['id'], application) is True
+    finally:
+        module.research_from_run = original
+    research = client.get('/v1/tasks/' + task['id']).json()['research']
+    assert research['output']['structured']['answer'] == 'Done.'
+    assert research['question'] == {'text': 'Which train do you take?', 'options': [], 'answer': None}
+
+
+def test_answer_first_rules_reach_agent_and_find_requests(api):
+    client, application, calls, *_ = api
+    from vali_api.research import SYSTEM_PROMPT, build_run_request
+    assert build_run_request('x')['systemPrompt'].startswith(SYSTEM_PROMPT) and 'Answer first' in build_run_request('x')['systemPrompt']
+    client.post('/v1/tasks', json={'task': 'find a cheap gym in Oulu'})
+    assert 'Answer first' in [c[2] for c in calls if c[1] == '/search'][0]['systemPrompt']
