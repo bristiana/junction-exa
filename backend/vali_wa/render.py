@@ -177,13 +177,37 @@ def render_nothing_new(lang="en"):
     return [NOTHING_NEW.get((lang or "en")[:2], NOTHING_NEW["en"])]
 
 
-def _short(text, limit=260):
-    # The answer in one or two sentences: WhatsApp is read on a phone, the details are one tap away.
-    sentences = re.split(r"(?<=[.!?])\s+", " ".join(str(text).split()))
-    out = sentences[0]
-    if len(sentences) > 1 and len(out) + len(sentences[1]) < 160:
-        out += " " + sentences[1]
-    return out if len(out) <= limit else out[:limit - 1].rstrip() + "…"
+def _short(text, limit=200):
+    # One sentence, read on a phone: a long one stops at its first clause (":" or ";"); the rest is one tap away.
+    sentence = re.split(r"(?<=[.!?])\s+", " ".join(str(text).split()))[0]
+    if len(sentence) > limit:
+        clause = re.split(r"\s*[:;]\s+", sentence)[0].rstrip(",")
+        sentence = clause.rstrip(".") + "." if 20 <= len(clause) <= limit else sentence[:limit - 1].rsplit(" ", 1)[0] + "…"
+    return sentence
+
+
+def _line(text, limit=90):
+    text = " ".join(str(text).split())
+    return text if len(text) <= limit else text[:limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+# Topics that can change later are worth a watch; a one-off how-to is not.
+_CHANGES = re.compile(r"\b(price|prices|cost|costs|fee|fees|benefit|benefits|allowance|supplement|amount|rule|rules|law|laws|"
+                      r"deadline|deadlines|queue|wait|available|availability|slot|slots|ticket|tickets|event|events|schedule|"
+                      r"opening|open now|new|change|changes|rent|rate|rates|exchange|apartment|apartments|housing|job|jobs|"
+                      r"internship|scholarship|discount|sale|concert|festival|weather|strike|timetable|hinta|tuki)\b", re.I)
+
+
+def result_media(task):
+    """The first source's picture (Exa Contents' image) and up to two PDF sources, for the WhatsApp answer."""
+    sources = ((task.get("research") or {}).get("output") or {}).get("sources") or []
+    image = next((s["image"] for s in sources if str(s.get("image") or "").startswith("https://")), None)
+    pdfs = []
+    for s in sources:
+        url = _safe_url(s.get("url"))
+        if url and urlsplit(url).path.lower().endswith(".pdf") and len(pdfs) < 2:
+            pdfs.append((url, (s.get("title") or urlsplit(url).path.rsplit("/", 1)[-1] or "document")[:60] + ".pdf"))
+    return image, pdfs
 
 
 def result_buttons(task, profile=None):
@@ -198,7 +222,7 @@ def result_buttons(task, profile=None):
         if booking and i == 0 and action.get("url"):
             title = "Book it"  # the first action of a booking runs the booking, not just opens a page
         buttons.append((f"choose:{task['id']}:{i + 1}", title if len(title) <= 20 else title[:19].rstrip() + "…"))
-    if task.get("mode") in ("check", "find") and not booking:
+    if task.get("mode") in ("check", "find") and not booking and _CHANGES.search(str(task.get("task") or "")):
         # Proactive: an answer can become a daily Exa watch that reports only what is new.
         buttons = buttons[:2] + [(f"watch:{task['id']}", "Watch this")]
     if next_errand(task):
@@ -222,7 +246,7 @@ def render_result(task, profile=None, buttons=False):
     visible = {source["n"] for source in sources}
     answer = _short(_text(structured.get("answer") or output.get("text") or "Vali is still researching this errand.", profile))
     sections = [f"*{answer}*" + _suffix(fields, "answer", visible)]
-    facts = [f"• {_text(fact.get('label'), profile)}: {_text(fact.get('value'), profile)}"
+    facts = [f"• {_text(fact.get('label'), profile)}: {_line(_text(fact.get('value'), profile))}"
              + _suffix(fields, f"key_facts[{i}]", visible)
              for i, fact in enumerate((structured.get("key_facts") or [])[:3])]
     if facts:

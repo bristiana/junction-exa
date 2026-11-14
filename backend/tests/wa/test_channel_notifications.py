@@ -23,7 +23,7 @@ def notification():
     def patch(tid, values):
         task['execution'].update(values)
     store.patch_execution.side_effect = patch
-    api = SimpleNamespace(send_text=AsyncMock(), upload_media=AsyncMock(return_value='uploaded-id'),
+    api = SimpleNamespace(send_text=AsyncMock(), send_document=AsyncMock(), upload_media=AsyncMock(return_value='uploaded-id'),
                           send_image=AsyncMock(), send_buttons=AsyncMock())
     app = SimpleNamespace(state=SimpleNamespace(store=store, whatsapp_api=api))
     return app, task, api
@@ -163,3 +163,24 @@ def test_info_answers_offer_a_watch():
     task = {'id': 't2', 'mode': 'check', 'task': 'Kela housing supplement for students', 'research': {'output': {'structured': {
         'actions': [{'label': 'Open OmaKela', 'url': 'https://kela.fi'}, {'label': 'Read the rules'}, {'label': 'Call Kela'}]}}}}
     assert result_buttons(task)[-1] == ('watch:t2', 'Watch this') and len(result_buttons(task)) == 3
+
+
+def test_answer_brings_the_page_picture_and_pdfs(notification):
+    from vali_wa.render import render_result
+    app, task, api = notification
+    task['execution'] = None
+    task['mode'] = 'check'
+    task['research'] = {'status': 'completed', 'output': {'sources': [
+        {'n': 1, 'url': 'https://kulttuurisauna.fi/', 'image': 'https://kulttuurisauna.fi/photo.jpeg'},
+        {'n': 2, 'url': 'https://www.kela.fi/documents/ot2e.pdf', 'title': 'Form OT 2e'}],
+        'structured': {'answer': 'Done.', 'actions': [{'label': 'Open it', 'url': 'https://x.example/'}]}}}
+    push_task(app, task['id'], render_result)
+    assert api.send_buttons.await_args.kwargs == {'image': 'https://kulttuurisauna.fi/photo.jpeg'}
+    api.send_document.assert_awaited_once_with('358401234567', 'https://www.kela.fi/documents/ot2e.pdf', 'Form OT 2e.pdf')
+
+
+def test_watch_only_for_things_that_change():
+    from vali_wa.render import result_buttons
+    base = {'id': 't3', 'mode': 'check', 'research': {'output': {'structured': {'actions': [{'label': 'Open', 'url': 'https://x.example/'}]}}}}
+    assert ('watch:t3', 'Watch this') not in result_buttons({**base, 'task': 'How do I open a bank account without a Finnish ID?'})
+    assert ('watch:t3', 'Watch this') in result_buttons({**base, 'task': 'Kela benefits for students'})

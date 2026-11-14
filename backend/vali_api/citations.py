@@ -167,6 +167,7 @@ def fetch_texts(exa, pages):
         page['text'] = (result.get('text') or '')[:FETCH_CHARS]
         page['title'] = page['title'] or result.get('title') or ''
         page['published'] = result.get('publishedDate')
+        page['image'] = result.get('image') if str(result.get('image') or '').startswith('https://') else None
     return float((response.get('costDollars') or {}).get('total') or 0)
 
 
@@ -468,7 +469,8 @@ def number_sources(claims, support, pages, context):
             numbers[index] = len(sources) + 1
             domain = domain_of(page['url'])
             sources.append({'n': numbers[index], 'url': page['url'], 'title': page['title'] or domain,
-                            'domain': domain, 'official': is_official(domain, context), **freshness(page.get('published'))})
+                            'domain': domain, 'official': is_official(domain, context), **freshness(page.get('published')),
+                            **({'image': page['image']} if page.get('image') else {})})
         return sources[numbers[index] - 1]
     for text, found in zip(claims, support):
         refs, supported = [], False
