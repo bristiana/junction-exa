@@ -65,7 +65,8 @@ Tables we need:
 |---|---|
 | `message` | `ROWID`, `guid`, `text`, `attributedBody`, `handle_id`, `is_from_me`, `date`, `service`, `cache_has_attachments`, `is_audio_message`, `associated_message_type`, `item_type`, `error` |
 | `handle` | `ROWID`, `id` (phone in E.164 or email), `service` |
-| `chat` | `ROWID`, `guid`, `style` (43 = 1:1 iMessage, 45 = group), `chat_identifier` |
+| `chat` | `ROWID`, `guid`, `style` (45 = 1:1 direct, 43 = group), `chat_identifier` |
+| `chat_handle_join` | `chat_id`, `handle_id` (require exactly one participant) |
 | `chat_message_join` | `chat_id`, `message_id` |
 | `attachment` | `ROWID`, `filename`, `mime_type`, `uti`, `transfer_state`, `total_bytes` |
 | `message_attachment_join` | `message_id`, `attachment_id` |
@@ -74,6 +75,8 @@ Facts that matter [8]:
 
 - `date` is nanoseconds since 2001-01-01 UTC. Unix seconds = `date / 1e9 + 978307200`.
 - `is_from_me` is 1 for sent, 0 for received.
+- Direct chats use `iMessage;-;<handle>` GUIDs; groups use `iMessage;+;chat...`.
+  Require style 45 and exactly one participant in `chat_handle_join`.
 - `attachment.filename` starts with `~/Library/Messages/Attachments/...`.
   Expand `~` before reading.
 - With iCloud "Optimize Storage" a file can be missing on disk.
@@ -602,7 +605,7 @@ Cases:
 3. `text` NULL, 300-byte message with `0x81` length -> full text, no truncation.
 4. Emoji and Finnish characters (ä, ö) survive decoding.
 5. `text` is only `U+FFFC` with an image -> treated as an attachment message.
-6. Group chat row (style 45) -> ignored, no decode, no send.
+6. Group chat row (style 43) -> ignored, no decode, no send.
 7. `is_from_me = 1` -> ignored.
 8. Tapback row (`associated_message_type = 2000`) -> ignored.
 9. Row dated before `startedAt` -> ignored.
