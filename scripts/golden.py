@@ -1,8 +1,8 @@
-"""Golden errands: four live runs against the deployed Vali API.
+"""Golden errands: five live runs against the deployed Vali API.
 
 Usage:
     backend/.venv/bin/python scripts/golden.py --token-file /path/to/tok
-    GOLDEN_TOKEN=... backend/.venv/bin/python scripts/golden.py [--api URL] [--only find,claim,execute,letter]
+    GOLDEN_TOKEN=... backend/.venv/bin/python scripts/golden.py [--api URL] [--only find,claim,execute,letter,lookup]
 
 Errands (run in parallel, 4 minutes each):
     find     "Find a sauna in Helsinki open tonight for 6 people" ends completed with cited results.
@@ -12,12 +12,15 @@ Errands (run in parallel, 4 minutes each):
              Approval is only ever sent when the start and current URL are on httpbin.org.
 
     letter   uploads a synthetic Finnish rent notice to /v1/letters and checks for a completed answer.
+    lookup   the errands.json errand execute-lookup-httpbin (Allas Sea Pool hours + address looked up with Exa while
+             filling the httpbin form), same approval rule as execute; passes only if execution.exa has a search with results.
 
 Prints one line per errand (PASS/FAIL, mode, seconds, cost, reason). Exit code 1 if any errand fails.
 The token is read from GOLDEN_TOKEN or --token-file and is never printed.
 """
 import argparse
 import asyncio
+import json
 import os
 import sys
 import time
@@ -134,12 +137,14 @@ async def live_frame(client, tid, token):
             and response.content[:3] == b'\xff\xd8\xff')
 
 
-async def execute(client, errand, token):
-    task = await create(client, errand, EXEC_TASK, page={'url': FORM_URL, 'title': 'httpbin test order form'})
+async def drive(client, errand, token, text, goal):
+    """Research, /execute on the httpbin form, approve once on httpbin.org, wait for the end.
+    Returns (execution, steps, frames); raises Fail unless execution is done after approval."""
+    task = await create(client, errand, text, page={'url': FORM_URL, 'title': 'httpbin test order form'})
     task = await wait_research(client, errand, task)
     tid = task['id']
     task = (await call(client, 'POST', f'/v1/tasks/{tid}/execute',
-                       json={'start_url': FORM_URL, 'goal': EXEC_GOAL, 'profile': TEST_PROFILE})).json()
+                       json={'start_url': FORM_URL, 'goal': goal, 'profile': TEST_PROFILE})).json()
     if not on_safe_host((task.get('execution') or {}).get('start_url')):
         raise Fail('execution start_url is not httpbin.org')
     frames = approved = 0
@@ -176,7 +181,27 @@ async def execute(client, errand, token):
         raise Fail(f'execution {status} after {steps} steps: {execution.get("error") or execution.get("result") or "no error"}')
     if not approved:
         raise Fail('done without passing the approval gate')
+    return execution, steps, frames
+
+
+async def execute(client, errand, token):
+    _, steps, frames = await drive(client, errand, token, EXEC_TASK, EXEC_GOAL)
     return f'done after approval, {steps} steps, {frames} live frames'
+
+
+def lookup_errand():
+    errands = json.loads((Path(__file__).with_name('evals') / 'errands.json').read_text())
+    errands = errands['errands'] if isinstance(errands, dict) else errands
+    return next(e for e in errands if e['id'] == 'execute-lookup-httpbin')
+
+
+async def lookup(client, errand, token):
+    spec = lookup_errand()
+    execution, steps, _ = await drive(client, errand, token, spec['text'], spec['execute']['goal'])
+    searches = [c for c in execution.get('exa') or [] if c.get('kind') == 'search' and c.get('results')]
+    if not searches:
+        raise Fail(f'done after {steps} steps but no Exa search with results in execution.exa')
+    return f'done after approval, {steps} steps, {len(execution["exa"])} Exa calls ({len(searches)} searches with results)'
 
 
 async def run(name, fn, api, token):
@@ -184,7 +209,7 @@ async def run(name, fn, api, token):
     headers = {'Authorization': f'Bearer {token}'}
     async with httpx.AsyncClient(base_url=api, headers=headers, timeout=60) as client:
         try:
-            args = (client, errand, token) if fn is execute else (client, errand)
+            args = (client, errand, token) if fn in (execute, lookup) else (client, errand)
             reason, ok = await asyncio.wait_for(fn(*args), TIMEOUT), True
         except asyncio.TimeoutError:
             reason, ok = f'timed out after {TIMEOUT} s', False
@@ -204,7 +229,7 @@ async def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--api', default=DEFAULT_API)
     parser.add_argument('--token-file')
-    parser.add_argument('--only', default='find,claim,execute,letter', help='comma-separated errands to run')
+    parser.add_argument('--only', default='find,claim,execute,letter,lookup', help='comma-separated errands to run')
     args = parser.parse_args()
     token = os.environ.get('GOLDEN_TOKEN', '').strip()
     if not token and args.token_file:
@@ -212,7 +237,7 @@ async def main():
             token = f.read().strip()
     if not token:
         parser.error('set GOLDEN_TOKEN or pass --token-file')
-    errands = {'find': find, 'claim': claim, 'execute': execute, 'letter': letter}
+    errands = {'find': find, 'claim': claim, 'execute': execute, 'letter': letter, 'lookup': lookup}
     names = [n.strip() for n in args.only.split(',') if n.strip()]
     unknown = [n for n in names if n not in errands]
     if unknown:
