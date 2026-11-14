@@ -10,6 +10,7 @@ import { fillPlaceholders } from "./lib/actions.js";
 import { redactText } from "./lib/redact.js";
 import * as backend from "./lib/backend.js";
 import { isLinkSender, linkCodeInput } from "./lib/device-link.js";
+import { cacheKey, helpfulPage, companionPayload, cleanTip, cachedEntry, remember } from "./lib/companion.js";
 
 const MAX_TASKS = 30;
 const MAX_HIDDEN = 200;
@@ -286,36 +287,86 @@ async function onServerTask(taskId, fn) {
   return rec;
 }
 
-// ---------- the badge on form pages (content/presence.js) ----------
-function openFromPresence(msg, sender, reply) {
+// ---------- Vali on the page (content/presence.js, content/explain.js) ----------
+// Called synchronously from a click on the page, so Chrome counts it as a user gesture and opens the panel.
+function openPanelNow(tabId) {
+  try { return chrome.sidePanel.open({ tabId }).then(() => true, () => false); } catch (_) { return Promise.resolve(false); }
+}
+
+// The panel picks the prefill up now, or the next time it opens (Alt+V) if Chrome refused to open it.
+function openWithPrefill(msg, sender, reply, prefill) {
   const tabId = sender.tab?.id;
   if (!tabId) { reply({ ok: false, error: "No tab." }); return false; }
-  // Called synchronously from the click on the badge, so Chrome can count it as a user gesture.
-  let opening;
-  try { opening = chrome.sidePanel.open({ tabId }); } catch (e) { opening = Promise.reject(e); }
-  // The panel picks this up now, or the next time it opens (Alt+V) if Chrome refused to open it.
-  chrome.storage.session.set({
-    prefill: {
-      at: Date.now(),
-      tabId,
-      source: "presence",
-      task: "Help me fill in this form",
-      usePage: true,
-      selection: "",
-      link: "",
-      pageTitle: String(msg.title || sender.tab.title || "").slice(0, 200),
-    },
-  }).catch(() => {});
-  Promise.resolve(opening).then(
-    () => reply({ ok: true, data: { opened: true } }),
-    () => reply({ ok: true, data: { opened: false } })
-  );
+  const opening = openPanelNow(tabId);
+  const pageTitle = String(msg.title || sender.tab.title || "").slice(0, 200);
+  chrome.storage.session.set({ prefill: { at: Date.now(), tabId, link: "", selection: "", pageTitle, ...prefill } }).catch(() => {});
+  opening.then((opened) => reply({ ok: true, data: { opened } }));
   return true;
+}
+
+const EXPLAIN_QUESTION = "What does this mean and what should I do?";
+
+// "Do it" on a tip: the tip's errand starts right away, with this page attached, and the panel shows it.
+function startFromTip(msg, sender, reply) {
+  const tabId = sender.tab?.id;
+  const task = String(msg.task || "").trim().slice(0, 2000);
+  if (!tabId || !task) { reply({ ok: false, error: "Nothing to start." }); return false; }
+  const opening = openPanelNow(tabId);
+  startTask({ task, tabId, usePage: true })
+    .then(async (rec) => {
+      await chrome.storage.session.set({ focusTask: rec.id });
+      reply({ ok: true, data: { opened: await opening } });
+    })
+    .catch((e) => reply({ ok: false, error: e?.message || String(e) }));
+  return true;
+}
+
+// One tip per page from POST /v1/companion, asked at most once per URL per 6 h (chrome.storage.local companionCache).
+let tipChain = Promise.resolve();
+function withTipCache(fn) {
+  tipChain = tipChain.catch(() => {}).then(async () => {
+    const { companionCache = {} } = await chrome.storage.local.get("companionCache");
+    await chrome.storage.local.set({ companionCache: fn(companionCache) });
+  });
+  return tipChain;
+}
+
+const askingTip = new Map(); // URL -> request in flight, so two tabs on one page ask once
+async function companionTip(raw, sender) {
+  const { presence, backendUrl, companionCache = {} } = await chrome.storage.local.get(["presence", "backendUrl", "companionCache"]);
+  const payload = companionPayload({ ...raw, url: sender.url || raw?.url });
+  if (presence === false || !backend.resolveBaseUrl(backendUrl) || !payload || !helpfulPage(payload.url, payload.title)) return null;
+  const hit = cachedEntry(companionCache, payload.url);
+  if (hit) return hit.seen ? null : hit.tip;
+  if (!askingTip.has(payload.url)) askingTip.set(payload.url, askTip(payload).finally(() => askingTip.delete(payload.url)));
+  return askingTip.get(payload.url);
+}
+
+async function askTip(payload) {
+  let entry;
+  try {
+    await backend.ensureConnected();
+    entry = { tip: cleanTip((await backend.companion(payload))?.tip) };
+  } catch (_) {
+    entry = { tip: null, failed: true }; // no server or no endpoint yet: no tip, ask again later
+  }
+  await withTipCache((cache) => remember(cache, payload.url, entry));
+  return entry.tip;
+}
+
+function markTipSeen(url) {
+  const key = cacheKey(url);
+  return withTipCache((cache) => {
+    const hit = key && cachedEntry(cache, key);
+    return hit ? remember(cache, key, { ...hit, seen: true }) : cache;
+  }).then(() => true);
 }
 
 // ---------- messages from the panel and the badge ----------
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
-  if (msg?.type === "presence-open") return openFromPresence(msg, sender, reply);
+  if (msg?.type === "presence-open") return openWithPrefill(msg, sender, reply, { source: "presence", task: "Help me fill in this form", usePage: true });
+  if (msg?.type === "explain") return openWithPrefill(msg, sender, reply, { source: "explain", task: EXPLAIN_QUESTION, usePage: true, selection: String(msg.selection || "").slice(0, 4000) });
+  if (msg?.type === "companion-do") return startFromTip(msg, sender, reply);
   const handlers = {
     linkAccount: async () => {
       if (!isLinkSender(sender, chrome.runtime.id)) throw new Error("Link your account from the extension panel.");
@@ -333,6 +384,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     },
     start: () => startTask(msg),
     poll: () => pollAll().then(() => true),
+    "companion-tip": () => companionTip(msg.page, sender),
+    "companion-seen": () => markTipSeen(sender.url),
     fill: () => fillForm(msg.taskId),
     cancel: async () => {
       const t = await findTask(msg.taskId);
