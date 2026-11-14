@@ -24,7 +24,7 @@ export function renderDashboard(tasks, stats) {
         counter(counters.cost == null ? null : `$${counters.cost.toFixed(2)}`, 'Exa cost'))),
     tasks.length
       ? h('ul', { class: 'errand-list' }, tasks.map(row))
-      : h('p', { class: 'muted empty' }, 'Nothing yet. Errands you start here, in the extension, the Mac app or by voice show up in this list.'));
+      : h('p', { class: 'muted empty' }, 'No errands yet.'));
 }
 
 function counter(value, label) {

@@ -172,7 +172,7 @@ $('to-errands').addEventListener('click', () => {
   requestAnimationFrame(() => $('errands').scrollIntoView({ behavior: 'smooth' }));
 });
 
-$('to-trust').addEventListener('click', () => openTrust(followed?.task));
+$('to-trust')?.addEventListener('click', () => openTrust(followed?.task));
 $('trust').addEventListener('click', (event) => { if (event.target === $('trust')) $('trust').close(); });
 $('to-details').addEventListener('click', () => openDetails());
 $('to-whatsapp').addEventListener('click', () => openWhatsapp());
