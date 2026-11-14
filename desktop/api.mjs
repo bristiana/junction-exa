@@ -34,6 +34,8 @@ export function makeApi({ baseUrl, token = '', fetchImpl = globalThis.fetch, tim
       if (create) form.append('create', '1');
       return send('/v1/voice', { form, timeout: 60000 });
     },
+    // Talk to Vali: a one-off ElevenLabs credential for this account, used within 15 minutes (backend/vali_api/VOICE.md).
+    voiceSession: () => send('/v1/voice/session?connection=webrtc', { json: {} }),
     // A photo or PDF of a letter becomes an errand with the letter as context.
     letter(bytes, mime, name = 'letter', note = '') {
       const form = new FormData();

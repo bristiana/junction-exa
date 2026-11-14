@@ -1,25 +1,49 @@
-import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, globalShortcut, Notification, shell, safeStorage, systemPreferences, session as electronSession, clipboard } from 'electron';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, globalShortcut, Notification, shell, safeStorage, systemPreferences, session as electronSession, clipboard, powerMonitor } from 'electron';
+import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeBaseUrl, toLocalTask, isActive } from './vendor/lib/backend.js';
 import { makeApi } from './api.mjs';
 import { frontTab, grabSelection } from './mac.mjs';
-import { mascotState, notificationEvents, buildErrand, comingSoon, voiceOutcome, letterType, sealConfig, openConfig, badgeOf } from './logic.mjs';
+import { mascotState, notificationEvents, buildErrand, comingSoon, voiceOutcome, letterType, sealConfig, openConfig, badgeOf, MAX_VOICE_BYTES, talkError, redactSecrets } from './logic.mjs';
+import { asleep, restoreSpot } from './valet.mjs';
+import { createStage } from './stage.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_URL = 'https://bogdan-c-2206--vali-web.us-east.modal.run';
 const smoke = process.argv.includes('--smoke');
+// --talk-check starts one real voice conversation with Chromium's fake microphone (a tone), on a throwaway account.
+const talkCheck = process.argv.includes('--talk-check');
+if (talkCheck && !process.env.VALI_USER_DATA) { console.error('--talk-check needs VALI_USER_DATA (a throwaway folder).'); process.exit(1); }
+if (talkCheck) for (const s of ['use-fake-device-for-media-stream', 'use-fake-ui-for-media-stream']) app.commandLine.appendSwitch(s);
 // Smoke never touches the user's account or credentials. VALI_USER_DATA runs a separate, throwaway instance.
 if (smoke) app.setPath('userData', path.join(app.getPath('temp'), `vali-smoke-${process.pid}`));
 else if (process.env.VALI_USER_DATA) app.setPath('userData', process.env.VALI_USER_DATA);
 app.setName('Vali');
 let config = { backendUrl: DEFAULT_URL, effort: 'low', profile: {} }, session = {}, tasks = [], paused = false, polling = false, quitting = false;
-let mascot, chat, quick, glance, tray, pollTimer, configFile, lastTab = null, glanceTimer;
-const shortcuts = { quick: '', voice: '', ask: '' };
+let mascot, chat, quick, glance, tray, pollTimer, configFile, lastTab = null, glanceTimer, stage, stageTimer;
+const shortcuts = { quick: '', voice: '', ask: '', talk: '' };
+// Talk to Vali runs in the mascot window; it reports '', 'connecting', 'listening' or 'speaking'.
+let talking = '', facing = '', sleeping = false, lastBusyAt = Date.now();
 let persistChain = Promise.resolve();
+// Saved settings that could not be decrypted stay untouched on disk until the user links an account on purpose.
+const LOCKED = 'Could not unlock saved settings. Unlock your login keychain and restart Vali, or link again in Settings.';
+let settingsLocked = false;
 const windows = () => [mascot, chat, quick, glance].filter(w => w && !w.isDestroyed());
-const state = () => ({ pose: mascotState(tasks, paused), paused, shortcut: shortcuts.quick, shortcuts, badge: badgeOf(tasks) });
-function publish() { for (const w of windows()) w.webContents.send('vali:state', state()); }
+const state = () => ({ pose: mascotState(tasks, paused), paused, shortcut: shortcuts.quick, shortcuts, badge: badgeOf(tasks), talking,
+  valet: { place: stage?.place || 'home', edge: stage?.edge || 'right', facing, sleeping } });
+function publish() {
+  const badge = badgeOf(tasks);
+  stage?.setNeedsYou(badge.needsYou && !paused);
+  for (const w of windows()) w.webContents.send('vali:state', state());
+}
+// Vali sleeps after five quiet minutes; anything running, waiting, talking or a hover wakes him.
+function wakeCheck() {
+  const badge = badgeOf(tasks), busy = badge.count > 0 || badge.needsYou || !!talking;
+  if (busy) lastBusyAt = Date.now();
+  const next = asleep({ busy, lastBusyAt });
+  if (next !== sleeping) { sleeping = next; publish(); }
+}
+function wake() { lastBusyAt = Date.now(); wakeCheck(); }
 function changes(values, old, area = 'local') {
   const diff = Object.fromEntries(Object.entries(values).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(old[k])).map(([k, v]) => [k, { oldValue: old[k], newValue: v }]));
   if (Object.keys(diff).length) for (const w of windows()) w.webContents.send('vali:change', diff, area);
@@ -27,10 +51,13 @@ function changes(values, old, area = 'local') {
 function setSession(values) { const before = { ...session }; Object.assign(session, values); changes(values, before, 'session'); }
 // The token and the profile are encrypted with the login keychain (safeStorage); settings.json is mode 0600.
 async function save() {
+  if (settingsLocked) throw new Error(LOCKED);
   const needsKey = config.backendToken || Object.keys(config.profile || {}).length;
   if (needsKey && !safeStorage.isEncryptionAvailable()) throw new Error('Secure storage is unavailable. Unlock your login keychain and retry.');
   const snapshot = sealConfig(config, s => safeStorage.encryptString(s).toString('base64'));
-  persistChain = persistChain.catch(() => {}).then(() => writeFile(configFile, JSON.stringify(snapshot), { mode: 0o600 }));
+  // Atomic: a crash mid-write leaves the old file, never half a file.
+  const temp = `${configFile}.${process.pid}.tmp`;
+  persistChain = persistChain.catch(() => {}).then(() => writeFile(temp, JSON.stringify(snapshot), { mode: 0o600 })).then(() => rename(temp, configFile));
   await persistChain;
 }
 async function setConfig(values) {
@@ -41,20 +68,23 @@ async function setConfig(values) {
 }
 const apiFetch = (url, opts = {}) => fetch(url, { redirect: 'error', signal: AbortSignal.timeout(20000), ...opts });
 const api = (baseUrl = config.backendUrl, token = config.backendToken) => makeApi({ baseUrl, token, fetchImpl: apiFetch });
-async function connect(retry = true) {
-  if (smoke) return;
+// One connect at a time: every caller shares the same attempt, so two windows never create two accounts.
+let connecting = null;
+function connect() {
+  if (smoke) return Promise.resolve();
+  return (connecting ||= ensureAccount().finally(() => { connecting = null; }));
+}
+// A token the server rejects (401) stays saved until the new account exists.
+async function ensureAccount() {
   const baseUrl = normalizeBaseUrl(config.backendUrl || DEFAULT_URL);
-  if (!config.backendToken || config.backendTokenUrl !== baseUrl) {
-    const user = await api(baseUrl, '').createUser();
-    if (!user?.token) throw new Error('The server did not return a token.');
-    await setConfig({ backendUrl: baseUrl, backendToken: user.token, backendTokenUrl: baseUrl, backendUserId: user.user_id });
-    setSession({ newAccount: true });
+  if (config.backendToken && config.backendTokenUrl === baseUrl) {
+    try { await api().me(); return; } catch (e) { if (e.status !== 401) throw e; }
   }
-  try { await api().me(); } catch (e) {
-    if (e.status !== 401 || !retry) throw e;
-    await setConfig({ backendToken: '' });
-    await connect(false);
-  }
+  if (settingsLocked) throw new Error(LOCKED);
+  const user = await api(baseUrl, '').createUser();
+  if (!user?.token) throw new Error('The server did not return a token.');
+  await setConfig({ backendUrl: baseUrl, backendToken: user.token, backendTokenUrl: baseUrl, backendUserId: user.user_id, hiddenTasks: [] });
+  setSession({ newAccount: true });
 }
 function notify(previous, next) {
   if (smoke || !Notification.isSupported()) return;
@@ -100,7 +130,12 @@ async function startErrand({ text, selection, page }) {
   await connect();
   return addTask(await api().createTask({ task: body.task, page: body.page || undefined, effort: config.effort }));
 }
+// Approve, execute and stop go out once per errand, even when two windows (chat and list) press at the same time.
+const ONCE = new Set(['approve', 'execute', 'stop']), inFlight = new Set();
 async function handleMessage(m) {
+  const key = ONCE.has(m?.type) ? `${m.taskId}:${m.type}` : '';
+  if (key && inFlight.has(key)) return { ok: false, error: 'Vali is already on it. One moment.' };
+  if (key) inFlight.add(key);
   try {
     if (m.type === 'poll') { await poll(); return { ok: true }; }
     if (m.type === 'start') {
@@ -138,6 +173,7 @@ async function handleMessage(m) {
     const next = toLocalTask(remote, t); updateTasks(tasks.map(x => x.id === t.id ? next : x));
     return { ok: true, data: next };
   } catch (e) { return fail(e); }
+  finally { if (key) inFlight.delete(key); }
 }
 // Microphone: macOS asks once per app; Chromium's own prompt is answered by the permission handler below.
 async function micAccess() {
@@ -150,6 +186,7 @@ async function micAccess() {
 async function voice({ bytes, mime, context }) {
   if (smoke) throw new Error('Smoke mode does not send audio.');
   if (!bytes?.byteLength) throw new Error('I did not hear anything. Try again.');
+  if (bytes.byteLength > MAX_VOICE_BYTES) throw new Error('That recording is too long. Say the errand in a minute or less.');
   await connect();
   const withContext = !!(context?.selection || context?.page);
   const out = voiceOutcome(await api().voice(bytes, mime || 'audio/webm', { create: !withContext }));
@@ -157,9 +194,10 @@ async function voice({ bytes, mime, context }) {
   if (withContext && out.text.trim()) return { ok: true, text: out.text, task: await startErrand({ text: out.text, ...context }) };
   return { ok: true, text: out.text };
 }
-async function letter({ bytes, mime, name, note, size }) {
+async function letter({ bytes, mime, name, note }) {
   if (smoke) throw new Error('Smoke mode does not send letters.');
-  const type = letterType({ name, type: mime, size: size ?? bytes?.byteLength });
+  if (!bytes?.byteLength) throw new Error('That file is empty.');
+  const type = letterType({ name, type: mime, size: bytes.byteLength });
   if (type.error) throw new Error(type.error);
   await connect();
   const json = await api().letter(bytes, type.mime, name || 'letter', note);
@@ -167,21 +205,34 @@ async function letter({ bytes, mime, name, note, size }) {
   if (!remote) throw new Error('The server did not start an errand for this letter.');
   return { ok: true, task: addTask(remote) };
 }
-const allowedKeys = new Set(['backendUrl', 'backendToken', 'backendTokenUrl', 'backendUserId', 'profile', 'effort', 'presence', 'exaKey']);
+const allowedKeys = new Set(['backendUrl', 'backendToken', 'backendTokenUrl', 'backendUserId', 'profile', 'effort']);
+// Linking or pasting a token is the user choosing an account on purpose: that may replace locked settings.
 async function useAccount(baseUrl, token) {
   const who = await api(baseUrl, token).me();
+  settingsLocked = false;
   await setConfig({ backendUrl: baseUrl, backendTokenUrl: baseUrl, backendToken: token, backendUserId: who.user_id || who.id, hiddenTasks: [] });
   setSession({ newAccount: false });
   updateTasks([]); poll().catch(() => {});
 }
+async function talkSession() {
+  if (smoke) return { ok: false, error: 'Smoke mode does not talk.' };
+  try { await connect(); return { ok: true, data: await api().voiceSession() }; }
+  catch (e) { return { ok: false, error: talkError(e) }; }
+}
+const TALK_MODES = new Set(['', 'connecting', 'listening', 'speaking']);
+function toggleTalk() { if (mascot && !mascot.isDestroyed()) mascot.webContents.send('vali:talk', talking ? 'stop' : 'start'); }
 ipcMain.handle('vali', async (event, op, arg) => {
   if (!windows().some(w => w.webContents.id === event.sender.id)) throw new Error('Unknown window.');
   if (op === 'state') return state();
+  if (op === 'talkSession') return event.sender === mascot.webContents ? talkSession() : { ok: false, error: 'Talk from the mascot.' };
+  if (op === 'talk') { if (event.sender !== mascot.webContents) throw new Error('Talk from the mascot.');
+    if (TALK_MODES.has(arg) && arg !== talking) { talking = arg; wake(); trayMenu(); publish(); } return; }
   if (op === 'chat') { openChat(arg); return; }
   if (op === 'hideQuick') { quick.hide(); return; }
   if (op === 'newErrand') { showQuick(); return; }
   if (op === 'quickSize') { const [w] = quick.getSize(); quick.setSize(w, Math.max(90, Math.min(620, Math.round(arg)))); return; }
-  if (op === 'glance') { if (arg === 'hover') hoverGlance(true); else if (arg === 'leave') hoverGlance(false); else if (arg === 'toggle') toggleGlance(); else if (arg === 'hide') glance.hide(); return; }
+  if (op === 'glance') { if (arg === 'hover' || arg === 'toggle') { wake(); stage?.hover(); }
+    if (arg === 'hover') hoverGlance(true); else if (arg === 'leave') hoverGlance(false); else if (arg === 'toggle') toggleGlance(); else if (arg === 'hide') glance.hide(); return; }
   if (op === 'glanceSize') { const [w] = glance.getSize(); glance.setSize(w, Math.max(120, Math.min(screen.getDisplayMatching(mascot.getBounds()).workArea.height - 40, Math.round(arg)))); positionGlance(); return; }
   if (op === 'storage:get') {
     const data = arg.area === 'session' ? session : { ...config, tasks };
@@ -267,9 +318,11 @@ ipcMain.handle('vali', async (event, op, arg) => {
   }
   throw new Error('Unsupported desktop action.');
 });
-function makeWindow(options) {
-  const w = new BrowserWindow({ show: false, ...options, webPreferences: { preload: path.join(root, 'bridge.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
-  w.webContents.on('console-message', e => { if (e.level === 'error' || e.level === 'warning') console.error('Renderer:', e.message); });
+function makeWindow(options, web = {}) {
+  const w = new BrowserWindow({ show: false, ...options, webPreferences: { preload: path.join(root, 'bridge.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, ...web } });
+  // Our renderers' errors and warnings go to stderr; third-party bundles (the ElevenLabs client) stay quiet, and
+  // anything that looks like a token is redacted.
+  w.webContents.on('console-message', e => { if ((e.level === 'error' || e.level === 'warning') && !/vendor\/elevenlabs\//.test(e.sourceId || '')) console.error('Renderer:', redactSecrets(e.message)); });
   w.webContents.setWindowOpenHandler(({ url }) => { if (/^(https?:|mailto:|tel:)/i.test(url)) shell.openExternal(url).catch(() => {}); return { action: 'deny' }; });
   w.webContents.on('will-navigate', e => e.preventDefault());
   return w;
@@ -295,7 +348,13 @@ function quickWithPage(mode) {
   showQuick(mode, {});
   pending.then(tab => { lastTab = tab; if (tab) quick.webContents.send('vali:quick', { mode: 'context', context: { page: tab } }); });
 }
+let asking = false;
 async function askAboutThis() {
+  if (asking) return;
+  asking = true;
+  try { await askNow(); } finally { asking = false; }
+}
+async function askNow() {
   // Copy before Vali takes focus: Cmd+C has to reach the app the user selected text in.
   const trusted = process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(false) : false;
   const [grab, tab] = await Promise.all([grabSelection({ clipboard, trusted }).catch(() => ({ text: '', via: 'none' })), frontTab().catch(() => null)]);
@@ -325,13 +384,15 @@ function trayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open chat', click: () => openChat() },
     { label: 'New errand', accelerator: shortcuts.quick || undefined, click: () => quickWithPage('type') },
-    { label: 'Talk to Vali', accelerator: shortcuts.voice || undefined, click: () => quickWithPage('voice') },
+    { label: talking ? 'Stop talking' : 'Talk to Vali', accelerator: shortcuts.talk || undefined, click: toggleTalk },
+    { label: 'Say an errand', accelerator: shortcuts.voice || undefined, click: () => quickWithPage('voice') },
     { label: paused ? 'Resume' : 'Pause', type: 'checkbox', checked: paused, click: () => { paused = !paused; publish(); trayMenu(); if (!paused) poll().catch(() => {}); } },
     { type: 'separator' }, { label: 'Quit Vali', click: () => app.quit() }
   ]));
 }
 const waitFor = (w, test, label, ms = 8000) => w.webContents.executeJavaScript(`new Promise((resolve, reject) => { const deadline = Date.now() + ${ms}; const check = () => (${test}) ? resolve() : Date.now() > deadline ? reject(new Error(${JSON.stringify(label)} + ' ' + JSON.stringify({errors: window.__desktopErrors || [], text: document.body.innerText.slice(0, 600)}))) : setTimeout(check, 50); check(); })`);
-const frame = w => w.webContents.executeJavaScript('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))');
+// The mascot may have stopped drawing (asleep): let it draw once more before the capture.
+const frame = w => w.webContents.executeJavaScript('new Promise(r => { window.ValiFrames?.resume(); requestAnimationFrame(() => requestAnimationFrame(r)); })');
 async function capture(w, out, name) {
   await frame(w);
   const errors = await w.webContents.executeJavaScript('window.__desktopErrors || []');
@@ -378,8 +439,61 @@ async function runSmoke() {
   await capture(quick, out, 'quick');
   await quick.webContents.executeJavaScript(`window.__smokeListening()`);
   await capture(quick, out, 'quick-listening');
-  console.log(`Smoke captures in ${out}: mascot, chat, glance, chat-question, glance-question, settings, settings-profile, quick, quick-listening`);
+  quick.hide(); glance.hide();
+  await smokeValet(out);
+  console.log(`Smoke captures in ${out}: mascot, chat, glance, chat-question, glance-question, settings, settings-profile, quick, quick-listening, mascot-talk, mascot-done, mascot-error, mascot-sleep`);
   app.quit();
+}
+// The mascot's reactions, the talking state and the walk to the edge (window positions are checked, not captured).
+async function smokeValet(out) {
+  const mascotHas = (test, label) => waitFor(mascot, test, label);
+  const pose = () => new Promise(r => setTimeout(r, 1200)); // let the butler settle into the new pose
+  await mascotHas(`!document.getElementById('bell').hasAttribute('hidden') && document.getElementById('line').textContent.includes('OK')`, 'Bell for approval missing');
+  await mascot.webContents.executeJavaScript(`window.__smokeTalk('speaking', 'Hei! I found two saunas open on Saturday. Shall I book the one in Kallio?')`);
+  await mascotHas(`document.getElementById('wrap').classList.contains('speaking') && document.getElementById('talk').textContent.includes('Stop')`, 'Talking state missing');
+  await pose(); await capture(mascot, out, 'mascot-talk');
+  await mascot.webContents.executeJavaScript(`window.__smokeTalk('')`);
+  const fixture = tasks;
+  for (const [name, keep, words] of [['mascot-done', 'smoke-done', 'All done'], ['mascot-error', 'smoke-done', 'couldn']]) {
+    updateTasks(fixture.filter(t => t.id === keep).map(t => name === 'mascot-error' ? { ...t, status: 'failed' } : t));
+    await mascotHas(`document.getElementById('line').textContent.includes(${JSON.stringify(words)})`, `${name} line missing`);
+    await pose(); await capture(mascot, out, name);
+  }
+  lastBusyAt = 0; wakeCheck();
+  await mascotHas(`!document.getElementById('zzz').hidden && document.getElementById('wrap').classList.contains('sleep')`, 'Sleep missing');
+  await pose(); await mascotHas('window.ValiFrames.paused', 'Mascot still draws every frame while asleep');
+  await capture(mascot, out, 'mascot-sleep');
+  // Walk: home -> tucked (64 pt left on screen) -> peek (120 pt) -> home, all on the edge nearest to home.
+  const home = mascot.getBounds(), area = screen.getDisplayMatching(home).workArea, settle = () => new Promise(r => setTimeout(r, 600));
+  for (const [place, show] of [['tucked', 64], ['peek', 120]]) {
+    stage.go(place); await settle();
+    const b = mascot.getBounds(), visible = Math.min(b.x + b.width, area.x + area.width) - Math.max(b.x, area.x);
+    if (stage.edge !== 'bottom' && visible !== show) throw new Error(`${place}: ${visible} pt visible at the ${stage.edge} edge, expected ${show}`);
+    console.log(`Valet ${place}: ${stage.edge} edge, x ${b.x}, ${visible} pt visible`);
+  }
+  stage.go('home'); await settle();
+  const back = mascot.getBounds();
+  if (back.x !== home.x || back.y !== home.y) throw new Error(`Valet did not come home: ${JSON.stringify(back)} vs ${JSON.stringify(home)}`);
+  console.log(`Valet home again at ${back.x},${back.y}`);
+}
+// One real conversation on a throwaway account (VALI_USER_DATA), with Chromium's fake microphone: proves the session
+// starts and the agent answers. It cannot prove speech recognition or what the user hears.
+async function runTalkCheck() {
+  await connect();
+  console.log('Account ready; starting the conversation.');
+  mascot.webContents.send('vali:talk', 'start');
+  const log = () => mascot.webContents.executeJavaScript('window.__talk');
+  const until = async (test, ms) => { const end = Date.now() + ms; while (Date.now() < end) { const l = await log(); if (test(l)) return l; await new Promise(r => setTimeout(r, 300)); } return log(); };
+  const l = await until(l => l.captions.length || l.errors.length && !talking, 40000);
+  console.log('Modes:', l.modes.join(' > ') || '(none)');
+  console.log('Agent said:', l.captions.join(' | ') || '(nothing)');
+  if (l.errors.length) console.log('Errors:', l.errors.join(' | '));
+  if (process.env.SMOKE_OUT) { await mkdir(process.env.SMOKE_OUT, { recursive: true }); await capture(mascot, process.env.SMOKE_OUT, 'talk-live').catch(e => console.error(e.message)); }
+  mascot.webContents.send('vali:talk', 'stop');
+  await until(() => !talking, 5000);
+  const ok = l.captions.length > 0 && (l.modes.includes('listening') || l.modes.includes('speaking'));
+  console.log(ok ? 'PASS talk session connected and the agent spoke' : 'FAIL talk session');
+  app.exit(ok ? 0 : 1);
 }
 function smokeTasks() {
   const now = Date.now();
@@ -396,15 +510,25 @@ else {
     configFile = path.join(app.getPath('userData'), 'settings.json');
     await mkdir(app.getPath('userData'), { recursive: true });
     try { config = { ...config, ...openConfig(JSON.parse(await readFile(configFile, 'utf8')), s => safeStorage.decryptString(Buffer.from(s, 'base64'))) }; }
-    catch (e) { if (e.code !== 'ENOENT') config.connectionError = 'Could not unlock saved settings. Connect again in Settings.'; }
+    catch (e) { if (e.code !== 'ENOENT') { settingsLocked = true; config.connectionError = LOCKED; } }
     if (smoke) { config.backendToken = 'smoke-fixture'; config.backendTokenUrl = config.backendUrl; tasks = smokeTasks(); }
-    // Only the quick box may use the microphone, and only for audio. Copy buttons may write the clipboard.
+    // Only the quick box (dictation) and the mascot (Talk to Vali) may use the microphone, and only for audio.
+    // Copy buttons may write the clipboard.
+    const mayListen = wc => !!wc && (wc === quick?.webContents || wc === mascot?.webContents);
     electronSession.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) =>
-      callback(permission === 'media' ? wc === quick?.webContents && (details.mediaTypes || []).every(t => t === 'audio') : permission === 'clipboard-sanitized-write'));
-    electronSession.defaultSession.setPermissionCheckHandler((wc, permission) => permission === 'media' ? wc === quick?.webContents : true);
+      callback(permission === 'media' ? mayListen(wc) && (details.mediaTypes || []).every(t => t === 'audio') : permission === 'clipboard-sanitized-write'));
+    electronSession.defaultSession.setPermissionCheckHandler((wc, permission) => permission === 'media' ? mayListen(wc) : true);
     const area = screen.getPrimaryDisplay().workArea;
-    mascot = makeWindow({ width: 210, height: 240, x: area.x + area.width - 230, y: area.y + area.height - 260, transparent: true, frame: false, resizable: false, alwaysOnTop: true, hasShadow: false, skipTaskbar: true, acceptFirstMouse: true });
+    // Vali stands where the user last put him (if that display is still there), else bottom right.
+    const size = { width: 210, height: 300 };
+    const spot = restoreSpot(config.mascotSpot, screen.getAllDisplays().map(d => d.workArea), size) || { x: area.x + area.width - 230, y: area.y + area.height - 320 };
+    // Talk to Vali may start from a shortcut, without a click in this window: audio must play without a gesture.
+    mascot = makeWindow({ ...size, ...spot, transparent: true, frame: false, resizable: false, alwaysOnTop: true, hasShadow: false, skipTaskbar: true, acceptFirstMouse: true }, { autoplayPolicy: 'no-user-gesture-required' });
     mascot.setAlwaysOnTop(true, 'floating'); mascot.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    stage = createStage({ win: mascot, screen, powerMonitor,
+      reducedMotion: () => !!systemPreferences.getAnimationSettings?.().prefersReducedMotion,
+      onHome: mascotSpot => { if (!smoke) setConfig({ mascotSpot }).catch(() => {}); },
+      onChange: v => { facing = v.facing; publish(); if (!v.facing && glance?.isVisible()) positionGlance(); } });
     chat = makeWindow({ width: 640, height: Math.min(850, area.height - 60), minWidth: 420, minHeight: 450, title: 'Vali', backgroundColor: '#f7f7fb' });
     chat.on('close', e => { if (!quitting) { e.preventDefault(); chat.hide(); } });
     quick = makeWindow({ width: 640, height: 360, frame: false, resizable: false, transparent: true, hasShadow: false, alwaysOnTop: true, skipTaskbar: true });
@@ -421,7 +545,7 @@ else {
     trayImage.setTemplateImage(true);
     if (trayImage.isEmpty()) throw new Error('Tray icon could not be created.');
     tray = new Tray(trayImage.resize({ width: 18, height: 18 })); tray.setToolTip('Vali'); tray.on('click', () => openChat());
-    if (!smoke) {
+    if (!smoke && !talkCheck) {
       for (const key of ['Alt+Space', 'Alt+V']) if (globalShortcut.register(key, () => quickWithPage('type'))) { shortcuts.quick = key; break; }
       // Hold to talk: the box records while the keys are held and sends when they come up (or on a second press).
       // Key repeat while held must not toggle: presses closer than 0.5 s apart count as one.
@@ -433,13 +557,18 @@ else {
       };
       if (globalShortcut.register('Alt+Shift+Space', onVoice)) shortcuts.voice = 'Alt+Shift+Space';
       if (globalShortcut.register('Alt+Shift+A', () => askAboutThis())) shortcuts.ask = 'Alt+Shift+A';
+      let lastTalk = 0;
+      const onTalk = () => { if (Date.now() - lastTalk > 500) toggleTalk(); lastTalk = Date.now(); };
+      if (globalShortcut.register('Alt+Shift+V', onTalk)) shortcuts.talk = 'Alt+Shift+V';
     }
     trayMenu();
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Vali', submenu: [{ label: 'Open chat', click: () => openChat() }, { role: 'quit' }] }, { role: 'editMenu' }, { role: 'windowMenu' }]));
-    await Promise.all([mascot.loadFile(path.join(root, 'renderer/mascot.html')), chat.loadFile(path.join(root, 'vendor/panel/panel.html')), quick.loadFile(path.join(root, 'renderer/quick.html')), glance.loadFile(path.join(root, 'renderer/glance.html'))]);
+    await Promise.all([mascot.loadFile(path.join(root, 'renderer/mascot.html'), smoke || talkCheck ? { query: { check: '1' } } : {}), chat.loadFile(path.join(root, 'vendor/panel/panel.html')), quick.loadFile(path.join(root, 'renderer/quick.html')), glance.loadFile(path.join(root, 'renderer/glance.html'))]);
     mascot.showInactive(); publish();
-    if (smoke) { setTimeout(() => { console.error('Smoke timed out.'); app.exit(1); }, 45000).unref(); await runSmoke(); }
+    if (smoke) { setTimeout(() => { console.error('Smoke timed out.'); app.exit(1); }, 60000).unref(); await runSmoke(); }
+    else if (talkCheck) { setTimeout(() => { console.error('Talk check timed out.'); app.exit(1); }, 90000).unref(); await runTalkCheck(); }
     else {
+      stageTimer = setInterval(() => { stage.tick({ hold: !!talking || glance.isVisible() || windows().some(w => w.isFocused()) }); wakeCheck(); }, 400);
       openChat();
       connect().then(() => poll()).catch(e => { config.connectionError = e.message; changes({ connectionError: e.message }, {}); });
       pollTimer = setInterval(() => poll().catch(() => {}), 4000);
@@ -448,4 +577,4 @@ else {
 }
 app.on('activate', () => openChat());
 app.on('window-all-closed', () => {});
-app.on('before-quit', () => { quitting = true; clearInterval(pollTimer); globalShortcut.unregisterAll(); });
+app.on('before-quit', () => { quitting = true; clearInterval(pollTimer); clearInterval(stageTimer); globalShortcut.unregisterAll(); });

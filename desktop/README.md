@@ -9,12 +9,21 @@ npm start
 npm test
 ```
 
-The lilac mascot starts at the bottom right and stays above windows on all macOS Spaces (including fullscreen). Drag its dotted handle to move it. A badge shows how many errands are running and an amber ring means one needs you. Hover or click the mascot for the list of every errand (running, waiting for you, done today) with Approve, Stop and Answer right there, plus the live view of the run in progress; double-click opens the chat. The menu bar offers Open chat, New errand, Talk to Vali, Pause/Resume and Quit.
+The lilac mascot starts at the bottom right and stays above windows on all macOS Spaces (including fullscreen). Drag its dotted handle to move it; Vali remembers the spot (if that display is still connected). A badge shows how many errands are running, and a ring with a ringing bell means one needs you. A speech bubble says what he is doing in one line. Hover or click the mascot for the list of every errand (running, waiting for you, done today) with Approve, Stop and Answer right there, plus the live view of the run in progress; double-click opens the chat. The menu bar offers Open chat, New errand, Talk to Vali, Say an errand, Pause/Resume and Quit.
+
+Vali on screen (`valet.mjs` decides, `stage.mjs` moves the window):
+
+- He breathes and blinks while idle, works on his laptop while an errand runs, holds the tray and rings the bell when one needs your OK, bows when it is done and fusses when it failed. The poses are the states of `extension/lib/butler.js`.
+- When you type near him (keyboard input with the pointer still, within 160 pt, for 1.6 s) he walks to the nearest screen edge (left, right or bottom) and leaves 64 pt showing. Hover the part that shows and he comes back. If an errand needs you while he is aside, he peeks further in with the bell. Only the system idle time and the pointer position are read: no keystrokes, no extra permission. Typing in Vali's own windows and the first five seconds after you hover or click him never count.
+- After five minutes with nothing running, nothing waiting for you and no talking, he falls asleep (eyes closed, a few z's). A hover, a click or a new errand wakes him.
+- On hover, with a browser in front, the bubble offers help with that site (the address only, never the page).
+- With Reduce motion on, he stands still, does not glide and the bell does not swing.
 
 Giving Vali an errand:
 
+- **Talk to Vali**: click Talk on the mascot (it shows on hover) or press Alt+Shift+V, and talk with Vali's ElevenLabs agent. It can start an errand, read back what it found or what it will submit, approve, stop, and answer a question; the list beside the mascot updates as it does. The ring and his mouth follow the voice, the bubble shows his last line, and Stop (or Alt+Shift+V again) ends the conversation. The app asks the Vali server for a one-off credential (`POST /v1/voice/session`) and connects with `@elevenlabs/client` over WebRTC. macOS asks for the microphone once; if it is off, the bubble says so and opens the setting.
 - **Type**: Alt+Space opens the quick box in the middle of the screen (Alt+V if Alt+Space is taken). Suggestions follow what you type; arrows pick one, Enter sends, Escape closes. If Chrome, Safari, Arc, Brave or Edge is the app in front, its tab title and address come along as a chip you can remove.
-- **Talk**: hold Alt+Shift+Space, say the errand, let go (a quick tap keeps listening until you press again), or click the microphone. The audio goes to `POST /v1/voice` with `create=1`; with a page or selection attached, Vali transcribes first and sends the text with that context. macOS asks for the microphone once.
+- **Say an errand**: hold Alt+Shift+Space, say the errand, let go (a quick tap keeps listening until you press again), or click the microphone. The audio goes to `POST /v1/voice` with `create=1`; with a page or selection attached, Vali transcribes first and sends the text with that context. macOS asks for the microphone once.
 - **Drop a letter**: drop a photo or PDF (JPEG, PNG, WebP, HEIC, PDF, up to 10 MB) on the mascot, or on the quick box to add a note first. It goes to `POST /v1/letters`.
 - **Ask Vali about this**: select text anywhere and press Alt+Shift+A. Vali copies the selection (a simulated Cmd+C, then your clipboard is put back) and opens the quick box with it attached. This needs Accessibility for Vali (System Settings > Privacy & Security > Accessibility); without it Vali offers what is already on your clipboard. Reading the browser tab needs the Automation permission macOS asks for the first time. Without either permission the context is simply left out.
 
@@ -32,7 +41,15 @@ The task list refreshes every four seconds. Questions from the cloud browser can
 npm run live-check
 ```
 
-Drives `api.mjs` (the client the app uses) against the live server with a throwaway account: new account, link/voice/letters endpoints, a find errand, a claim errand, and a cloud browser run on httpbin's test form (https://httpbin.org/forms/post) that it approves. It approves nothing else.
+Drives `api.mjs` (the client the app uses) against the live server with a throwaway account: new account, link/voice/letters endpoints, a Talk to Vali credential (`POST /v1/voice/session`), a find errand, a claim errand, and a cloud browser run on httpbin's test form (https://httpbin.org/forms/post) that it approves. It approves nothing else.
+
+## Talk check
+
+```sh
+VALI_USER_DATA=/tmp/vali-talk npm run talk-check
+```
+
+Starts one real conversation on a throwaway account in that folder, with Chromium's fake microphone (a tone): it passes when the session connects and the agent's first line arrives as a caption. It cannot check speech recognition, what you hear or the agent's errand tools; that needs a person talking.
 
 ## Smoke captures
 
@@ -40,7 +57,7 @@ Drives `api.mjs` (the client the app uses) against the live server with a throwa
 SMOKE_OUT=/private/tmp/vali-desktop npm start -- --smoke
 ```
 
-Smoke uses isolated temporary userData and a clearly local fixture, sends no API requests and registers no shortcuts. It writes `mascot.png`, `chat.png`, `glance.png`, `chat-question.png`, `glance-question.png`, `settings.png`, `settings-profile.png`, `quick.png` and `quick-listening.png`, then quits. Missing output, renderer errors, empty captures, or timeout fail the command. It checks the UI only; it does not prove live API calls, the microphone, AppleScript permissions, notifications or all-Spaces behavior.
+Smoke uses isolated temporary userData and a clearly local fixture, sends no API requests and registers no shortcuts. It writes `mascot.png`, `chat.png`, `glance.png`, `chat-question.png`, `glance-question.png`, `settings.png`, `settings-profile.png`, `quick.png`, `quick-listening.png`, `mascot-talk.png`, `mascot-done.png`, `mascot-error.png` and `mascot-sleep.png`, checks that Vali walks to the edge and back, then quits. Missing output, renderer errors, empty captures, or timeout fail the command. It checks the UI only; it does not prove live API calls, the microphone, AppleScript permissions, notifications or all-Spaces behavior.
 
 ## Package with electron-builder
 

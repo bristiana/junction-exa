@@ -1,1 +1,16 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'"><title>Vali</title><link rel="stylesheet" href="mascot.css"></head><body><div id="drag" title="Drag Vali">⠿</div><div id="wrap"><button id="mascot" aria-label="Show your errands"></button><span id="badge" hidden></span></div><span id="status">At your service</span><script src="../vendor/lib/butler.js"></script><script type="module" src="mascot.js"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: data:; worker-src 'self' blob: data:; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:; connect-src 'self' https://*.elevenlabs.io wss://*.elevenlabs.io">
+<title>Vali</title>
+<link rel="stylesheet" href="../vendor/shared/tokens.css"><link rel="stylesheet" href="../vendor/shared/components.css"><link rel="stylesheet" href="mascot.css"></head>
+<body data-place="home" data-edge="right">
+<div id="drag" title="Drag Vali">⠿</div>
+<div id="wrap">
+  <button id="mascot" aria-label="Show your errands"></button>
+  <span id="badge" class="v-badge v-badge--count" hidden></span>
+  <svg id="bell" class="bell" viewBox="0 0 24 24" aria-hidden="true" hidden><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6v-5a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
+  <span id="zzz" class="zzz" aria-hidden="true" hidden><i>z</i><i>z</i><i>Z</i></span>
+  <button id="talk" class="v-btn v-btn--sm" type="button" aria-label="Talk to Vali"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-5a3.5 3.5 0 0 0-7 0v5A3.5 3.5 0 0 0 12 15Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.9V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.6a6 6 0 0 0 5-5.9Z"/></svg><span>Talk</span></button>
+</div>
+<p id="bubble" class="v-bubble v-bubble--up" role="status" aria-live="polite"><span id="line">At your service.</span></p>
+<script src="frames.js"></script><script src="../vendor/lib/butler.js"></script><script src="../vendor/elevenlabs/client.js"></script><script type="module" src="mascot.js"></script>
+</body></html>

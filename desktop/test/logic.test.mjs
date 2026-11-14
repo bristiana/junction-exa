@@ -52,3 +52,33 @@ test('prepared research and missing information draw attention', () => {
   assert.deepEqual(notificationEvents(task('running'), result('ready_to_approve')), ['approval']);
   assert.deepEqual(notificationEvents(task('running'), result('needs_info')), ['question']);
 });
+import { talkError, micError, caption, MAX_VOICE_BYTES, letterType } from '../logic.mjs';
+test('talk session errors read plainly', () => {
+  assert.match(talkError({ status: 503, message: 'Voice agent is not configured' }), /not set up/);
+  assert.match(talkError({ status: 429 }), /few minutes/);
+  assert.match(talkError({ status: 502 }), /did not answer/);
+  assert.match(talkError({ status: 404, message: 'Not Found' }), /coming soon/);
+  assert.equal(talkError({ status: 0, message: "Can't reach the Vali server." }), "Can't reach the Vali server.");
+});
+test('microphone failures say what to do', () => {
+  assert.match(micError({ name: 'NotAllowedError', message: 'Permission denied' }), /System Settings/);
+  assert.match(micError({ name: 'NotFoundError' }), /No microphone/);
+  assert.match(micError({ name: 'NotReadableError' }), /Another app/);
+  assert.equal(micError(new Error('socket closed')), '');
+});
+test('captions drop audio tags and keep the end of long lines', () => {
+  assert.equal(caption('[warmly] Hei!  I am   Vali.'), 'Hei! I am Vali.');
+  const long = 'First I looked at every sauna in Helsinki for you. ' + 'Kotiharju is open until ten tonight and costs fifteen euros. Shall I book it?';
+  const out = caption(long, 100);
+  assert.ok(out.startsWith('…') && out.endsWith('Shall I book it?') && out.length <= 101, out);
+});
+test('voice and letter limits are checked on the real byte count', () => {
+  assert.equal(MAX_VOICE_BYTES, 25 * 1024 * 1024);
+  assert.ok(letterType({ name: 'a.pdf', size: 11 * 1024 * 1024 }).error);
+});
+import { redactSecrets } from '../logic.mjs';
+test('console lines lose tokens before they reach stderr', () => {
+  const out = redactSecrets('GET https://x/v1/tasks/a/live.jpg?t=abc123&n=1 Authorization: Bearer eyJ.x {"conversation_token":"q.w","secret__vali_session":"u.1.h"} token=zz');
+  assert.ok(!/abc123|eyJ|q\.w|u\.1\.h|zz/.test(out), out);
+  assert.match(out, /n=1/);
+});

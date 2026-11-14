@@ -15,11 +15,13 @@
     "icon": "node scripts/icon.mjs",
     "live-check": "npm run prepare && node scripts/live-check.mjs",
     "pack": "npm run prepare && electron-builder --mac dir",
-    "dist": "npm run prepare && npm run icon && electron-builder --mac dmg"
+    "dist": "npm run prepare && npm run icon && electron-builder --mac dmg",
+    "talk-check": "npm run prepare && electron . --talk-check"
   },
   "devDependencies": {
-    "electron": "latest",
-    "electron-builder": "latest"
+    "@elevenlabs/client": "1.32.1",
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "fi.vali.desktop",
@@ -33,6 +35,8 @@
       "api.mjs",
       "mac.mjs",
       "logic.mjs",
+      "stage.mjs",
+      "valet.mjs",
       "bridge.cjs",
       "renderer/**/*",
       "vendor/**/*"

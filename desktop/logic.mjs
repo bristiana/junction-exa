@@ -1,5 +1,5 @@
 import { redactText } from './vendor/lib/redact.js';
-import { executionView, LIVE } from './vendor/lib/execution.js';
+import { executionView } from './vendor/lib/execution.js';
 const ACTIVE = new Set(['starting', 'running', 'awaiting_approval', 'submitting']);
 const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
 export function taskState(t) {
@@ -124,9 +124,10 @@ export function letterType({ name = '', type = '', size = 0 } = {}) {
   if (size > MAX_LETTER_BYTES) return { error: 'That file is too big. Try a photo under 10 MB.' };
   return { mime };
 }
+// What main accepts from the quick box's recorder (POST /v1/voice takes longer clips, but nobody talks that long).
+export const MAX_VOICE_BYTES = 25 * 1024 * 1024;
 
 // ---------- local secrets (token and profile are encrypted with the macOS keychain) ----------
-export const PERSONAL_ID = ['personal_id', 'Personal ID (henkilötunnus)'];
 export function sealConfig(config, encrypt) {
   const out = { ...config };
   delete out.backendToken; delete out.profile; delete out.connectionError;
@@ -181,4 +182,31 @@ export function badgeOf(tasks = []) {
   const all = tasks.map(plainStatus);
   return { count: all.filter(s => s.active).length, needsYou: all.some(s => s.needsYou) };
 }
-export { LIVE };
+
+// Console lines forwarded to stderr: tokens in query strings, Bearer headers and token fields are cut out.
+export const redactSecrets = s => String(s ?? '').replace(/((?:[?&](?:t|token|conversation_token)=)|(?:Bearer\s+)|(?:"?(?:token|conversation_token|secret__vali_session)"?\s*[:=]\s*"?))[^\s&"',}]+/gi, '$1[redacted]');
+
+// ---------- Talk to Vali (live voice with the ElevenLabs agent) ----------
+// POST /v1/voice/session failed -> one plain sentence. 503: the server has no voice agent configured yet.
+export function talkError(e) {
+  if (comingSoon(e)) return 'Talking with Vali is coming soon. Type your errand for now.';
+  if (e?.status === 503) return 'Talking is not set up on the server yet. Type your errand for now.';
+  if (e?.status === 429) return 'That was a lot of talking. Try again in a few minutes.';
+  if (e?.status === 502) return 'The voice service did not answer. Try again in a moment.';
+  return String(e?.message || 'Could not start talking. Try again.');
+}
+// Microphone failures from getUserMedia (also inside the ElevenLabs client) -> what to do about it, or '' if not one.
+export function micError(e) {
+  const what = `${e?.name || ''} ${e?.message || ''}`;
+  if (/NotAllowed|Permission|denied/i.test(what)) return 'Vali needs the microphone. Allow it in System Settings > Privacy & Security > Microphone.';
+  if (/NotFound|DevicesNotFound|no audio input|Requested device not found/i.test(what)) return 'No microphone found. Connect one and try again.';
+  if (/NotReadable|TrackStart|Could not start audio source/i.test(what)) return 'Another app is using the microphone. Close it and try again.';
+  return '';
+}
+// The agent's last line for the caption bubble: audio tags like [laughs] removed, long lines keep their end.
+export function caption(text, max = 140) {
+  const s = String(text || '').replace(/\[[^\]]{1,30}\]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (s.length <= max) return s;
+  const tail = s.slice(-max), cut = tail.search(/[.!?]\s+\S/);
+  return '…' + (cut >= 0 && cut < max / 2 ? tail.slice(cut + 1).trim() : tail.slice(tail.indexOf(' ') + 1));
+}
