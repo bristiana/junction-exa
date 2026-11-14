@@ -57,7 +57,9 @@ def test_limits_and_placeholders(task):
     assert "[8]" in rendered and "[9]" not in rendered
     assert fill_placeholders("{{NAME}} {{unknown}}", {"name": "Test Person"}) == "Test Person ‹unknown›"
     assert fill_placeholders("{{name}}", {"name": " "}) == "‹name›"
-    assert render_ack(task) == ["Vali is on it — claim and apply."]
+    assert render_ack(task) == ["On it. I'll send the answer here in about half a minute."]
+    assert render_ack({**task, "lang": "ro"})[0].startswith("Mă ocup.")
+    assert render_ack({**task, "lang": "xx"}) == render_ack({**task, "lang": None})
 
 
 def test_execution(task):

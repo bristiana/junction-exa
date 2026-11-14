@@ -160,7 +160,7 @@ def test_pairing_and_unknown(task):
 
 def test_create_choose_and_status(task):
     bodies, calls, _ = flow_scenario(task, msg("Help with my delayed flight"))
-    assert bodies == ["Vali is on it — claim and apply."]
+    assert bodies == ["On it. I'll send the answer here in about half a minute."]
     assert calls[-1] == ("create", "u_test", "Help with my delayed flight", "whatsapp")
     _, calls, _ = flow_scenario(task, msg("2"))
     assert calls[-1] == ("execute", "t_claim", 1)

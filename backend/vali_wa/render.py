@@ -105,11 +105,22 @@ def _suffix(by_field, prefix, visible):
             + "".join(f" [{n}]" for n in cites["nums"] if n in visible))
 
 
+ACKS = {
+    "en": "On it. I'll send the answer here in about half a minute.",
+    "fi": "Selvä. Lähetän vastauksen tähän noin puolen minuutin kuluttua.",
+    "sv": "Jag fixar det. Svaret kommer hit om ungefär en halv minut.",
+    "ro": "Mă ocup. Îți trimit răspunsul aici în aproximativ jumătate de minut.",
+    "de": "Mache ich. Die Antwort kommt in etwa einer halben Minute hierher.",
+    "es": "Me encargo. Te envío la respuesta aquí en medio minuto.",
+    "fr": "Je m'en occupe. Je t'envoie la réponse ici dans une trentaine de secondes.",
+    "ru": "Занимаюсь. Пришлю ответ сюда примерно через полминуты.",
+    "uk": "Займаюся. Надішлю відповідь сюди приблизно за пів хвилини.",
+}
+
+
 def render_ack(task, profile=None):
-    modes = {"find": "find and compare", "check": "check and explain", "claim": "claim and apply",
-             "book": "book", "watch": "watch", "write": "write"}
-    mode = modes.get(task.get("mode"), "errand")
-    return [f"Vali is on it — {mode}."]
+    # Plain words in the errand's language; the internal mode name means nothing to a user.
+    return [ACKS.get((task.get("lang") or "en")[:2], ACKS["en"])]
 
 
 def render_result(task, profile=None):
