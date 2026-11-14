@@ -50,6 +50,7 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - [x] M3 Link with the extension through K2 (show a code in one, type it in the other).
 - [x] M4 Profile on the Mac: name, address, ID numbers kept locally and filled into placeholders only at execute time, same as the extension.
 - [x] M5 `npm run dist` builds an unsigned .dmg with the mascot icon; README updated.
+- [x] M7 Keyboard control of all errands (Alt+Shift+G, arrows, A approve, S stop).
 - [x] M6 First run: welcome card with the three ways to give a task, a sample errand, and linking.
 
 ## X. Any site, any errand, Exa visible (Bogdan, 05:45)
@@ -101,3 +102,4 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - 06:10 Merged #16-#18: routing (check vs find), Mac visual polish (14 fixes), agent safety (newline never submits, order/purchase always gated, guest path only from a real control). Approval-stop rerun 5/5, golden 4/4, 502 backend tests. Running: Exa during form runs, Exa cache (K4), extension visual review (D5), desktop status bubble.
 - 06:20 Merged #19 mascot bubble (approval vs question vs hand-off) and #20 Exa cache (10 min, hit costs 0). Extension visual review done, ships with Exa during form runs. Running: Exa during form runs, 10-errand sweep on new sites, Mac first run.
 - 06:50 Merged #21-#25: how-to questions route to check, Mac first-run welcome, live captions while talking, Exa lookups during form runs (masked before sending, shown in the trail), extension polish. New-site sweep 8/10 (dentist routing fixed; Espoo form was down for maintenance). Golden 4/4. Running: outage hand-off + address suggestion guard fix, extension leftovers, demo docs, dmg rebuild.
+- 07:45 Merged #26-#35: demo docs, one-line composer, mascot narrates Exa and has a searching pose, golden lookup check, Mac live end-to-end check (demo flow passed twice), plain answers read Done, keyboard control of the list, site outages become a hand-off and address suggestions click (stricter guard kept for 'Place order'). Golden 5/5 after fixing the lookup errand's delivery time.
