@@ -293,7 +293,8 @@ export function errandStage(task) {
   if (!TERMINAL.has(research.status)) return out(0, 'working', 'Vali is reading the web with Exa.', null);
   if (research.status === 'failed') return out(0, 'failed', research.error || 'The research did not finish.', { kind: 'retry' });
   if (research.status === 'cancelled' && !run) return out(0, 'stopped', 'You stopped this errand. Nothing was sent.', { kind: 'retry' });
-  const question = questionOf(task);
+  // A finished research's leftover question is stale: the answer came without it.
+  const question = research.status === 'completed' ? null : questionOf(task);
   if (!run) {
     if (question) return out(0, 'you', `Vali needs one thing from you: ${question.text}`, { kind: 'answer', question: question.text });
     if (structured(task).status === 'needs_info' && missingInfo(task).length) {
