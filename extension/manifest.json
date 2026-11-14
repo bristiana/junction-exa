@@ -23,12 +23,12 @@
         "*://*.op.fi/*", "*://*.nordea.fi/*", "*://*.danskebank.fi/*", "*://*.s-pankki.fi/*", "*://*.aktia.fi/*",
         "*://*.saastopankki.fi/*", "*://*.omasp.fi/*", "*://*.handelsbanken.fi/*"
       ],
-      "js": ["lib/butler.js", "content/presence.js"],
+      "js": ["lib/butler.js", "content/presence.js", "content/explain.js"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
-    { "resources": ["mascot/needs_approval.svg"], "matches": ["<all_urls>"] }
+    { "resources": ["mascot/needs_approval.svg", "icons/icon-48.png"], "matches": ["<all_urls>"] }
   ],
   "commands": {
     "_execute_action": { "suggested_key": { "default": "Alt+V" }, "description": "Open Vali" }
