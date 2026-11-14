@@ -13,6 +13,15 @@ Built for the Exa "Internet Butler" challenge at Junction 2026. Exa judges on us
 3. **Do it.** "Let Vali do it" starts a browser sandbox on Modal: headless Chromium, driven by Claude, one container per run. It can look things up with Exa Search and Contents while the form stays open. It shows a live view, asks you when a choice is yours, and fills the form.
 4. **Approve.** Anything that sends, pays, confirms or books is blocked until you approve. Logins (Suomi.fi, bank ID), CAPTCHAs, bot walls and card pages stop the run with a one-line reason and a link to finish by hand.
 
+## What's new
+
+- **Exa lookups while filling a form.** When a form asks for an address, a fee, an opening time or which option applies, the browser agent searches Exa instead of guessing. Each lookup is saved on the errand (profile values masked first) and listed under "While filling the form" in "How Vali found this", next to the research queries and sources.
+- **Exa cache.** Read-only Exa calls are cached for 10 minutes (256 entries). A cache hit costs nothing. Each call logs mode, time and hit or miss, never the query.
+- **Questions are answered, not acted on.** "How do I book a dentist and what is the fee?" now routes to check. Vali only books, claims or writes when you ask it to.
+- **Safer last step.** Submit, order and purchase buttons always need your approval. A typed newline never submits a form. A login wall is passed only through a real guest control. Autocomplete fields and dropdowns work on real sites.
+- **Mac app.** A first-run welcome card (three ways to give an errand, a sample errand, link with the extension). Live captions and a state chip while you talk to Vali. The mascot bubble says whether an errand needs an approval, an answer or a hand-off. Visual polish across the quick box, the list and settings.
+- **Extension.** One primary button per view, an amber edge on errands that need you, a status line under each errand, and Approve in the errand detail.
+
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (API, task shape) and [docs/SANDBOX.md](docs/SANDBOX.md) (browser agent, guardrails, measured cost).
 
 ## Two surfaces, one task list
@@ -43,7 +52,7 @@ Devices link with a 6-digit code (`POST /v1/link/code`, `POST /v1/link`), so the
 | Claude | Drives the browser sandbox (`claude-opus-5-5`, effort low, prompt caching) and reads photos of letters (`vali_media/letters.py`). |
 | Codex | Used to build: Codex workers wrote and checked code alongside Claude Code. |
 
-Cloudinary support exists for screenshots (`vali_media/screenshots.py`) but is not configured on the deployed API; the API serves screenshots itself. Exa Monitors for "watch" errands are stubbed: a watch is saved, but live monitoring is not enabled.
+Cloudinary support exists for screenshots (`vali_media/screenshots.py`) but is not configured on the deployed API; the API serves screenshots itself. "Watch" errands create a daily Exa Monitor with a signed webhook (max 3 per user).
 
 ## Repo layout
 

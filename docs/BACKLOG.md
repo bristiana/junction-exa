@@ -50,11 +50,13 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - [x] M3 Link with the extension through K2 (show a code in one, type it in the other).
 - [x] M4 Profile on the Mac: name, address, ID numbers kept locally and filled into placeholders only at execute time, same as the extension.
 - [x] M5 `npm run dist` builds an unsigned .dmg with the mascot icon; README updated.
+- [x] M6 First run: welcome card with the three ways to give a task, a sample errand, and linking.
 
 ## X. Any site, any errand, Exa visible (Bogdan, 05:45)
 - [x] X1 scripts/evals/errands.json: 20 real errands across all six modes and many site types (city services, Kela, Migri, Vero, HSL, VR, Finnair, housing, banks, shops, restaurants, sports venues, universities, forms with wizards, PDFs). scripts/evals/run.py runs them live against the API (find/check/claim/write/watch to an answer, book/claim with execute until approval, never past it) and writes a scorecard (pass, time, cost, Exa calls, failure reason).
 - [x] X2 Fix the top failures in the agent (backend/vali_agent) and research (backend/vali_api/research.py), rerun, repeat. Target: 16/20.
 - [x] X3 Show Exa at work in the UI: each errand lists what Exa did (search, contents, agent research, monitor) with sources, so the demo shows how Exa powers Vali.
+- [x] X5 Exa during form runs: every exa_search / exa_read the browser agent makes is stored on the errand and shown in "How Vali found this"; the agent looks things up when a form asks what the profile and page do not say.
 - [x] X4 Real watch mode with Exa Monitors (currently stubbed): create, webhook to /webhooks/exa with a secret, notify in the app.
 
 ## S. Valet on screen
@@ -65,10 +67,10 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 ## D. Design system
 - [x] D3 shared/ design tokens (colors, type scale, spacing, radius, shadows, motion) as one CSS file plus a tiny component set (button, input, card, badge, list row, live view) used by both the Mac app and the extension. Light and dark.
 - [x] D4 Apply it to the Mac app and the extension panel; remove one-off styles.
-- [ ] D5 Visual review: screenshots of every state in both surfaces, fix spacing, contrast and copy.
+- [x] D5 Visual review: screenshots of every state in both surfaces, fix spacing, contrast and copy.
 
 ## K. Backend (more)
-- [ ] K4 Speed: find under 5 s, claim research under 30 s; cache Exa answers per normalized question for 10 min; stream task status.
+- [x] K4 Speed (cache + timings; status streaming not done): find under 5 s, claim research under 30 s; cache Exa answers per normalized question for 10 min; stream task status.
 - [x] K5 Reliability: retries with backoff for Exa/Claude/Jev, clear error messages in tasks, a /v1/status page with recent failures, no silent excepts.
 
 ## U. Simple UI (Bogdan, 05:25)
@@ -79,11 +81,13 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 
 ## H. Voice and iMessage
 - [x] V1 Talk to Vali: an ElevenLabs agent (created through the ElevenLabs API by a script in backend/scripts/, id stored as VALI_ELEVENLABS_AGENT_ID) with server tools that call our API: create errand, task status, read approval, approve, stop. POST /v1/voice/session returns a signed conversation URL for the authed user. The Mac app's mascot opens a live voice conversation (WebSocket/WebRTC from the ElevenLabs JS client). Verify with a real spoken round trip.
+- [x] V3 Live captions, state chip and mic ring while talking to Vali.
 - [ ] V2 Phone (only if Bogdan buys a Twilio number): import it into ElevenLabs, inbound calls reach the same agent, and Vali calls you when an approval is waiting (POST /v1/convai/twilio/outbound-call).
 - [x] I1 Spec: docs/IMESSAGE.md. No official iMessage API for bots (Apple Messages for Business needs an approved provider). Workable path: a Mac signed in to a dedicated Vali Apple ID runs a bridge in the Mac app that reads ~/Library/Messages/chat.db (Full Disk Access) and replies through AppleScript to Messages. Allowed senders only, linked to a Vali account with a code. Works while that Mac is on.
 - [x] I2 Build the bridge in desktop/ (imessage.mjs in the main process, a Settings toggle, allowed handles, link code flow), reusing the WhatsApp flow logic: errand in, result out, "da"/"stop" for approvals. Test with a fixture chat.db; live test needs the dedicated Apple ID.
 
 ## Needs Bogdan
+- Codex runs: the permission classifier sometimes blocks `codex exec` (sends code to OpenAI). Allow it with a Bash permission rule if you want Codex workers; until then Claude workers take those tasks.
 - WhatsApp (parked): Meta rejects every outbound message with 131031 "Business Account locked". In WhatsApp Manager, check why the account is locked and request a review. Until then Vali receives messages but cannot reply (A1, plus a live check of A3-A5).
 
 ## Log
@@ -94,3 +98,6 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - 05:30 Plan widened to five tracks until 10:00: call, valet on screen, design system polish, Mac app, backend. One PR per item with a Claude review.
 - 05:20 Merged PRs #2-#7: voice/letters/linking API, design system, iMessage spec, voice agent (agent created in ElevenLabs, session live), extension redesign, Mac app (live-checked, dmg built). Running: Exa Monitors + rate limit, 20-errand eval, Mac voice + valet motion, extension linking + Exa trail, docs refresh.
 - 05:50 Merged #9-#13: Exa Monitors watch mode, extension linking + Exa trail, Mac talk-to-Vali (real agent spoke) + valet on screen, serving pose, extension polish. Evals 20/20 live ($6 total). iMessage bridge in review fixes (chat.style bug caught).
+- 06:10 Merged #16-#18: routing (check vs find), Mac visual polish (14 fixes), agent safety (newline never submits, order/purchase always gated, guest path only from a real control). Approval-stop rerun 5/5, golden 4/4, 502 backend tests. Running: Exa during form runs, Exa cache (K4), extension visual review (D5), desktop status bubble.
+- 06:20 Merged #19 mascot bubble (approval vs question vs hand-off) and #20 Exa cache (10 min, hit costs 0). Extension visual review done, ships with Exa during form runs. Running: Exa during form runs, 10-errand sweep on new sites, Mac first run.
+- 06:50 Merged #21-#25: how-to questions route to check, Mac first-run welcome, live captions while talking, Exa lookups during form runs (masked before sending, shown in the trail), extension polish. New-site sweep 8/10 (dentist routing fixed; Espoo form was down for maintenance). Golden 4/4. Running: outage hand-off + address suggestion guard fix, extension leftovers, demo docs, dmg rebuild.
