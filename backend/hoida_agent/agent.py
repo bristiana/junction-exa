@@ -6,7 +6,7 @@ from typing import Literal
 from .browser import Browser
 from .guard import is_final_submit, is_navigation
 from .hooks import AgentHooks
-from .jev import Jev, final_submit_probability
+from .jev import Jev, final_submit_probability, find_element
 from .live import Screencast, dismiss_cookie_banner, mark_private
 from .llm import ClaudeLLM, LLM
 from .privacy import mask, substitute
@@ -23,7 +23,9 @@ _STRING = {'type': 'string'}
 _NULLABLE = {'type': ['string', 'null']}
 TOOLS = [
     _tool('open_url', 'Open a URL.', {'url': _STRING}),
-    _tool('click', 'Click a snapshot reference; final submission requires approval.', {'ref': _STRING}),
+    _tool('click', 'Click an element: give its snapshot ref and a short description of what you mean (target, e.g. '
+          '"19:30 Suvi slot"). If the ref is null or the page changed, the element is found again from target. '
+          'Final submission requires approval.', {'ref': _NULLABLE, 'target': _NULLABLE}),
     _tool('type_text', 'Fill a text field using profile placeholders.', {'ref': _STRING, 'text': _STRING}),
     _tool('select_option', 'Select an option by text or value.', {'ref': _STRING, 'option': _STRING}),
     _tool('set_checkbox', 'Set a checkbox or radio state.', {'ref': _STRING, 'checked': {'type': 'boolean'}}),
@@ -189,7 +191,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         return ref
 
     def describe(name, args):
-        target = label_of(args['ref']) if 'ref' in args else ''
+        target = label_of(args['ref']) if args.get('ref') else (args.get('target') or '')
         text = {'click': f'Clicked "{target}"',
                 'type_text': f'Filled "{target}"' + (f" with {args.get('text', '')[:60]}" if '{{' in args.get('text', '') else ''),
                 'select_option': f'Chose "{args.get("option", "")[:40]}" in "{target}"',
@@ -349,6 +351,17 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                        {'type': 'text', 'text': snapshot()}]
                         else:
                             if name == 'click':
+                                if not args['ref'] and not args['target']:
+                                    raise ValueError('Give a ref or a target')
+                                if not browser.has(args['ref']):
+                                    # The ref is missing or the page re-rendered: Jev finds the element again (~0.2 s).
+                                    fresh = browser.snapshot()
+                                    found, p = find_element(jev, mask(args['target'] or '', profile), mask(fresh, profile))
+                                    if not found or p < 0.7:
+                                        raise ValueError('That element is gone (the page changed); call read_page')
+                                    args = dict(args, ref=found)
+                                    last_snapshot = mask(fresh, profile)
+                                    step_text = mask(f'Clicked "{label_of(found)}" (found by Jev)', profile)
                                 described = browser.element_text(args['ref'])
                                 info = browser.element_info(args['ref'])
                                 # Cookie consent is never an irreversible commitment ("Confirm my choices").

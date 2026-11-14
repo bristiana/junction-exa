@@ -291,3 +291,48 @@ def test_payment_page_still_gets_the_approval_summary(local_site):
     browser_payment = local_site + '/payment.html'
     result = run_browser_agent('x', browser_payment, {}, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert approvals == ['Pay 208 EUR for the sauna'] and result.status == 'stopped'
+
+
+def jev_picking(text):
+    """Fake Jev that picks the option whose description contains `text`, in both orders."""
+    seen = []
+
+    def respond(request):
+        q = json.loads(request.content)['questions']
+        seen.append(q)
+        if 'q' in q:  # guard second opinion: not irreversible
+            return httpx.Response(200, json={'answers': {'q': {'noul': 0.05}}})
+        pick = {k: (0.95 if text in v else 0.05 / max(1, len(q['a']['criteria']) - 1)) for k, v in q['a']['criteria'].items()}
+        return httpx.Response(200, json={'answers': {'a': {'probabilities': pick}, 'b': {'probabilities': pick}}})
+    return Jev(api_key='fake', transport=httpx.MockTransport(respond)), seen
+
+
+def test_jev_finds_the_element_from_the_target(local_site):
+    jev, seen = jev_picking('Accept terms')
+    steps = []
+    llm = Scripted([('click', {'ref': None, 'target': 'the accept terms checkbox'}), ('finish', {'result': 'ok'})])
+    hooks = AgentHooks(lambda t, j: steps.append(t), lambda s, f: True, lambda: False)
+    result = run_browser_agent('x', local_site + '/claim.html', PROFILE, hooks, llm, exa=ExaTools(api_key=''), jev=jev)
+    assert result.status == 'done', result
+    assert 'Clicked "Accept terms" (found by Jev)' in steps
+    assert len(seen[0]['a']['criteria']) <= 25
+
+
+def test_stale_ref_found_again_by_jev_still_hits_the_guard(local_site):
+    jev, _ = jev_picking('Submit claim')
+
+    def refused(messages):
+        assert 'Call request_approval first' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'stopped'}
+    llm = Scripted([('click', {'ref': 'e99', 'target': 'the submit button'}), refused])
+    result = run_browser_agent('x', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=jev)
+    assert result.status == 'done'
+
+
+def test_without_jev_a_missing_ref_asks_to_read_the_page(local_site):
+    def told(messages):
+        assert 'call read_page' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'ok'}
+    llm = Scripted([('click', {'ref': None, 'target': 'Submit claim'}), told])
+    result = run_browser_agent('x', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done'

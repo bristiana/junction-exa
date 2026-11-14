@@ -6,6 +6,7 @@ API: POST https://api.typesafe.ai/v1/systemone {model, state, questions}; questi
 callers ask twice with reversed order and average.
 """
 import os
+import re
 import httpx
 
 JEV_URL = 'https://api.typesafe.ai/v1/systemone'
@@ -81,3 +82,19 @@ def final_submit_probability(jev, element_description, page_summary):
     return jev.yes(state, 'Would clicking this element make an irreversible commitment: submit the form, send a message, '
                           'confirm a booking or reservation, place an order or pay? (Moving to the next step of a form, '
                           'opening a menu, choosing a date or accepting cookies is not irreversible.)')
+
+
+def find_element(jev, target, snapshot_text, limit=25):
+    """Pick the snapshot ref that best matches `target` ("the 19:30 Suvi slot"). Returns (ref, probability) or (None, 0).
+
+    Lines are pre-ranked by word overlap so Jev chooses among at most `limit` candidates.
+    """
+    if not jev or not jev.enabled or not target:
+        return None, 0.0
+    head, _, text = snapshot_text.partition('\nText: ')
+    lines = [l for l in head.splitlines() if l.startswith('[e') and '] ' in l]
+    words = {w for w in re.findall(r'\w+', target.lower()) if len(w) > 1}
+    scored = sorted(enumerate(lines), key=lambda il: (-len(words & set(re.findall(r'\w+', il[1].lower()))), il[0]))
+    options = {l.split(']')[0][1:]: l.split('] ', 1)[1][:200] for _, l in scored[:limit]}
+    state = f'A web page that a browser agent is using. Visible text: {text[:1500]}'
+    return jev.choose(state, f'Which element is this: {target}?', options)
