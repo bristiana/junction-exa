@@ -1,5 +1,6 @@
 """Vali HTTP API and injectable research/browser workers."""
 import asyncio
+import copy
 from datetime import datetime, timedelta, timezone
 from contextvars import ContextVar
 import hmac
@@ -17,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
+from . import activity
 from .citations import cite
 from .config import Config
 from .exa import ExaClient, ExaError
@@ -73,6 +75,11 @@ def research_from_run(run, kind='agent'):
                 stop_reason=run.get('stopReason'), error=error.get('message') if isinstance(error, dict) else error)
 
 
+def user_profile(store, uid):
+    user = store.get_user(uid)
+    return json.loads(user['profile_json']) if user else {}
+
+
 def poll_research_once(task_id, application=None):
     application = application or app
     store, exa = application.state.store, application.state.exa
@@ -84,11 +91,12 @@ def poll_research_once(task_id, application=None):
         run = exa.get_run(previous['run_id'])
         research = research_from_run(run)
         research['progress'] = previous.get('progress', [])
-        if research['status'] not in TERMINAL:
+        research['activity'] = previous.get('activity', [])
+        if research['status'] not in {'failed', 'cancelled'}:
             try:
-                progress = progress_from_events(exa.get_events(previous['run_id']).get('data', []))
-                if progress:
-                    research['progress'] = progress
+                events = exa.get_events(previous['run_id']).get('data', [])
+                research['progress'] = progress_from_events(events) or research['progress']
+                research['activity'] = activity.from_events(task, events, user_profile(store, task['user_id']))
             except ExaError:
                 store.record_failure(task_id, 'research.events', 'Research progress is temporarily unavailable.')
     except ExaError as exc:
@@ -97,7 +105,13 @@ def poll_research_once(task_id, application=None):
             return False
         research = {**previous, 'status': 'failed', 'error': 'The run was not found.'}
     if research['status'] == 'completed' and research.get('output'):
+        # Shown while the quotes are checked; the web page polls every second.
+        quoting = {**research, 'status': 'running', 'activity': research['activity'] + [activity.checking(task, research['output'])]}
+        if not store.update_research(task_id, quoting, expected=previous):
+            return False
+        previous, research = quoting, {**copy.deepcopy(quoting), 'status': 'completed'}
         research['cost'] = (research.get('cost') or 0) + cite(research['output'], exa, application.state.llm, task['task'])
+        research['activity'] = research['activity'] + [activity.done(task, research['output'])]
     if store.update_research(task_id, research, expected=previous) and research['status'] in {'completed', 'failed'}:
         push_task(application, task_id, render_result)
     return research['status'] in TERMINAL
@@ -109,7 +123,7 @@ def research_poller_loop(task_id, application=None):
     while time.monotonic() < deadline:
         if poll_research_once(task_id, application):
             return
-        time.sleep(4)
+        time.sleep(2)
     store = application.state.store
     task = store.get_task(task_id)
     if task and task['research']['status'] not in TERMINAL:
@@ -345,24 +359,27 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             previous_run = owned(body.previous_task_id, user)['research'].get('run_id')
         research = dict(kind=kind, status='queued', run_id=None, progress=[], output=None, cost=None, stop_reason=None, error=None)
         task = state.store.create_task(user['id'], body.task, body.page, mode, research, source=source)
+        profile = json.loads(user['profile_json'])
         try:
             if kind == 'search':
                 response = state.exa.search(dict(query=build_query(body.task, body.page), type='auto', numResults=5,
                                                 contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT))
                 output = map_find_output(response)
+                trail = activity.from_search(task, body.task, response, profile) + [activity.checking(task, output)]
                 extra = cite(output, state.exa, state.llm, body.task)
-                research.update(status='completed', output=output, cost=((response.get('costDollars') or {}).get('total') or 0) + extra)
+                research.update(status='completed', output=output, cost=((response.get('costDollars') or {}).get('total') or 0) + extra,
+                                activity=trail + [activity.done(task, output)])
             elif kind == 'agent':
                 run_request = build_run_request(body.task, body.page, effort=body.effort)
                 if previous_run:
                     run_request['previousRunId'] = previous_run
-                research = research_from_run(state.exa.create_run(run_request))
+                research = {**research_from_run(state.exa.create_run(run_request)), 'activity': [activity.opening(task)]}
             else:
                 watch, message = provision_watch(config, state.store, state.exa, user['id'], body.task, task['id'])
                 if watch is None:
                     state.store.update_research(task['id'], {**research, 'status': 'failed', 'error': message})
                     raise HTTPException(409, message)
-                research.update(status='completed', watch_id=watch['id'],
+                research.update(status='completed', watch_id=watch['id'], activity=[activity.opening(task)],
                     monitor_stubbed=not bool(watch.get('secret')),
                     output={'text': message, 'structured': {
                         'answer': message, 'status': 'info_only',
