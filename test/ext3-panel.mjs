@@ -70,8 +70,10 @@ try {
     headless: true, args: ["--headless=new", `--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
     viewport: { width: 420, height: 1000 },
   });
-  let [sw] = context.serviceWorkers();
-  if (!sw) sw = await context.waitForEvent("serviceworker");
+  // Chrome can start its own service workers too; wait for the extension's.
+  const extWorker = () => context.serviceWorkers().find((w) => w.url().startsWith("chrome-extension://"));
+  let sw = extWorker();
+  while (!sw) { await new Promise((r) => setTimeout(r, 200)); sw = extWorker(); }
   const id = new URL(sw.url()).host;
   await sw.evaluate((url) => chrome.storage.local.set({ backendUrl: url }), base);
   const page = await context.newPage();
@@ -107,10 +109,10 @@ try {
   assert.equal((await sw.evaluate(() => chrome.storage.local.get("backendToken"))).backendToken, macToken);
   await page.screenshot({ path: path.join(out, "linked.png"), fullPage: true });
   await page.click("#settingsBtn");
-  await page.waitForFunction(() => document.querySelector("#list").textContent.includes("Mac account"));
-  const taskNames = await page.locator("#list .task-text").allTextContents();
-  assert.ok(taskNames.some((s) => /Mac account/.test(s)));
-  await page.locator(".card-head").filter({ hasText: "Mac account" }).click();
+  await page.click("#historyBtn");
+  await page.waitForFunction(() => document.querySelector("#history").textContent.includes("Mac account"));
+  await page.locator(".h-row").filter({ hasText: "Mac account" }).click();
+  assert.ok((await page.locator("#thread .msg.user").first().textContent()).includes("Mac account"));
   assert.equal(await page.locator(".exa-activity").evaluate((e) => e.open), false);
   await page.locator(".exa-activity summary").click();
   assert.ok(await page.locator(".exa-activity a").count() > 0);
@@ -129,7 +131,7 @@ try {
   await page.screenshot({ path: path.join(out, "narrow-dark.png"), fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   assert.deepEqual(errors, []);
-  console.log("PASS: panel linking, countdown/expiry, wrong code recovery, account refresh, Exa sources/disclosure, Talk fallback, narrow dark layout; no page errors.");
+  console.log("PASS: panel linking, countdown/expiry, wrong code recovery, account refresh, history to thread, Exa sources/disclosure, Talk fallback, narrow dark layout; no page errors.");
 } finally {
   await context?.close();
   server.close();

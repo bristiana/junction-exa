@@ -14,13 +14,22 @@
       <div id="mascot" class="mascot" aria-hidden="true"></div>
       <div class="brand-text">
         <span class="name">Vali</span>
-        <span id="mascotSays" class="v-bubble" aria-live="polite" aria-atomic="true">I’m ready to help.</span>
+        <span id="mascotSays" class="says" aria-live="polite" aria-atomic="true">I’m ready to help.</span>
       </div>
     </div>
-    <button id="settingsBtn" class="v-btn v-btn--quiet icon-btn" title="Settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
-    </button>
+    <div class="top-actions">
+      <button id="newBtn" class="v-btn v-btn--quiet icon-btn" type="button" title="New errand" aria-label="New errand">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button id="historyBtn" class="v-btn v-btn--quiet icon-btn" type="button" title="History" aria-label="History" aria-controls="history" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3.5 12a8.5 8.5 0 1 0 2.5-6M3.5 4v4h4M12 7.5V12l3 2"/></svg>
+      </button>
+      <button id="settingsBtn" class="v-btn v-btn--quiet icon-btn" type="button" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
+      </button>
+    </div>
   </header>
+  <div id="stats" class="stats" aria-label="Your errands so far"></div>
 
   <section id="settings" class="settings v-card" hidden>
     <h2>Settings</h2>
@@ -82,38 +91,31 @@
     </details>
     <div class="row end"><button id="saveSettings" class="v-btn">Save</button></div>
   </section>
-
-  <main id="main">
-    <form id="composer" class="composer v-card">
-      <textarea id="task" class="v-textarea" aria-label="What should I take care of?" rows="1" placeholder="What should I take care of?"></textarea>
-      <div id="context" class="context" hidden>
-        <label class="check"><input type="checkbox" id="usePage" checked /> <span id="contextLabel">Use this page</span></label>
-      </div>
-      <div class="row end"><button id="talk" class="v-btn v-btn--quiet" type="button" aria-controls="talkHint" aria-expanded="false">Talk</button><button id="send" class="v-btn" type="submit">Send</button></div>
-      <p id="talkHint" class="muted small" role="status" hidden>Talk to Vali from the Mac app. Open Vali on your Mac and choose Talk. Link in Settings to share errands.</p>
-      <p id="composerError" class="error" hidden></p>
-    </form>
-
-    <section id="list" class="list v-card v-card--flush" aria-label="All errands"></section>
-    <section id="detail" class="detail-card card v-card" hidden aria-label="Selected errand"></section>
-    <div id="empty" class="v-empty">
-      <img src="../mascot/idle.svg" alt="" width="144" height="144" />
-      <h2 class="v-empty__title">One less thing</h2>
-      <p class="v-empty__text">I’ll look into your errand and prepare the next step for your OK. Try one:</p>
-      <div id="presets" class="presets"></div>
-    </div>
+  <main id="main" class="main">
+    <section id="history" class="history" hidden aria-label="History"></section>
+    <section id="thread" class="thread" aria-label="Conversation with Vali"></section>
   </main>
 
-  <template id="cardTpl">
-    <article class="card v-row">
-      <img class="still v-row__lead" alt="" width="40" height="40" />
-      <div class="v-row__main">
-        <button class="card-head v-row__link v-row__title" type="button" aria-controls="detail"><span class="task-text"></span></button>
-        <p class="v-row__status"><b class="status"></b><span class="meta"></span></p>
-      </div>
-      <div class="v-row__actions"></div>
-    </article>
-  </template>
+  <form id="composer" class="composer">
+    <div id="context" class="context" hidden>
+      <label class="check"><input type="checkbox" id="usePage" checked /> <span id="contextLabel">Use this page</span></label>
+    </div>
+    <div id="replyTo" class="reply-to" hidden>
+      <span class="reply-to__text"></span>
+      <button id="replyOff" class="reply-to__off" type="button" title="Start a new errand instead" aria-label="Start a new errand instead">×</button>
+    </div>
+    <div class="composer-row">
+      <button id="talk" class="v-btn v-btn--quiet icon-btn round" type="button" title="Talk" aria-label="Talk" aria-controls="talkHint" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 3.5a3 3 0 0 0-3 3V12a3 3 0 0 0 6 0V6.5a3 3 0 0 0-3-3ZM6 11a6 6 0 0 0 12 0M12 17v3.5"/></svg>
+      </button>
+      <textarea id="task" class="composer-input" aria-label="Message Vali" rows="1" placeholder="What should I take care of?"></textarea>
+      <button id="send" class="send" type="submit" title="Send" aria-label="Send">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5M6 11l6-6 6 6"/></svg>
+      </button>
+    </div>
+    <p id="talkHint" class="muted small hint" role="status" hidden>Talk to Vali from the Mac app. Open Vali on your Mac and choose Talk. Link in Settings to share errands.</p>
+    <p id="composerError" class="error" hidden></p>
+  </form>
 
   <script src="../lib/butler.js"></script>
   <script type="module" src="panel.js"></script>
