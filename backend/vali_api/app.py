@@ -483,7 +483,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                         question=early_question(body.task, mode), effort=body.effort, known_details=sorted(set(body.known_details)))
         reusable = not (body.page or previous_run or kind == 'monitor' or TIME_SENSITIVE.search(body.task))
         reused = reusable and state.store.recent_research(
-            user['id'], body.task, mode, body.effort, (datetime.now(timezone.utc) - REUSE_FOR).isoformat())
+            user['id'], body.task, mode, body.effort, (datetime.now(timezone.utc) - REUSE_FOR).isoformat(),
+            research['known_details'])
         task = state.store.create_task(user['id'], body.task, body.page, mode, research, source=source)
         if reused:  # the same question minutes ago: its cited research, at no cost and no wait
             research = reused_research(task, *reused)

@@ -83,6 +83,20 @@ def test_the_same_question_reuses_recent_research_at_no_cost():
     assert stranger['status'] == 'running' and 'reused_from' not in stranger
 
 
+def test_reuse_needs_the_same_known_details():
+    client, application, store, polls = make()
+    first = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki'}).json()
+    poll_research_once(first['id'], application)
+    # Research written for someone whose name and email are saved differs: it uses {{name}} instead of asking.
+    known = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki', 'known_details': ['email', 'name']}).json()
+    assert known['research']['status'] == 'running' and 'reused_from' not in known['research']
+    poll_research_once(known['id'], application)
+    again = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki', 'known_details': ['name', 'email', 'name']}).json()
+    assert again['research']['reused_from'] == store.get_task(known['id'])['created_at']
+    plain = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki'}).json()
+    assert plain['research']['reused_from'] == store.get_task(first['id'])['created_at']
+
+
 def test_a_stalled_quote_check_restarts_on_the_next_poll():
     client, application, store, polls = make()
     task = client.post('/v1/tasks', json={'task': 'find a sauna in Helsinki'}).json()
