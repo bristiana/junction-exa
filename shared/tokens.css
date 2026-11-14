@@ -1,26 +1,38 @@
-/* Vali design tokens. Light by default, dark via the OS, and data-theme="light|dark" on any element wins. */
+/* Vali design tokens. Light by default, dark via the OS, and data-theme="light|dark" on any element wins.
+   Light is the pastel look of the Vali web page: blush background, ink text, white cards, lilac fills. */
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans"), url("fonts/plus-jakarta-sans.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
 :root, [data-theme="light"] {
   color-scheme: light;
-  --v-bg: #f8f6fc;          /* app background, a faint lilac */
+  --v-bg: #fdf7fb;          /* app background, a pastel blush */
   --v-surface: #ffffff;     /* cards, inputs, bubbles */
-  --v-surface-2: #f1edf9;   /* sunken: live frame, hover */
-  --v-line: #e5dff1;
-  --v-text: #2a2340;        /* deep plum ink */
-  --v-muted: #6d6485;
-  --v-accent: #6a55b5;      /* lilac, from the butler's brow, deepened for contrast */
-  --v-accent-hover: #5b47a3;
-  --v-accent-soft: #eee9fb;
+  --v-surface-2: #f6effa;   /* sunken: live frame, hover */
+  --v-line: #efe6f3;
+  --v-line-2: #e6dcef;      /* inputs and outlined buttons */
+  --v-text: #34305a;        /* ink */
+  --v-muted: #6e6890;
+  --v-primary: #34305a;     /* the one primary button: ink */
+  --v-primary-hover: #45407a;
+  --v-on-primary: #ffffff;
+  --v-accent: #7656c9;      /* lilac: links, status words, citations */
+  --v-accent-hover: #6446b5;
+  --v-accent-soft: #f1eafb;
   --v-on-accent: #ffffff;
   --v-success: #2c7a4b;
   --v-success-soft: #e3f3e9;
-  --v-warning: #935d00;     /* needs the user */
-  --v-warning-soft: #fcefd9;
-  --v-danger: #b03448;
-  --v-danger-soft: #fbe6ea;
+  --v-warning: #9a5b00;     /* needs the user */
+  --v-warning-soft: #fdf0d8;
+  --v-danger: #b3364f;
+  --v-danger-soft: #fbe5ea;
   --v-on-danger: #ffffff;
-  --v-ring: #8b76e0;
-  --v-shadow-1: 0 1px 2px rgb(42 35 64 / 0.06);
-  --v-shadow-2: 0 6px 20px rgb(42 35 64 / 0.10), 0 1px 3px rgb(42 35 64 / 0.06);
+  --v-ring: #b9a3ec;
+  --v-shadow-1: 0 1px 2px rgb(52 48 90 / 0.04), 0 8px 24px rgb(52 48 90 / 0.06);
+  --v-shadow-2: 0 12px 32px rgb(52 48 90 / 0.12), 0 1px 3px rgb(52 48 90 / 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,8 +42,12 @@
     --v-surface: #1e1a29;
     --v-surface-2: #272236;
     --v-line: #342d46;
+    --v-line-2: #3d3552;
     --v-text: #ece8f6;
     --v-muted: #a49cba;
+    --v-primary: #b7a6f4;
+    --v-primary-hover: #c8bbf8;
+    --v-on-primary: #1d1733;
     --v-accent: #b7a6f4;
     --v-accent-hover: #c8bbf8;
     --v-accent-soft: #2d2650;
@@ -55,8 +71,12 @@
   --v-surface: #1e1a29;
   --v-surface-2: #272236;
   --v-line: #342d46;
+  --v-line-2: #3d3552;
   --v-text: #ece8f6;
   --v-muted: #a49cba;
+  --v-primary: #b7a6f4;
+  --v-primary-hover: #c8bbf8;
+  --v-on-primary: #1d1733;
   --v-accent: #b7a6f4;
   --v-accent-hover: #c8bbf8;
   --v-accent-soft: #2d2650;
@@ -74,8 +94,8 @@
 }
 
 :root {
-  /* type: 4 sizes, system stack */
-  --v-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* type: 4 sizes, Plus Jakarta Sans (fonts/, SIL OFL) then the system stack */
+  --v-font: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --v-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --v-fs-sm: 12px;   /* meta, badges */
   --v-fs-md: 14px;   /* body, buttons */
@@ -87,7 +107,7 @@
   --v-s-1: 4px;  --v-s-2: 8px;  --v-s-3: 12px;  --v-s-4: 16px;  --v-s-5: 24px;  --v-s-6: 32px;
   --v-tap: 44px;     /* minimum touch target */
 
-  --v-r-sm: 8px;  --v-r-md: 12px;  --v-r-lg: 16px;  --v-r-pill: 999px;
+  --v-r-sm: 10px;  --v-r-md: 14px;  --v-r-lg: 18px;  --v-r-xl: 22px;  --v-r-pill: 999px;
 
   /* motion */
   --v-dur-fast: 120ms;  --v-dur-base: 200ms;  --v-dur-slow: 320ms;
