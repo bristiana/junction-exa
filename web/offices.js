@@ -10,8 +10,8 @@ export function renderOffices(node, query) {
   node.replaceChildren(h('p', { class: 'muted' }, 'Finding offices in Helsinki…'));
   if (!cache.has(query)) cache.set(query, api.places(query).catch(() => ({ available: false, places: [] })));
   cache.get(query).then((result) => {
-    if (!node.isConnected) return;
-    const offices = (result.available ? result.places : []).map((place) => officeLine(place)).filter((o) => o.name);
+    if (!result.available) return node.replaceChildren(h('p', { class: 'muted' }, 'Couldn’t load offices right now.'));
+    const offices = result.places.map((place) => officeLine(place)).filter((o) => o.name);
     node.replaceChildren(offices.length ? officeList(offices) : h('p', { class: 'muted' }, 'No offices listed on the Helsinki service map.'));
   });
 }

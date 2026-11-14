@@ -1,6 +1,6 @@
 // Pure reads for the student hub: the catalog from GET /v1/services, office hours from /v1/places and register
 // matches from /v1/company. No DOM here.
-import { domainOf, safeUrl } from './model.js';
+import { domainOf, isOfficial, safeUrl } from './model.js';
 
 export const PHASES = {
   before_arrival: 'Before you arrive',
@@ -16,8 +16,6 @@ const HELP = {
   'guide only': 'Vali guides you step by step',
 };
 
-export const BANK_ID = 'Finnish bank ID or mobile ID';
-
 // Office searches on the Helsinki service map, for services people visit in person.
 const OFFICES = {
   'residence-permit': 'Maahanmuuttovirasto', 'eu-registration': 'Maahanmuuttovirasto', 'permit-extension': 'Maahanmuuttovirasto',
@@ -28,7 +26,12 @@ const OFFICES = {
 
 export const officeQuery = (service) => OFFICES[service.id] || null;
 export const helpLabel = (service) => HELP[service.vali_help] || 'Vali guides you step by step';
-export const canFill = (service) => service.vali_help === 'fill in the cloud browser';
+export const canFill = (service) => service.vali_help === 'fill in the cloud browser' && !!service.official_url;
+
+// A catalog entry made safe to show: the official link only when it is a plain http(s) URL, and the bank-ID flag.
+function cleanService(service) {
+  return { ...service, official_url: safeUrl(service.official_url), needsBankId: /bank id/i.test(String(service.login_needed || '')) };
+}
 
 // Who the reader is: { citizenship: 'eu'|'non_eu'|null, study: 'degree'|'exchange'|null }; null shows everything.
 export function appliesTo(service, about) {
@@ -42,7 +45,7 @@ export function timeline(catalog, about) {
   const groups = Array.isArray(catalog?.groups) ? catalog.groups : [];
   return groups.map((group) => ({
     id: group.id, title: PHASES[group.id] || group.id,
-    services: (Array.isArray(group.services) ? group.services : []).filter((s) => s?.id && appliesTo(s, about)),
+    services: (Array.isArray(group.services) ? group.services : []).filter((s) => s?.id && appliesTo(s, about)).map(cleanService),
   })).filter((group) => group.services.length);
 }
 
@@ -68,7 +71,7 @@ export function factSources(facts) {
     const quote = clipQuote(fact?.quote);
     if (!url || !quote) continue;
     if (!sources.has(url)) {
-      sources.set(url, { n: sources.size + 1, url, domain: domainOf(url), title: String(fact.title || domainOf(url)), quote, official: true });
+      sources.set(url, { n: sources.size + 1, url, domain: domainOf(url), title: String(fact.title || domainOf(url)), quote, official: isOfficial(domainOf(url)) });
     }
     if (!quotes.some((q) => q.text === quote)) quotes.push({ text: quote, n: sources.get(url).n });
   }
@@ -79,9 +82,10 @@ export function factSources(facts) {
 export function errandFor(service, about, fill = false) {
   const who = [about.citizenship === 'eu' ? 'EU' : about.citizenship === 'non_eu' ? 'non-EU' : '',
     about.study ? `${about.study} student` : 'student'].filter(Boolean).join(' ');
+  const start = safeUrl(service.official_url);
   return fill
-    ? `Fill in the ${service.name} form (${service.organisation}) for me as a ${who} in Finland, starting from ${service.official_url}. Stop before submitting.`
-    : `${service.name} (${service.organisation}): what do I need to do as a ${who} in Finland? Start from ${service.official_url}`;
+    ? `Fill in the ${service.name} form (${service.organisation}) for me as a ${who} in Finland${start ? `, starting from ${start}` : ''}. Stop before submitting.`
+    : `${service.name} (${service.organisation}): what do I need to do as a ${who} in Finland?${start ? ` Start from ${start}` : ''}`;
 }
 
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -139,19 +143,20 @@ function summary(company) {
 
 const normal = (s) => String(s).toLowerCase().replace(/\b(oy|oyj|ab|ky|ltd|sr|ry)\b|[^a-z0-9åäö]+/g, ' ').trim();
 
-// One verdict line and the matches that back it: the closest name first, active companies before ceased ones.
+// One neutral verdict line and the matches that back it: the closest name first, active companies before ceased ones.
+// A register entry says a company exists, nothing about whether a landlord can be trusted.
 export function companyVerdict(result, query) {
   if (!result?.available) return { tone: 'unknown', line: 'The trade register did not answer. Try again in a moment.', matches: [] };
   const wanted = normal(query);
   const matches = (Array.isArray(result.companies) ? result.companies : []).map(summary).filter((c) => c.name)
-    .map((c) => ({ ...c, exact: normal(c.name) === wanted }))
+    .map((c) => ({ ...c, exact: wanted !== '' && normal(c.name) === wanted }))
     .sort((a, b) => (b.exact - a.exact) || (!!a.ceased - !!b.ceased));
   const best = matches[0];
   if (!best) return { tone: 'none', line: `No company named “${query}” in the Finnish trade register. That alone is not proof of fraud: ask for their business ID.`, matches };
   if (!best.exact) return { tone: 'none', line: `No exact match for “${query}”. Closest registered names below; compare the business ID they give you.`, matches: matches.slice(0, 3) };
   return best.ceased
-    ? { tone: 'bad', line: `${best.name} (${best.id}) is in the register but ceased on ${best.ceased}.`, matches: matches.slice(0, 3) }
-    : { tone: 'good', line: `${best.name} (${best.id}) is a registered ${best.form ? best.form.toLowerCase() : 'company'} since ${best.since}.`, matches: matches.slice(0, 3) };
+    ? { tone: 'ceased', line: `Found in the register: ${best.name} (${best.id}), but it ceased on ${best.ceased}.`, matches: matches.slice(0, 3) }
+    : { tone: 'listed', line: `Found in the register: ${best.name} (${best.id})${best.form ? `, ${best.form.toLowerCase()}` : ''}${best.since ? `, registered ${best.since}` : ''}.`, matches: matches.slice(0, 3) };
 }
 
 export const registerUrl = (id) => `https://tietopalvelu.ytj.fi/yritys/${encodeURIComponent(id)}`;

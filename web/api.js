@@ -46,13 +46,15 @@ function signIn() {
 }
 
 // Every call is signed in; a token the server forgot (401) is replaced once with a fresh anonymous account.
+// A 401 that arrives after another call already replaced the token just retries with the new one.
 async function call(method, path, body) {
   if (!token) await signIn();
+  const used = token;
   try {
     return await send(method, path, body);
   } catch (error) {
     if (error.status !== 401) throw error;
-    await signIn();
+    if (token === used) await signIn();
     return send(method, path, body);
   }
 }
