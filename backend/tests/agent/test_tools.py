@@ -595,3 +595,14 @@ def test_without_ask_user_unnamed_details_stay_refused(local_site):
     llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{email}}'}), refused])
     result = run_browser_agent('Book a sauna', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert result.status == 'done' and 'With the user' not in llm.received[0][0]
+
+
+def test_chat_users_without_saved_details_are_asked_once(local_site):
+    llm = Scripted([('finish', {'result': 'ok'})])
+    run_browser_agent('Book a sauna', local_site + '/claim.html', {}, plain_hooks(ask_user=lambda q: None), llm,
+                      exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert 'call ask_user once for all of them together' in llm.received[0][0]
+    llm = Scripted([('finish', {'result': 'ok'})])
+    run_browser_agent('Book a sauna', local_site + '/claim.html', PROFILE, plain_hooks(ask_user=lambda q: None), llm,
+                      exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert 'never ask for it' in llm.received[0][0]

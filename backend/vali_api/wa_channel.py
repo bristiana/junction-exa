@@ -1,5 +1,6 @@
 """Graph client lifetime and best-effort worker notifications for Vali."""
 import asyncio
+import threading
 import logging
 
 from vali_wa.api import GraphAPIClient, GraphAPIError
@@ -110,9 +111,30 @@ def push_task(application, task_id, renderer):
                 return
             for body in bodies:
                 await api.send_text(number, body)
-        asyncio.run(send())
+        run_outside_loop(send)
     except Exception as exc:
         log_failure("task notification failed", exc, task_id=task_id)
+
+
+def run_outside_loop(make_coroutine, timeout=60):
+    """asyncio.run cannot start inside a running loop, and the browser sandbox (Playwright) runs one in this
+    thread: there the send gets its own thread."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(make_coroutine())
+    errors = []
+
+    def worker():
+        try:
+            asyncio.run(make_coroutine())
+        except Exception as exc:
+            errors.append(exc)
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if errors:
+        raise errors[0]
 
 
 async def push_watch_update(application, watch, update):
