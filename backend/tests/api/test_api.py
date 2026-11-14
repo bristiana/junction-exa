@@ -64,7 +64,8 @@ def test_identity_profile_and_auth(api):
     assert user['token'] not in json.dumps(store.get_user(user['user_id']))
     assert client.get('/v1/me').json()['profile_synced'] is False
     assert client.put('/v1/profile', json={'profile': {'email': 'test@example.com'}}).json() == {'ok': True}
-    assert client.get('/v1/me').json()['profile_synced'] is True
+    assert client.get('/v1/me').json()['profile_synced'] is False  # accepted for old clients, never stored
+    assert store.get_user(user['user_id'])['profile_json'] == '{}'
     assert client.put('/v1/profile', json={'profile': {}}).status_code == 200
     del client.headers['Authorization']
     for path in ['/v1/me', '/v1/tasks']:

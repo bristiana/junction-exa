@@ -45,6 +45,8 @@ class Store:
         for table in tables:
             self.sql('CREATE TABLE IF NOT EXISTS ' + table)
         self._add_column('tasks', 'lang TEXT')
+        # One-off and idempotent: profiles were once synced here; they now stay on the device.
+        self.sql("UPDATE users SET profile_json='{}' WHERE profile_json<>'{}'")
 
     def _add_column(self, table, column):
         """Additive migration for tables created before the column existed."""
@@ -104,9 +106,6 @@ class Store:
 
     def get_user(self, uid):
         return self.sql('SELECT * FROM users WHERE id=?', (uid,), one=True)
-
-    def set_profile(self, uid, profile):
-        self.sql('UPDATE users SET profile_json=? WHERE id=?', (json.dumps(profile), uid))
 
     def create_pair_code(self, uid):
         expiry = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
