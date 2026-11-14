@@ -26,6 +26,7 @@ from .guard import RateLimited, SlidingWindow, authenticate, check_origin, check
 from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .llm import make_fast_json
+from .questions import early_question, with_answer
 from .router import route
 from .stats import pick_channel, summarize
 from .store import make_store, now
@@ -37,6 +38,7 @@ from vali_wa.render import render_result, render_execution_update, render_error
 from .wa_channel import ChannelAPI, push_task, log_failure, logger as whatsapp_logger
 
 TERMINAL = {'completed', 'failed', 'cancelled'}
+CARRIED = ('question', 'activity_head', 'cost_before')  # research fields that outlive a run poll
 
 
 class TaskBody(BaseModel):
@@ -90,14 +92,17 @@ def poll_research_once(task_id, application=None):
     previous = task['research']
     try:
         run = exa.get_run(previous['run_id'])
-        research = research_from_run(run)
+        research = {**research_from_run(run), **{k: previous[k] for k in CARRIED if k in previous}}
         research['progress'] = previous.get('progress', [])
         research['activity'] = previous.get('activity', [])
+        if previous.get('cost_before'):
+            research['cost'] = (research.get('cost') or 0) + previous['cost_before']
         if research['status'] not in {'failed', 'cancelled'}:
             try:
                 events = exa.get_events(previous['run_id']).get('data', [])
                 research['progress'] = progress_from_events(events) or research['progress']
-                research['activity'] = activity.from_events(task, events, user_profile(store, task['user_id']))
+                trail, head = activity.from_events(task, events, user_profile(store, task['user_id'])), previous.get('activity_head')
+                research['activity'] = head + trail[1:] if head else trail
             except ExaError:
                 store.record_failure(task_id, 'research.events', 'Research progress is temporarily unavailable.')
     except ExaError as exc:
@@ -116,6 +121,48 @@ def poll_research_once(task_id, application=None):
     if store.update_research(task_id, research, expected=previous) and research['status'] in {'completed', 'failed'}:
         push_task(application, task_id, render_result)
     return research['status'] in TERMINAL
+
+
+def find_research(state, task, text, profile):
+    """One Exa search+answer call, then the quote check: the whole find errand."""
+    response = state.exa.search(dict(query=build_query(text, task['page']), type='auto', numResults=5,
+                                     contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT))
+    output = map_find_output(response)
+    trail = activity.from_search(task, text, response, profile) + [activity.checking(task, output)]
+    extra = cite(output, state.exa, state.llm, text)
+    return dict(status='completed', output=output, cost=((response.get('costDollars') or {}).get('total') or 0) + extra,
+                activity=trail + [activity.done(task, output)])
+
+
+def refine_research(application, task, answer, profile):
+    """The user answered research.question: rerun with the answer, keeping the trail so far."""
+    state, research = application.state, task['research']
+    question = {**research['question'], 'answer': answer.strip()[:200]}
+    text = with_answer(task['task'], question, answer)
+    head = (research.get('activity') or []) + [
+        activity.entry(task['created_at'], 'think', f'Got your answer: {question["answer"]}. Refining', profile=profile)]
+    if research['kind'] == 'search':
+        found = find_research(state, task, text, profile)
+        refined = {**research, **found, 'question': question, 'activity': head + found['activity'][1:],
+                   'cost': (research.get('cost') or 0) + found['cost']}
+    elif research['kind'] == 'agent':
+        if research['status'] not in TERMINAL and research.get('run_id'):
+            try:
+                state.exa.cancel_run(research['run_id'])
+            except ExaError:
+                pass
+        run_request = build_run_request(text, task['page'])
+        if research['status'] == 'completed' and research.get('run_id'):
+            run_request['previousRunId'] = research['run_id']
+        refined = {**research_from_run(state.exa.create_run(run_request)), 'question': question, 'activity': head,
+                   'activity_head': head, 'cost_before': research.get('cost') or 0}
+    else:
+        refined = {**research, 'question': question}
+    if not state.store.update_research(task['id'], refined, expected=research):
+        raise HTTPException(409, 'Research changed meanwhile; try again')
+    if research['kind'] == 'agent' and research['status'] in TERMINAL:
+        state.spawn_research_poller(task['id'])  # a running poller follows the new run by itself
+    return state.store.get_task(task['id'])
 
 
 def research_poller_loop(task_id, application=None):
@@ -362,23 +409,19 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         previous_run = None
         if body.previous_task_id:
             previous_run = owned(body.previous_task_id, user)['research'].get('run_id')
-        research = dict(kind=kind, status='queued', run_id=None, progress=[], output=None, cost=None, stop_reason=None, error=None)
-        task = state.store.create_task(user['id'], body.task, body.page, mode, research, source=source)
         profile = json.loads(user['profile_json'])
+        research = dict(kind=kind, status='queued', run_id=None, progress=[], output=None, cost=None, stop_reason=None, error=None,
+                        question=early_question(body.task, mode, profile))
+        task = state.store.create_task(user['id'], body.task, body.page, mode, research, source=source)
         try:
             if kind == 'search':
-                response = state.exa.search(dict(query=build_query(body.task, body.page), type='auto', numResults=5,
-                                                contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT))
-                output = map_find_output(response)
-                trail = activity.from_search(task, body.task, response, profile) + [activity.checking(task, output)]
-                extra = cite(output, state.exa, state.llm, body.task)
-                research.update(status='completed', output=output, cost=((response.get('costDollars') or {}).get('total') or 0) + extra,
-                                activity=trail + [activity.done(task, output)])
+                research.update(find_research(state, task, body.task, profile))
             elif kind == 'agent':
                 run_request = build_run_request(body.task, body.page, effort=body.effort)
                 if previous_run:
                     run_request['previousRunId'] = previous_run
-                research = {**research_from_run(state.exa.create_run(run_request)), 'activity': [activity.opening(task)]}
+                research = {**research_from_run(state.exa.create_run(run_request)), 'activity': [activity.opening(task)],
+                            'question': research['question']}
             else:
                 watch, message = provision_watch(config, state.store, state.exa, user['id'], body.task, task['id'])
                 if watch is None:
@@ -517,7 +560,12 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     def message_for_user(tid, body, user, source='extension'):
         task = owned(tid, user)
-        if not task['execution'] or task['execution']['status'] not in ACTIVE_EXECUTION:
+        executing = task['execution'] and task['execution']['status'] in ACTIVE_EXECUTION
+        question = task['research'].get('question')
+        if not executing and question and question.get('answer') is None:
+            check_task_budget(application, user)  # the follow-up pass is research too
+            return refine_research(application, task, body.text, json.loads(user['profile_json']))
+        if not executing:
             raise HTTPException(409, 'No running execution')
         application.state.store.patch_execution(tid, message={'at': now(), 'text': body.text, 'source': source})
         return application.state.store.get_task(tid)

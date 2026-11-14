@@ -46,7 +46,7 @@ def started_task(client, application):
 
 def test_messages_need_a_running_execution(api):
     client, application, store = api
-    tid = client.post('/v1/tasks', json={'task': 'book a sauna'}).json()['id']
+    tid = client.post('/v1/tasks', json={'task': 'book a sauna in Helsinki tonight'}).json()['id']  # nothing to ask
     assert client.post(f'/v1/tasks/{tid}/messages', json={'text': 'use 18:00'}).status_code == 409
     module.poll_research_once(tid, application)
     client.post(f'/v1/tasks/{tid}/execute', json={})
