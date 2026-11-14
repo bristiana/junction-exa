@@ -183,10 +183,6 @@
     font: 500 13.5px/1.45 "Vali Jakarta", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text);
     transform: translateX(calc(100% + 40px)); opacity: 0; pointer-events: none;
     transition: transform .5s cubic-bezier(.16,1,.3,1), opacity .25s ease; }
-  @media (prefers-color-scheme: dark) {
-    .wrap { --card: #1e1a29; --text: #ece8f6; --muted: #a49cba; --line: #3d3552; --ink: #b7a6f4; --on-ink: #1d1733;
-      --accent: #b7a6f4; --fill: #2d2650; --fill-2: #272236; --ring: #b7a6f4; }
-  }
   .wrap.in { transform: none; opacity: 1; pointer-events: auto; }
   .bubble { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 12px 14px;
     max-width: 290px; box-shadow: 0 12px 32px rgba(52,48,90,.14), 0 1px 3px rgba(52,48,90,.08); }

@@ -1,5 +1,5 @@
-// Explain this: select text on a page and a small "Ask Vali" button appears next to it. A click opens the side panel
-// with the selection attached and "What does this mean and what should I do?" ready to send as an errand.
+// Explain this: select text on a page and a small "Ask Vali" button appears next to it. A click sends
+// "What does this mean and what should I do?" as an errand, with the selection attached, and opens the side panel.
 // Never for text inside fields or editors (what the user typed), never on the sites presence.js blocks, off when
 // settings.presence === false. Classic content script; runs after content/presence.js, which defines the site rules
 // and adds the "Vali Jakarta" font.
@@ -99,8 +99,8 @@
     try {
       ext.runtime.sendMessage({ type: "explain", selection: ui.text, title: document.title }, (res) => {
         void ext.runtime.lastError;
-        if (res?.data?.opened) { hide(); return; }
-        if (ui.label) ui.label.textContent = "Open Vali with Alt+V";
+        if (res?.ok && res.data?.opened) { hide(); return; }
+        if (ui.label) ui.label.textContent = res?.ok ? "Asked. Open Vali with Alt+V" : res?.error || "That didn’t work. Try again.";
         setTimeout(hide, 4000);
       });
     } catch (_) {

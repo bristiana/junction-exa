@@ -865,14 +865,14 @@ function applyPrefill(p) {
   prefill = p;
   if (p.task) {
     // a ready question with this page attached: "Help me fill in this form" from the badge on a form page, or
-    // "What does this mean and what should I do?" from "Ask Vali about this" on a selection (one press on Send)
+    // "What does this mean and what should I do?" when "Ask Vali about this" could not send it by itself
     $("task").value = p.task;
     $("usePage").checked = p.usePage !== false;
   } else if (p.link && !p.selection) {
     $("task").value = `Help me with this link: ${p.link}\n`;
   }
   fitTask();
-  (p.source === "explain" ? $("send") : $("task")).focus();
+  $("task").focus();
   refreshActiveTab();
 }
 
