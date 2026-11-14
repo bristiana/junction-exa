@@ -177,32 +177,39 @@ def render_nothing_new(lang="en"):
     return [NOTHING_NEW.get((lang or "en")[:2], NOTHING_NEW["en"])]
 
 
+def _short(text, limit=260):
+    # The answer in one or two sentences: WhatsApp is read on a phone, the details are one tap away.
+    sentences = re.split(r"(?<=[.!?])\s+", " ".join(str(text).split()))
+    out = sentences[0]
+    if len(sentences) > 1 and len(out) + len(sentences[1]) < 160:
+        out += " " + sentences[1]
+    return out if len(out) <= limit else out[:limit - 1].rstrip() + "…"
+
+
 def render_result(task, profile=None):
     if (task.get("research") or {}).get("status") == "failed":
         return render_error("Research failed. " + ((task.get("research") or {}).get("error") or "Please try again."))
     output = (task.get("research") or {}).get("output") or {}
     structured = output.get("structured") or {}
     numbered = number_sources(output.get("grounding"))
-    sources, fields = numbered["sources"][:8], numbered["byField"]
+    sources, fields = numbered["sources"][:2], numbered["byField"]
     visible = {source["n"] for source in sources}
-    answer = _text(structured.get("answer") or output.get("text") or "Vali is still researching this errand.", profile)
+    answer = _short(_text(structured.get("answer") or output.get("text") or "Vali is still researching this errand.", profile))
     sections = [f"*{answer}*" + _suffix(fields, "answer", visible)]
     facts = [f"• {_text(fact.get('label'), profile)}: {_text(fact.get('value'), profile)}"
              + _suffix(fields, f"key_facts[{i}]", visible)
-             for i, fact in enumerate((structured.get("key_facts") or [])[:5])]
+             for i, fact in enumerate((structured.get("key_facts") or [])[:3])]
     if facts:
         sections.append("\n".join(facts))
     actions = [f"Reply {i + 1} to {_text(action.get('label') or 'continue', profile)}"
-               + _suffix(fields, f"actions[{i}]", visible)
-               for i, action in enumerate((structured.get("actions") or [])[:9])]
-    if actions:
-        sections.append("\n".join(actions))
+               for i, action in enumerate((structured.get("actions") or [])[:3])]
     questions = structured.get("missing_info") or []
     if questions:
-        sections.append("*Missing information*\n" + "\n".join(f"• {_text(q, profile)}" for q in questions))
+        actions.append(_text(questions[0], profile))
+    if actions:
+        sections.append("\n".join(actions))
     if sources:
-        sections.append("*Sources*\n" + "\n".join(
-            f"[{s['n']}] {_text(s['title'], profile)} – {s['url']}" for s in sources))
+        sections.append("\n".join(f"[{s['n']}] {s['url']}" for s in sources))
     return split_messages("\n\n".join(sections))
 
 
