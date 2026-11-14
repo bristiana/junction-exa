@@ -218,8 +218,21 @@ def build_query(task, page=None, profile=None):
     return '\n\n'.join(parts)
 
 
+# Server-side only: SYSTEM_PROMPT itself must stay identical to the extension's copy (extension/lib/task.js).
+ANSWER_FIRST = """
+Answer first, ask second:
+- Always give the useful general answer and the steps first, even when details are missing. Assume the common case
+  and say so in one short sentence ("Assuming you rent privately in Helsinki, ..."). Put what is still missing in
+  missing_info as optional questions; they refine the answer, they never replace it. Use needs_info only when
+  nothing useful can be said at all.
+- Never ask for details the user fills in when sending (bank account, names, addresses, dates of the lease): put a
+  {{placeholder}} in the draft instead.
+- A live-status question without an identifier (train or flight number) gets the next departures or the official
+  live-status page, not a request for the number."""
+
+
 def build_run_request(task, page=None, profile=None, effort='low'):
-    return dict(query=build_query(task, page, profile), systemPrompt=SYSTEM_PROMPT,
+    return dict(query=build_query(task, page, profile), systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST,
                 effort=effort, outputSchema=output_schema(bool((page or {}).get('fields'))), metadata={'app': 'vali'})
 
 
