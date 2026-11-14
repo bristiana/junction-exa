@@ -309,7 +309,7 @@ export function errandStage(task) {
   }
   if (status === 'awaiting_approval') return out(2, 'you', `Everything is filled on ${site}. Nothing is sent until you approve.`, { kind: 'approve' });
   if (status === 'submitting') return out(2, 'working', `Sending it on ${site}.`, null);
-  if (status === 'done' || status === 'completed') return out(done, 'done', run.result || 'Done.', { kind: 'done' });
+  if (status === 'done' || status === 'completed') return out(done, 'done', sentences(run.result || '')[0] || 'Done.', { kind: 'done' });
   const reached = run.approval ? 2 : 1;
   if (status === 'stopped') {
     const where = asked ? `while Vali was asking “${asked.replace(/[?.]\s*$/, '')}?”` : last ? `after “${last}”.` : `on ${site}.`;
