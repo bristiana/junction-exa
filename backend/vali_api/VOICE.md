@@ -59,6 +59,6 @@ so an id belonging to someone else answers "I can't find that errand."
 | `list_errands()` | the 5 latest errands, one line each, with ids for the agent |
 | `errand_status(id)` | status line: researching, answer, waiting for OK, question, done, failed |
 | `approval_summary(id)` | what will be submitted, placeholders spoken as "your name"; records that it was read back |
-| `approve(id)` | approves only after `approval_summary` was read for this exact approval (`execution.voice_read_back`); a changed approval needs a new read back |
+| `approve(id, text)` | approves only with the errand id, the user's own words in that turn being a clear yes (no "no", "wait", question), and after `approval_summary` was read for this exact approval (`execution.voice_read_back`); otherwise "Approve it in the app" and nothing changes. `stop` stays available without these checks |
 | `stop(id)` | stops the sandbox, or cancels research when nothing runs yet |
 | `answer_question(id, text)` | sends the answer to the running sandbox's inbox (`source: "voice"`) |
