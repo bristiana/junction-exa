@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 
 from vali_api.jev import JEV_URL, MODES, JevClient
 from vali_api.router import route
@@ -23,7 +24,9 @@ def test_classify_sends_both_orders_and_averages():
         seen.append(request)
         return httpx.Response(200, json=answer({'claim': 0.9, 'check': 0.1}, {'claim': 0.7, 'write': 0.3}))
 
-    assert client(handler).classify('My flight was 4 hours late', {'title': 'Finnair', 'url': 'https://finnair.com'}) == ('claim', 0.8)
+    mode, confidence, margin = client(handler).classify('My flight was 4 hours late', {'title': 'Finnair', 'url': 'https://finnair.com'})
+    assert (mode, confidence) == ('claim', 0.8)
+    assert margin == pytest.approx(0.65)
     request = seen[0]
     body = json.loads(request.content)
     assert str(request.url) == JEV_URL
@@ -31,6 +34,15 @@ def test_classify_sends_both_orders_and_averages():
     assert list(body['questions']['mode_a']['criteria']) == list(MODES)
     assert list(body['questions']['mode_b']['criteria']) == list(reversed(MODES))
     assert 'My flight was 4 hours late' in body['state'] and 'Finnair' in body['state']
+
+
+def test_classify_margin_uses_averaged_scores():
+    jev = client(lambda request: httpx.Response(200, json=answer(
+        {'find': 0.8, 'check': 0.2}, {'find': 0.3, 'check': 0.7})))
+    mode, confidence, margin = jev.classify('What do I need to open an account?')
+    assert (mode, confidence) == ('find', 0.55)
+    assert margin == pytest.approx(0.1)
+    assert route('What do I need to open an account?', classify=jev.classify) == ('check', 'agent')
 
 
 def test_classify_returns_none_when_jev_fails():

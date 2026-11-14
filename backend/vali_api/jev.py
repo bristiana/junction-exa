@@ -3,8 +3,8 @@ import httpx
 
 JEV_URL = 'https://api.typesafe.ai/v1/systemone'
 MODES = {
-    'find': 'Find and compare options: places, products, services, prices, opening hours',
-    'check': 'Check or explain a document, rule, letter or clause; whether something is legal or correct',
+    'find': 'Find or compare options, places, products or services to choose between them, including prices and opening hours',
+    'check': 'Understand or verify: is this right, what does this mean, what do I need, how do I; requirements, fees, eligibility, or questions about my account, letter or contract. Asking what is needed for a service is check.',
     'claim': 'Claim money or apply for something: compensation, refund, benefit, application form',
     'book': 'Book or reserve a slot, table, appointment, court or ticket',
     'watch': 'Keep watching and notify when something new appears or changes',
@@ -28,7 +28,7 @@ class JevClient:
         self.client = httpx.Client(headers={'Authorization': 'Bearer ' + api_key}, transport=transport, timeout=timeout)
 
     def classify(self, task, page=None):
-        """Return (mode, confidence) or None when Jev is unavailable or answers oddly."""
+        """Return (mode, confidence, top-two margin), or None when unavailable."""
         # Each choice is asked twice with the options reversed to cancel Jev's first-option bias.
         reversed_modes = dict(reversed(list(MODES.items())))
         body = {'model': 'jev-latest', 'state': describe(task, page), 'questions': {
@@ -47,8 +47,8 @@ class JevClient:
             for mode in MODES:
                 value = probabilities.get(mode)
                 scores[mode] += value / 2 if isinstance(value, (int, float)) else 0.0
-        mode = max(scores, key=scores.get)
-        return (mode, round(scores[mode], 2)) if scores[mode] > 0 else None
+        mode, runner_up = sorted(scores, key=scores.get, reverse=True)[:2]
+        return (mode, round(scores[mode], 2), scores[mode] - scores[runner_up]) if scores[mode] > 0 else None
 
     def close(self):
         self.client.close()
