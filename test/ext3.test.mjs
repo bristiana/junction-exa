@@ -73,6 +73,13 @@ test("Exa form filling counts note is limited to execute errands with counts", (
   assert.equal(exaActivity({ mode: "execute" }).note, "Exa call counts were not returned.");
 });
 
+test("Exa activity lists the queries research ran, without turning them into a count", () => {
+  const view = exaActivity({ mode: "claim", progress: [{ kind: "search", text: "EU261 delay" }, { kind: "source", text: "Finnair" }, { kind: "search", text: "EU261 delay" }, { kind: "search" }] });
+  assert.deepEqual(view.queries, ["EU261 delay"]);
+  assert.equal(view.summary, "Exa: 0 sources");
+  assert.equal(view.note, "");
+});
+
 test("Exa source lists ignore non-arrays and malformed grounding entries", () => {
   for (const value of [null, {}, "https://example.com/", 42, true]) {
     assert.deepEqual(exaActivity({ output: { grounding: value, sources: value, citations: value },

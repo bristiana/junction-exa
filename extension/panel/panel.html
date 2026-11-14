@@ -24,8 +24,6 @@
 
   <section id="settings" class="settings v-card" hidden>
     <h2>Settings</h2>
-    <h3>Try an errand</h3>
-    <div id="presets" class="presets"></div>
     <label class="field">
       <span>Exa API key</span>
       <div class="row">
@@ -44,7 +42,7 @@
     </label>
     <label class="check toggle"><input type="checkbox" id="presence" checked /> <span>Show Vali on form pages</span></label>
     <h3>Vali server</h3>
-    <p class="muted small">Connect to Vali to share errands with WhatsApp. Leave this empty to use your Exa key.</p>
+    <p class="muted small">Connect to Vali to share errands with the Mac app. Leave this empty to use your Exa key.</p>
     <label class="field">
       <span>Server URL</span>
       <div class="row">
@@ -54,7 +52,7 @@
       <small id="backendStatus" class="muted"></small>
     </label>
     <div id="serverPresets" class="presets server-presets"></div>
-    <div class="field">
+    <div class="field" hidden><!-- WhatsApp is parked until Meta verifies the business -->
       <span>WhatsApp</span>
       <div class="row">
         <button id="pairBtn" class="v-btn v-btn--quiet" type="button">Link WhatsApp</button>
@@ -66,6 +64,7 @@
     <p class="muted small">Linking uses the same account on both devices. This browser will show that account’s errands.</p>
     <button id="showMacCode" class="v-btn v-btn--quiet" type="button">Show this browser’s code</button>
     <p id="macCode" class="pair" hidden></p>
+    <p id="macLinkStatus" class="muted small" role="status"></p>
     <label class="field">
       <span>Code from the Mac app</span>
       <div class="row">
@@ -73,11 +72,10 @@
         <button id="linkMac" class="v-btn v-btn--quiet" type="button">Link</button>
       </div>
     </label>
-    <p id="macLinkStatus" class="muted small" role="status"></p>
     <h3>Your details</h3>
     <p class="muted small">Used to fill forms and drafts. Your personal details stay in this browser.</p>
     <div id="profileFields" class="profile"></div>
-    <div class="row end"><button id="saveSettings" class="v-btn v-btn--quiet">Save</button></div>
+    <div class="row end"><button id="saveSettings" class="v-btn">Save</button></div>
   </section>
 
   <main id="main">
@@ -96,8 +94,8 @@
     <div id="empty" class="v-empty">
       <img src="../mascot/idle.svg" alt="" width="144" height="144" />
       <h2 class="v-empty__title">One less thing</h2>
-      <p class="v-empty__text">I’ll look into your errand and prepare the next step for your OK.</p>
-      <button id="newErrand" class="v-btn v-btn--quiet" type="button">Add an errand</button>
+      <p class="v-empty__text">I’ll look into your errand and prepare the next step for your OK. Try one:</p>
+      <div id="presets" class="presets"></div>
     </div>
   </main>
 
