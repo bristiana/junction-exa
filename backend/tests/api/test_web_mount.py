@@ -25,3 +25,17 @@ def test_web_page_and_api_routes_coexist():
         assert client.get('/webhooks/whatsapp').status_code == 403
     store.close()
     exa.close()
+
+
+def test_web_files_are_never_served_from_cache():
+    """A deploy must reach the browser at once, even when a file keeps its size."""
+    store = SQLiteStore(':memory:')
+    exa = ExaClient('fake-key', transport=httpx.MockTransport(lambda request: httpx.Response(404)))
+    application = create_app(Config(sqlite_path=':memory:'), store, exa, lambda tid: None, lambda *args: None)
+    with TestClient(application) as client:
+        first = client.get('/app.js')
+        assert first.headers['cache-control'] == 'no-store'
+        again = client.get('/app.js', headers={'If-None-Match': first.headers.get('etag', '*')})
+        assert again.status_code == 200 and again.text == first.text
+    store.close()
+    exa.close()
