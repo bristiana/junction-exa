@@ -12,7 +12,7 @@ def test_missing_key_skips_network():
     def unexpected(request):
         pytest.fail("request without key")
     transport = httpx.MockTransport(unexpected)
-    assert voice.transcribe(b"ogg", "audio/ogg", transport=transport) == ""
+    assert voice.transcribe(b"ogg", "audio/ogg", api_key="", transport=transport) == ""
     assert voice.speak("Test", transport=transport) is None
 
 
@@ -39,7 +39,7 @@ def test_transcription_multipart(monkeypatch, language_hint):
         return httpx.Response(200, json={"text": "Find a sauna."})
 
     assert voice.transcribe(
-        b"original-ogg-opus-bytes", "audio/ogg", language_hint,
+        b"original-ogg-opus-bytes", "audio/ogg", language_hint, api_key="test-key",
         transport=httpx.MockTransport(handler),
     ) == "Find a sauna."
 
@@ -69,14 +69,14 @@ def test_speak_env_voice(monkeypatch):
     assert voice.speak("Ready.", transport=httpx.MockTransport(handler)) == b"mp3"
 
 
-@pytest.mark.parametrize("function,args", [
-    (voice.transcribe, (b"ogg", "audio/ogg")), (voice.speak, ("Test",)),
+@pytest.mark.parametrize("function,args,kwargs", [
+    (voice.transcribe, (b"ogg", "audio/ogg"), {"api_key": "test-key"}), (voice.speak, ("Test",), {}),
 ])
-def test_http_failure_is_typed_and_safe(monkeypatch, function, args):
+def test_http_failure_is_typed_and_safe(monkeypatch, function, args, kwargs):
     monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
     transport = httpx.MockTransport(lambda request: httpx.Response(429, json={"detail": "private"}))
     with pytest.raises(voice.VoiceError) as error:
-        function(*args, transport=transport)
+        function(*args, **kwargs, transport=transport)
     assert error.value.status_code == 429
     assert "private" not in str(error.value)
     assert "test-key" not in str(error.value)
@@ -89,7 +89,7 @@ def test_network_failure(monkeypatch):
         raise httpx.ReadTimeout("private", request=request)
 
     with pytest.raises(voice.VoiceError) as error:
-        voice.transcribe(b"ogg", "audio/ogg", transport=httpx.MockTransport(handler))
+        voice.transcribe(b"ogg", "audio/ogg", api_key="test-key", transport=httpx.MockTransport(handler))
     assert error.value.status_code is None
     assert "private" not in str(error.value)
 
@@ -98,7 +98,7 @@ def test_network_failure(monkeypatch):
 def test_invalid_transcript(monkeypatch, payload):
     monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
     with pytest.raises(voice.VoiceError) as error:
-        voice.transcribe(b"ogg", "audio/ogg", transport=httpx.MockTransport(
+        voice.transcribe(b"ogg", "audio/ogg", api_key="test-key", transport=httpx.MockTransport(
             lambda request: httpx.Response(200, json=payload),
         ))
     assert error.value.status_code == 200

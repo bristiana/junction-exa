@@ -22,6 +22,8 @@ from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request
 from .jev import JevClient
 from .router import route
 from .store import make_store, now
+from .uploads import oversized_request
+from .voice_agent import add_voice_routes
 from vali_wa.flow import WhatsAppFlow
 from vali_wa.webhook import parse_webhook, verify_signature
 from vali_wa.render import render_result, render_execution_update, render_error
@@ -38,7 +40,7 @@ class TaskBody(BaseModel):
 
 
 class LinkBody(BaseModel):
-    code: str = Field(pattern=r'^\d{6}$', max_length=6)
+    code: str = Field(pattern=r'^[0-9]{6}$', max_length=6)
 
 
 class ProfileBody(BaseModel):
@@ -272,6 +274,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     async def guards(request, call_next):
         try:
             check_origin(request.headers.get('origin'), config.allowed_origins)
+            if oversized_request(request.url.path, request.headers.get('content-length')):
+                raise HTTPException(413, 'Upload exceeds 10 MB')
             ip = request.client.host if request.client else 'unknown'
             application.state.limiter.check('ip:' + ip, application.state.limiter.ip_limit)
         except HTTPException as exc:
@@ -378,14 +382,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.post('/v1/voice')
     def voice_upload(audio: UploadFile = File(...), create: str | None = Form(None), user=Depends(authenticate)):
-        from .uploads import AUDIO_TYPES, read_upload
+        from .uploads import AUDIO_TYPES, audio_mime, read_upload
         from vali_media.voice import transcribe, VoiceError
         check_task_budget(application, user)
-        data, mime = read_upload(audio, AUDIO_TYPES)
+        data, mime = read_upload(audio, AUDIO_TYPES, audio_mime(audio))
         if not config.elevenlabs_api_key:
             raise HTTPException(503, 'Voice transcription is not configured')
         try:
-            text = transcribe(data, mime).strip()
+            text = transcribe(data, mime, api_key=config.elevenlabs_api_key).strip()
         except VoiceError:
             raise HTTPException(502, 'Voice transcription failed') from None
         if not text:
@@ -549,7 +553,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     def transcribe(data, mime):
         from vali_media.voice import transcribe
-        return transcribe(data, mime or 'audio/ogg')
+        return transcribe(data, mime or 'audio/ogg', api_key=config.elevenlabs_api_key)
 
     def read_letter(data, mime, caption):
         from vali_media.letters import read_letter
@@ -616,6 +620,11 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         # No monitor is provisioned yet; do not accept unauthenticated task updates.
         raise HTTPException(501, 'Monitor delivery is not implemented')
 
+    add_voice_routes(
+        application, owned=owned, active=active_task, approve=approve, cancel=cancel,
+        create=lambda text, user: create_task_for_user(TaskBody(task=text), user, 'voice'),
+        stop=lambda tid, user: stop_for_user(tid, user),
+        message=lambda tid, text, user: message_for_user(tid, MessageBody(text=text), user, 'voice'))
     return application
 
 

@@ -22,6 +22,8 @@ class Config:
     sqlite_path: str = field(default_factory=lambda: vali_env('VALI_SQLITE_PATH', 'vali.db'))
     cloudinary_url: str = field(default_factory=lambda: os.getenv('CLOUDINARY_URL', ''))
     elevenlabs_api_key: str = field(default_factory=lambda: os.getenv('ELEVENLABS_API_KEY', ''))
+    elevenlabs_agent_id: str = field(default_factory=lambda: os.getenv('VALI_ELEVENLABS_AGENT_ID', ''))
+    voice_tool_secret: str = field(default_factory=lambda: os.getenv('VALI_VOICE_TOOL_SECRET', ''))
     whatsapp_token: str = field(default_factory=lambda: os.getenv('WHATSAPP_TOKEN', ''))
     whatsapp_phone_number_id: str = field(default_factory=lambda: os.getenv('WHATSAPP_PHONE_NUMBER_ID', ''))
     whatsapp_verify_token: str = field(default_factory=lambda: os.getenv('WHATSAPP_VERIFY_TOKEN', ''))
@@ -34,4 +36,7 @@ class Config:
         return dict(ok=True, exa=bool(self.exa_api_key), anthropic=bool(self.anthropic_api_key),
                     jev=bool(self.jev_api_key), db=True, cloudinary=bool(self.cloudinary_url),
                     whatsapp=bool(self.whatsapp_token and self.whatsapp_phone_number_id),
-                    elevenlabs=bool(self.elevenlabs_api_key))
+                    elevenlabs=bool(self.elevenlabs_api_key), voice_agent=self.voice_agent_ready())
+
+    def voice_agent_ready(self):
+        return bool(self.elevenlabs_api_key and self.elevenlabs_agent_id and self.voice_tool_secret)

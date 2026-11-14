@@ -36,7 +36,7 @@ def test_voice_provider_and_task(media, monkeypatch, mime, create):
         assert request.headers['xi-api-key'] == 'fake-voice'
         assert b'original-audio' in request.content
         return httpx.Response(200, json={'text': 'find a sauna'})
-    monkeypatch.setattr(voice, 'transcribe', lambda data, mime: original(data, mime, transport=httpx.MockTransport(provider)))
+    monkeypatch.setattr(voice, 'transcribe', lambda data, mime, **kwargs: original(data, mime, **kwargs, transport=httpx.MockTransport(provider)))
     app.state.limiter.user_limit = 1
     response = client.post('/v1/voice', files={'audio': ('voice', b'original-audio', mime)}, data={'create': create} if create else {})
     assert response.status_code == 200
@@ -48,6 +48,12 @@ def test_voice_provider_and_task(media, monkeypatch, mime, create):
     else:
         assert result == {'text': 'find a sauna'}
     assert client.post('/v1/tasks', json={'task': 'find sauna'}).status_code == 429
+
+
+def image_bytes(size, fmt):
+    stream = BytesIO()
+    Image.new('RGB', size, 'white').save(stream, format=fmt)
+    return stream.getvalue()
 
 
 def fake_claude(monkeypatch, *, invalid=False):
@@ -88,7 +94,7 @@ def test_letter_image_provider_and_context(media, monkeypatch, mime, note):
     assert task['page']['text'] == task['page']['selection']
     assert '{{name}}' in task['page']['text'] and '850 EUR' in task['page']['text']
     assert 'Aino Example' not in json.dumps(task) and 'private-filename' not in json.dumps(task)
-    assert captured[0][0]['source']['media_type'] == ('image/png' if mime == 'image/heic' else mime)
+    assert captured[0][0]['source']['media_type'] == ('image/jpeg' if mime == 'image/heic' else mime)
     assert ' '.join(task['page']['selection'].split()) in calls[-1][2]['query']
     poll_research_once(task['id'], app)
     assert store.get_task(task['id'])['research']['output']['structured']['answer']
@@ -145,20 +151,20 @@ def test_upload_guards(media, monkeypatch, path, field, mime, kind, status):
 
 def test_provider_errors_are_safe(media, monkeypatch):
     client = media[0]
-    def fail(*args):
+    def fail(*args, **kwargs):
         raise voice.VoiceError('private provider payload')
     monkeypatch.setattr(voice, 'transcribe', fail)
     response = client.post('/v1/voice', files={'audio': ('a.wav', b'audio', 'audio/wav')})
     assert response.status_code == 502 and 'private' not in response.text
     fake_claude(monkeypatch, invalid=True)
-    response = client.post('/v1/letters', files={'file': ('a.png', b'image', 'image/png')})
+    response = client.post('/v1/letters', files={'file': ('a.png', image_bytes((20, 20), 'PNG'), 'image/png')})
     assert response.status_code == 502
     assert not client.get('/v1/tasks').json()['tasks']
 
 
 @pytest.mark.parametrize('transcript,status', [('', 400), ('   ', 400), ('x' * 20001, 422)])
 def test_bad_transcript(media, monkeypatch, transcript, status):
-    monkeypatch.setattr(voice, 'transcribe', lambda *args: transcript)
+    monkeypatch.setattr(voice, 'transcribe', lambda *args, **kwargs: transcript)
     assert media[0].post('/v1/voice', files={'audio': ('a', b'audio', 'audio/ogg')}, data={'create': '1'}).status_code == status
 
 
@@ -248,3 +254,77 @@ def test_golden_letter_offline(media, monkeypatch):
             result = await golden.letter(http, golden.Errand('letter'))
             assert result.startswith('answer ')
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('path,field', [('/v1/voice', 'audio'), ('/v1/letters', 'file')])
+def test_oversized_request_rejected_before_parsing(media, monkeypatch, path, field):
+    from vali_api import uploads
+    monkeypatch.setattr(uploads, 'read_upload', lambda *a, **k: pytest.fail('body parsed'))
+    data = b'x' * (11 * 1024 * 1024 + 1)
+    assert media[0].post(path, files={field: ('file', data, 'audio/wav')}).status_code == 413
+
+
+@pytest.mark.parametrize('filename,mime,sent_name,sent_type', [
+    ('voice.webm', 'audio/webm', 'voice.webm', 'audio/webm'),
+    ('clip.m4a', 'application/octet-stream', 'voice.m4a', 'audio/mp4'),
+    ('memo.caf', '', 'voice.caf', 'audio/x-caf'),
+    ('memo', 'audio/x-caf', 'voice.caf', 'audio/x-caf'),
+    ('x.m4a', 'audio/x-m4a', 'voice.m4a', 'audio/x-m4a'),
+])
+def test_voice_container_naming(media, monkeypatch, filename, mime, sent_name, sent_type):
+    from email import policy
+    from email.parser import BytesParser
+    original = voice.transcribe
+    seen = []
+    def provider(request):
+        message = BytesParser(policy=policy.default).parsebytes(
+            b'Content-Type: ' + request.headers['content-type'].encode() + b'\r\n\r\n' + request.content)
+        part = next(p for p in message.iter_parts() if p.get_param('name', header='content-disposition') == 'file')
+        seen.append((part.get_filename(), part.get_content_type()))
+        return httpx.Response(200, json={'text': 'hello'})
+    monkeypatch.setattr(voice, 'transcribe', lambda data, mime, **kwargs: original(
+        data, mime, **kwargs, transport=httpx.MockTransport(provider)))
+    files = {'audio': (filename, b'audio', mime)} if mime else {'audio': (filename, b'audio')}
+    response = media[0].post('/v1/voice', files=files)
+    assert response.status_code == 200, response.text
+    assert seen == [(sent_name, sent_type)]
+
+
+def test_voice_unknown_generic_type_rejected(media):
+    assert media[0].post('/v1/voice', files={'audio': ('voice.exe', b'x', 'application/octet-stream')}).status_code == 415
+
+
+def test_image_pixel_cap(media, monkeypatch):
+    from vali_api import uploads
+    fake_claude(monkeypatch)
+    monkeypatch.setattr(uploads, 'MAX_PIXELS', 100)
+    response = media[0].post('/v1/letters', files={'file': ('a.png', image_bytes((20, 20), 'PNG'), 'image/png')})
+    assert response.status_code == 413
+
+
+def test_large_image_reencoded_as_jpeg(media, monkeypatch):
+    import base64
+    from vali_api import uploads
+    captured = fake_claude(monkeypatch)
+    monkeypatch.setattr(uploads, 'VISION_MAX_SIDE', 10)
+    response = media[0].post('/v1/letters', files={'file': ('a.png', image_bytes((40, 20), 'PNG'), 'image/png')})
+    assert response.status_code == 200
+    source = captured[0][0]['source']
+    assert source['media_type'] == 'image/jpeg'
+    with Image.open(BytesIO(base64.b64decode(source['data']))) as image:
+        assert image.format == 'JPEG' and max(image.size) <= 10
+
+
+def test_small_image_passes_unchanged(media, monkeypatch):
+    import base64
+    captured = fake_claude(monkeypatch)
+    data = image_bytes((20, 20), 'PNG')
+    assert media[0].post('/v1/letters', files={'file': ('a.png', data, 'image/png')}).status_code == 200
+    assert base64.b64decode(captured[0][0]['source']['data']) == data
+
+
+@pytest.mark.parametrize('code', ['١٢٣٤٥٦', '12345', '1234567', '12a456'])
+def test_link_code_ascii_digits_only(api, code):
+    client = api[0]
+    del client.headers['Authorization']
+    assert client.post('/v1/link', json={'code': code}).status_code == 422
