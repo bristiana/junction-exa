@@ -111,7 +111,7 @@
   }
   function pageContext() {
     const headings = [...document.querySelectorAll("h1, h2, h3")]
-      .filter((h) => !inEditable(h) && !h.closest("form"))
+      .filter((h) => !inEditable(h) && !h.closest("form, dialog, [role=dialog], [aria-modal=true]")) // not cookie banners
       .map((h) => clipText(h.textContent, 120))
       .filter(Boolean)
       .slice(0, 12);
