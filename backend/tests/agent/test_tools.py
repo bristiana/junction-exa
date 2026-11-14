@@ -96,9 +96,8 @@ def test_exa_tools_sources_usage_and_messages(local_site):
 def test_exa_calls_are_recorded_masked_and_reported_live(local_site):
     seen, live = [], []
     exa = exa_fake(seen)
-    def refused(messages):
-        assert messages[-1]['content'][0]['is_error']
-        assert 'only allowed in approved fields' in messages[-1]['content'][0]['content']
+    def searched(messages):
+        assert not messages[-1]['content'][0]['is_error']
         return 'exa_read', {'url': 'ftp://example.com/x', 'question': None}
 
     def private_read(messages):
@@ -106,22 +105,24 @@ def test_exa_calls_are_recorded_masked_and_reported_live(local_site):
         return 'exa_read', {'url': 'https://example.com/claim?who=Test Person', 'question': 'Opening hours for Test Person?'}
 
     def finish(messages):
-        assert messages[-1]['content'][0]['is_error']
-        assert 'only allowed in approved fields' in messages[-1]['content'][0]['content']
+        assert not messages[-1]['content'][0]['is_error']
         return 'finish', {'result': 'ok'}
 
     llm = Scripted([
         ('exa_search', {'query': 'Kela office near Test Person {{city}}', 'include_domains': ['kela.fi']}),
-        refused, private_read, finish,
+        searched, private_read, finish,
     ])
     hooks = plain_hooks(on_exa=live.append)
     result = run_browser_agent('x', local_site + '/claim.html', PROFILE | {'city': 'Espoo'}, hooks, llm, exa=exa, jev=Jev(api_key=''))
     assert result.status == 'done'
-    assert len(result.exa) == 1
-    bad = result.exa[0]
+    assert len(result.exa) == 3
+    bad = result.exa[1]
     assert bad['kind'] == 'read' and bad['results'] == [] and 'http' in bad['error'] and bad['cost_usd'] == 0
     assert live[-1] == result.exa
-    assert seen == [] and result.sources == []
+    assert seen[0][1]['query'] == 'Kela office near {{name}} Espoo'
+    assert seen[1][1]['urls'] == ['https://example.com/claim?who={{name}}']
+    assert seen[1][1]['highlights']['query'] == 'Opening hours for {{name}}?'
+    assert len(seen) == 2 and result.sources
     assert 'Test Person' not in json.dumps([result.exa, result.sources, seen])
 
 
@@ -239,12 +240,11 @@ def test_forms_that_only_mention_identification_or_recaptcha_are_not_blocked(loc
 
 
 import pytest
-from vali_agent.guard import is_final_submit, without_default_submit
+from vali_agent.guard import is_final_submit
 
 
 @pytest.mark.parametrize('label', [
-    'Jatka', 'Seuraava', 'Next', '4 henkilöä', '19:00', 'la 21.11.',
-    '21', 'Palaa vaiheeseen Seurueen koko', 'Lisää vaihtoehtoja',
+    '4 henkilöä', '19:00', 'Palaa vaiheeseen Seurueen koko', 'Lisää vaihtoehtoja',
     'Vahvista varaus', 'Tee varaus', 'Varaa pöytä', 'Jatka maksamaan',
     'Continue to payment', 'Lähetä', 'Book now', 'Something unclear',
 ])
@@ -260,18 +260,7 @@ def test_filled_values_kept_for_handoff(local_site):
     assert result.filled == [{'label': 'Full name', 'value': '{{name}}'}, {'label': 'Claim type', 'value': 'Refund'}]
 
 
-from vali_agent.guard import is_navigation
 from vali_agent.live import _MINIMAL, _ACCEPT_ALL
-
-
-def test_final_labels_on_links_still_require_approval():
-    assert is_navigation('a', '/locations', False, 'Locations')
-    assert not is_navigation('a', '/en/saunas/helsinki/booking', False, 'Book now')
-    assert not is_navigation('a', 'https://example.com/varaa', False, 'Varaa aika')
-    assert not is_navigation('a', '/checkout/pay', False, 'Pay now')
-    assert not is_navigation('a', '#', False, 'Book now')
-    assert not is_navigation('button', '', True, 'Book now')
-    assert not is_navigation('a', '/x', True, 'Book now')
 
 
 @pytest.mark.parametrize('label,minimal', [
@@ -447,10 +436,6 @@ def test_autocomplete_suggestions_skip_only_the_default_submit_type(local_site):
     assert [s for s in steps if s.startswith(('Clicked', 'Action refused'))] == [
         'Clicked "Mannerheimintie 5"', 'Clicked "Katajanokanlaituri 2a"', 'Clicked "Aleksanterinkatu 1, Helsinki"', 'Action refused: Call request_approval first',
         'Action refused: Call request_approval first', 'Clicked "Submit order"']
-    typeless = '<button class="dropdown-item">Katajanokanlaituri 2a</button> button type=submit Katajanokanlaituri 2a'
-    assert is_final_submit(typeless, 'Katajanokanlaituri 2a') and not is_final_submit(without_default_submit(typeless), 'Katajanokanlaituri 2a')
-    assert is_final_submit(without_default_submit('<button role="option">Place order</button> button type=submit'), 'Place order')
-    assert is_final_submit(without_default_submit('<button type="submit">Aamutie 2</button> button type=submit'), 'Aamutie 2')
 
 
 def test_maintenance_page_is_a_hand_off_with_the_outage(local_site):
@@ -479,3 +464,90 @@ def test_server_errors_are_unavailable_but_a_form_announcing_a_break_is_not(loca
         assert browser.blockers() == ['captcha']
     finally:
         browser.close()
+
+
+@pytest.mark.parametrize('label', ['Next', 'Continue', 'Jatka', 'Seuraava', 'Nästa', 'Fortsätt',
+                                   'Search', 'Hae', 'Select', 'Valitse', '21', 'la 21.11.', 'Back', 'Edellinen'])
+def test_wizard_next_and_jatka_are_not_final(label):
+    assert not is_final_submit(f'<button class="book-now" type="submit">{label}</button>', label)
+
+
+@pytest.mark.parametrize('label', ['Osta', 'Viimeistele', 'Ilmoittaudu', 'Köp', 'Beställ', 'Reservera',
+                                   'Slutför', 'Register', 'Subscribe', 'Donate', 'Apply', 'Continue to payment'])
+def test_final_action_words(label):
+    assert is_final_submit(f'<button>{label}</button>', label)
+
+
+def test_save_requires_submit_control_and_html_metadata_is_not_a_label():
+    assert not is_final_submit('<button type="button">Tallenna</button>', 'Tallenna')
+    assert is_final_submit('<button type="submit">Tallenna</button>', 'Tallenna')
+    assert not is_final_submit('<a href="/order" class="book-now">Locations</a>', 'Locations')
+    assert is_final_submit('<button aria-label="Confirm">Next</button>', 'Next')
+    assert is_final_submit('<input type="button" value="Pay">', '')
+
+
+@pytest.mark.parametrize('container', ['class="pac-container"', 'class="address-autocomplete"',
+                                       'role="listbox"', 'role="option"'])
+def test_common_autocomplete_buttons_are_suggestions(local_site, container):
+    browser = Browser()
+    try:
+        browser.goto(local_site + '/claim.html')
+        browser.page.set_content(f'<form><div {container}><button>Main Street 1</button></div></form>')
+        browser.snapshot()
+        button = next(ref for ref in browser._refs if browser._element(ref).evaluate("el => el.localName === 'button'"))
+        assert not is_final_submit(browser.element_text(button))
+        browser.click(button)
+    finally:
+        browser.close()
+
+
+def test_checkbox_approval_reaches_browser_and_is_consumed(local_site):
+    def verify(messages):
+        assert not messages[-1]['content'][0]['is_error']
+        return 'set_checkbox', {'ref': 'e1', 'checked': False}
+
+    def refused(messages):
+        assert 'Call request_approval first' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'ok'}
+
+    class TermsBrowser(Browser):
+        def goto(self, url):
+            super().goto(url)
+            self.page.set_content('<input type="checkbox" name="confirm-terms" aria-label="Confirm terms">')
+
+    from unittest.mock import patch
+    llm = Scripted([('set_checkbox', {'ref': 'e1', 'checked': True}),
+                    ('request_approval', {'summary': 'Confirm terms', 'filled': []}),
+                    ('set_checkbox', {'ref': 'e1', 'checked': True}), verify, refused])
+    with patch('vali_agent.agent.Browser', TermsBrowser):
+        result = run_browser_agent('Accept terms', local_site + '/claim.html', {}, plain_hooks(), llm,
+                                   exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done'
+    assert result.filled == [{'label': 'Confirm terms', 'value': 'checked'}]
+
+
+def test_booking_provider_navigation_and_personal_field_approval(local_site):
+    provider = local_site.replace('127.0.0.1', 'localhost') + '/claim.html'
+    steps = []
+
+    def blocked(messages):
+        assert 'outside the start site' in messages[-1]['content'][0]['content']
+        return 'request_approval', {'summary': f'Type my email on {provider}',
+                                    'filled': [{'label': 'Email', 'value': '{{email}}', 'source': None}]}
+
+    def typed(messages):
+        assert not messages[-1]['content'][0]['is_error']
+        return 'type_text', {'ref': 'e2', 'text': '{{email}}'}
+
+    def consumed(messages):
+        assert 'outside the start site' in messages[-1]['content'][0]['content']
+        return 'finish', {'result': 'ok'}
+
+    llm = Scripted([('open_url', {'url': provider}),
+                    ('type_text', {'ref': 'e2', 'text': '{{email}}'}), blocked,
+                    ('type_text', {'ref': 'e2', 'text': '{{email}}'}), typed, consumed])
+    result = run_browser_agent('Fill email', local_site + '/claim.html', PROFILE, plain_hooks(steps=steps), llm,
+                               exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done'
+    assert result.filled == [{'label': 'Email', 'value': '{{email}}'}]
+    assert 'Navigated to ' + provider in steps

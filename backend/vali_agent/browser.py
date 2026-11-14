@@ -4,7 +4,7 @@ from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright, expect, TimeoutError as BrowserTimeout
 from .privacy import private_values
 from .guard import is_final_submit
-from .scope import site
+from .scope import site, reject_placeholders
 
 _CAPTURE = r'''({start, limit}) => {
  const visible = el => { const r=el.getBoundingClientRect(), s=getComputedStyle(el);
@@ -93,7 +93,7 @@ _CAPTURE = r'''({start, limit}) => {
 _ACTION_DESCRIPTION = r'''el => {
     // Only recognized suggestions may omit the implicit HTML submit type.
     const suggestion = el.matches('[role="option"]') ||
-        !!el.closest('typeahead-container,[role="listbox"]');
+        !!el.closest('typeahead-container,.pac-container,[class*="autocomplete"],[role="listbox"],[role="option"]');
     const implicitChoice = suggestion && !el.hasAttribute('type');
     return [el.outerHTML + ' ' +
         [...(el.labels || [])].map(label => label.innerText).join(' ') + ' ' +
@@ -105,7 +105,8 @@ _ACTION_DESCRIPTION = r'''el => {
 class Browser:
     def __init__(self, headless=True):
         self._refs = {}
-        self._sites = set()
+        self._start_site = None
+        self._private_profile = {}
         self._runtime = sync_playwright().start()
         try:
             self._browser = self._runtime.chromium.launch(headless=headless)
@@ -163,10 +164,6 @@ class Browser:
             if open_pages:
                 self.page, self._refs = open_pages[-1], {}
 
-        # Page-controlled redirects/popups may continue the flow on another site.
-        if self.page.url.startswith(('http://', 'https://')):
-            self._sites.add(site(self.page.url))
-
     def _wait_quiet(self, quiet_ms=250, cap_ms=2500):
         """Wait until the DOM stops changing and shows no "Loading..." or a lone "…" placeholder:
         calendars, slot lists and suggestion lists often fill in after network idle."""
@@ -192,15 +189,14 @@ class Browser:
         return frame.locator(f'[data-vali-ref="{ref}"]')
 
     def _check_url(self, url):
-        destination = site(url)
-        if self._sites and destination not in self._sites:
-            raise ValueError('Destination is outside the start site and its page redirects')
-        return destination
+        reject_placeholders(url, self._private_profile)
+        return site(url)
 
-    def personal_field(self, ref):
+    def personal_field(self, ref, approved=False):
         """Personal substitutions belong in ordinary fields on the authorized site only."""
         frame = self._refs[ref]
-        self._check_url(frame.url)
+        if site(frame.url) != self._start_site and not approved:
+            raise ValueError('Personal placeholders outside the start site: call request_approval first for this site and field')
         safe = self._element(ref).evaluate(r"""el => {
           const metadata = [el.name, el.id, el.getAttribute('aria-label'), el.placeholder,
             el.getAttribute('autocomplete')].filter(Boolean).join(' ');
@@ -215,7 +211,8 @@ class Browser:
         destination = self._check_url(url)
         if not re.match(r'^https?://', url, re.I):
             raise ValueError('Only http and https URLs are supported')
-        self._sites.add(destination)
+        if self._start_site is None:
+            self._start_site = destination
         self._refs = {}
         try:
             # Public-sector sites can take well over 5 s to load.
@@ -347,11 +344,12 @@ class Browser:
     def select(self, ref, option, approved=False):
         el = self._element(ref)
         if el.evaluate("el => el.localName==='select'"):
-            self._guard_click(el, approved)
             options = el.locator('option').evaluate_all('(els)=>els.map(o=>({value:o.value,text:o.text}))')
             match = next((o for o in options if option.casefold() in (o['value'].casefold(),o['text'].casefold())), None)
             if not match:
                 raise ValueError('Option not found')
+            if is_final_submit('', match['text']) and not approved:
+                raise ValueError('Call request_approval first')
             el.select_option(value=match['value'])
         else:
             if not el.evaluate(r'''el => {
@@ -387,9 +385,9 @@ class Browser:
             matches[0].click()
         self._settle()
 
-    def check(self, ref, checked):
+    def check(self, ref, checked, approved=False):
         el = self._element(ref)
-        self._guard_click(el)
+        self._guard_click(el, approved)
         # A native <input type=checkbox role=switch> keeps its state in .checked, not aria-checked.
         native = el.evaluate("el => el.localName === 'input'")
         if el.get_attribute('role') in ('checkbox','switch') and not native:

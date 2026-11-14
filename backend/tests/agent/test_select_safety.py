@@ -61,14 +61,19 @@ def test_final_click_timeout_never_retries(monkeypatch):
     browser._fallback_click.assert_not_called()
 
 
-def test_native_selection_uses_the_common_final_action_guard():
+@pytest.mark.parametrize('chosen,blocked', [('Morning', False), ('Send', True)])
+def test_native_selection_guards_only_chosen_option(chosen, blocked):
     element = Mock()
     element.evaluate.return_value = True
+    element.locator.return_value.evaluate_all.return_value = [
+        {'value': 'morning', 'text': 'Morning'}, {'value': 'send', 'text': 'Send'}]
     browser = Browser.__new__(Browser)
     browser._element = lambda ref: element
-    browser._guard_click = Mock(side_effect=ValueError('Call request_approval first'))
-    with pytest.raises(ValueError, match='request_approval'):
-        browser.select('e1', 'Send')
-    browser._guard_click.assert_called_once_with(element, False)
-    element.select_option.assert_not_called()
-    element.locator.assert_not_called()
+    browser._settle = Mock()
+    if blocked:
+        with pytest.raises(ValueError, match='request_approval'):
+            browser.select('e1', chosen)
+        element.select_option.assert_not_called()
+    else:
+        browser.select('e1', chosen)
+        element.select_option.assert_called_once_with(value='morning')

@@ -96,12 +96,12 @@ def test_cookie_banner(local_site):
     assert result.status == 'done'
 
 
-@pytest.mark.parametrize('text', ['Submit claim','SEND','Pay now','Confirm booking','Book','Reserve','Place order','Complete','Finish','Lähetä','Maksa','Vahvista','Varaa','Tilaa','Jatka maksamaan','<button type="submit">Continue</button>','<input type=submit value=Continue>'])
+@pytest.mark.parametrize('text', ['Submit claim','SEND','Pay now','Confirm booking','Book','Reserve','Place order','Complete','Finish','Lähetä','Maksa','Vahvista','Varaa','Tilaa','Jatka maksamaan'])
 def test_final_submit(text):
     assert is_final_submit(text)
 
 
-@pytest.mark.parametrize('text', ['Next page','Reject optional cookies','Full name','Select country'])
+@pytest.mark.parametrize('text', ['Next page','Reject optional cookies','Full name','Select country', '<button type="submit">Continue</button>', '<input type=submit value=Continue>'])
 def test_not_final_submit(text):
     assert not is_final_submit(text)
 
