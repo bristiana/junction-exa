@@ -192,6 +192,8 @@ def result_buttons(task, profile=None):
     buttons = []
     booking = re.search(r"\b(book|reserve|varaa|boka|rezerv)", str(task.get("task") or ""), re.I)
     for i, action in enumerate(actions):
+        if action.get("prefilled"):
+            continue  # already in the message as a ready link; a button would start the cloud browser on it
         title = " ".join(_text(action.get("label") or "Continue", profile).split())
         if booking and i == 0 and action.get("url"):
             title = "Book it"  # the first action of a booking runs the booking, not just opens a page
@@ -217,6 +219,11 @@ def render_result(task, profile=None, buttons=False):
              for i, fact in enumerate((structured.get("key_facts") or [])[:3])]
     if facts:
         sections.append("\n".join(facts))
+    # A filled-in link (a route with both ends set) goes in as is: one tap opens it ready.
+    ready = next((a for a in structured.get("actions") or []
+                  if isinstance(a, dict) and a.get("prefilled") and _safe_url(a.get("url"))), None)
+    if ready:
+        sections.append(f"{_text(ready.get('label'), profile)}: {_safe_url(ready['url'])}")
     actions = [] if buttons else [f"Reply {i + 1} to {_text(action.get('label') or 'continue', profile)}"
                                   for i, action in enumerate((structured.get("actions") or [])[:3])]
     questions = structured.get("missing_info") or []

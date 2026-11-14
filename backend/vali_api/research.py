@@ -233,7 +233,11 @@ Only what the source says:
 - State only facts a cited page states, with the page's own numbers (if pages differ, give the page's figure and
   say where it is from). Never invent identifiers, routes, prices, opening hours or availability ("accepts new
   patients") that no page states; say "not stated on the sources" instead.
-- When you assume something, say so plainly in the answer ("Assuming your flight left from Helsinki, ...")."""
+- When you assume something, say so plainly in the answer ("Assuming your flight left from Helsinki, ...").
+Links that open the right thing:
+- Every url is the deepest page that does the job: the show or event's own page, the booking calendar for that
+  date, the form's start page, the exact product. Never a home page when a deeper page exists.
+- Add query parameters (date, from/to, people) only in a format a cited page itself uses; never invent parameters."""
 
 
 def build_run_request(task, page=None, profile=None, effort='low', known_details=()):
