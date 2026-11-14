@@ -62,17 +62,23 @@ class Screencast:
             self.cdp.send('Page.screencastFrameAck', {'sessionId': event['sessionId']})
         except Exception:
             pass
+        if self._closed:
+            return
         now = time.monotonic()
         if now - self._last_sent < self.interval:
             return
         self._last_sent = now
         with self._lock:
+            if self._closed:
+                return
             self._latest = base64.b64decode(event['data'])
         self._wake.set()
 
     def push(self, jpeg):
         """Send a frame taken some other way (e.g. after an action) through the same writer."""
         with self._lock:
+            if self._closed:
+                return
             self._latest = jpeg
         self._wake.set()
 
@@ -81,7 +87,7 @@ class Screencast:
             self._wake.wait(1.0)
             self._wake.clear()
             with self._lock:
-                jpeg, self._latest = self._latest, None
+                jpeg, self._latest = self._latest if not self._closed else None, None
             if jpeg:
                 try:
                     self.on_frame(jpeg)
@@ -89,11 +95,13 @@ class Screencast:
                     pass
 
     def close(self):
+        with self._lock:
+            self._closed = True
+            self._latest = None
         try:
             self.cdp.send('Page.stopScreencast')
         except Exception:
             pass
-        self._closed = True
         self._wake.set()
         self._writer.join(timeout=3)
 
