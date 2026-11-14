@@ -93,6 +93,10 @@ class GraphAPIClient:
                 {"type": "reply", "reply": {"id": id_, "title": title}}
                 for id_, title in buttons]}}})
 
+    async def send_reaction(self, to, message_id, emoji):
+        return await self._send({"messaging_product": "whatsapp", "recipient_type": "individual", "to": to,
+                                 "type": "reaction", "reaction": {"message_id": message_id, "emoji": emoji}})
+
     async def mark_read(self, message_id):
         return await self._send({"messaging_product": "whatsapp", "status": "read",
                                  "message_id": message_id})

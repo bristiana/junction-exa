@@ -49,6 +49,14 @@ class ChannelAPI:
             log_failure("read receipt failed", exc, message_id=message_id)
             return None
 
+    async def send_reaction(self, to, message_id, emoji):
+        # A reaction is decoration: a failure never stops the reply.
+        try:
+            return await self._call('send_reaction', to, message_id, emoji)
+        except Exception as exc:
+            log_failure("reaction failed", exc, message_id=message_id)
+            return None
+
     async def get_media_url(self, media_id):
         return await self._call('get_media_url', media_id)
 

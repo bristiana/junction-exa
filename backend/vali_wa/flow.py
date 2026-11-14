@@ -38,7 +38,10 @@ class WhatsAppFlow:
     async def handle(self, msg):
         # Read receipts also apply to unknown senders and unsupported media.
         await self.api.mark_read(msg.message_id)
+        self.reaction = None
         bodies = await self._handle(msg)
+        if self.reaction and hasattr(self.api, "send_reaction"):
+            await self.api.send_reaction(msg.from_number, msg.message_id, self.reaction)
         sent = []
         for body in bodies:
             await self.api.send_text(msg.from_number, body, reply_to=msg.message_id)
@@ -54,6 +57,7 @@ class WhatsAppFlow:
             user = await _call(self.link_number, command.code, msg.from_number)
             if user == "paused":  # too many wrong codes from all numbers
                 return render_link_paused()
+            self.reaction = "🤝" if user and user != "paused" else None
             return render_linked() if user else render_link_failed()
         user = await _call(self.find_user_by_number, msg.from_number)
         if not user:
@@ -73,6 +77,7 @@ class WhatsAppFlow:
                 return render_error("I could not read that message. Please describe the errand in text.")
             # Media content is errand text, never an implicit approval or pairing command.
             task = await _call(self.create_task, user, text, source="whatsapp")
+            self.reaction = "👀"
             return render_ack(task)
         if msg.kind not in {"text", "interactive"}:
             return render_error("Please send your errand as text, a voice note, or a photo of a letter.")
@@ -116,6 +121,7 @@ class WhatsAppFlow:
                 if execution.get("status") not in {"starting", "running", "awaiting_approval", "submitting"}:
                     return render_error("There is no running execution to stop.")
                 updated = await _call(self.stop, task["id"])
+            self.reaction = {"choose": "🚀", "approve": "👍", "stop": "✋"}[command.kind]
             if isinstance(updated, dict) and updated.get("execution"):
                 return render_execution_update(updated)
             return render_error({"choose": "Starting your chosen action.", "approve": "Approval received.",
@@ -126,4 +132,5 @@ class WhatsAppFlow:
             await _call(self.message, task["id"], command.text)
             return render_error("Message passed to your running errand.")
         task = await _call(self.create_task, user, command.text, source="whatsapp")
+        self.reaction = "👀"
         return render_ack(task)
