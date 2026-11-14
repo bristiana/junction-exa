@@ -83,3 +83,87 @@ test("the mock's demo errands cover every browser run state and a failed errand"
   // failed research + login blocker, approval + question, finished run + the seeded WhatsApp answer
   assert.deepEqual(poses, ["error", "error", "needs_approval", "needs_approval", "success", "success"]);
 });
+
+// Exercise the actual renderer with a deterministic frame clock and a tiny SVG DOM.
+function renderMascot(state, { reducedMotion = true, palette = "lilac" } = {}) {
+  let now = 0, frame;
+  const nodes = new Map();
+  const svg = { querySelectorAll: () => [...nodes.values()] };
+  const container = {
+    set innerHTML(value) {
+      nodes.clear();
+      for (const [, name] of value.matchAll(/data-p="([^"]+)"/g)) {
+        nodes.set(name, { dataset: { p: name }, attrs: {}, setAttribute(k, v) { this.attrs[k] = String(v); } });
+      }
+    },
+    querySelector: () => svg,
+    dispatchEvent() {},
+  };
+  const ctx = vm.createContext({
+    window: { addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: reducedMotion }) },
+    document: { addEventListener() {}, removeEventListener() {} },
+    performance: { now: () => now },
+    requestAnimationFrame(fn) { frame = fn; return 1; }, cancelAnimationFrame() {},
+    CustomEvent: class { constructor(type, opts) { this.type = type; this.detail = opts?.detail; } },
+    console,
+  });
+  vm.runInContext(readFileSync(new URL("../extension/lib/butler.js", import.meta.url), "utf8"), ctx);
+  const api = ctx.window.Butler.create(container, { state, palette, trackPointer: false, hoverReact: false, reducedMotion: "auto" });
+  const advance = (count = 240) => { for (let i = 0; i < count; i++) { now += 1000 / 60; frame(now); } };
+  const attrs = (name) => nodes.get(name).attrs;
+  const snapshot = () => JSON.stringify([...nodes].map(([name, node]) => [name, node.attrs]));
+  advance();
+  return { api, advance, attrs, snapshot, states: [...ctx.window.Butler.STATES], palettes: [...ctx.window.Butler.PALETTES] };
+}
+
+test("working serves a cloche on a raised glove; typing preserves the laptop", () => {
+  const working = renderMascot("working");
+  const serving = renderMascot("serving");
+  assert.equal(working.snapshot(), serving.snapshot());
+  assert.equal(working.attrs("trayC").opacity, "1.00");
+  assert.equal(working.attrs("lap").opacity, "0.00");
+  assert.match(working.attrs("gloveR").transform, /translate\(32.00 112.00\)/);
+  assert.match(working.attrs("trayC").transform, /translate\(32.00 103.00\)/);
+  const typing = renderMascot("typing");
+  assert.equal(typing.api.getState(), "typing");
+  assert.equal(typing.attrs("lap").opacity, "1.00");
+  assert.equal(typing.attrs("trayC").opacity, "0.00");
+  typing.api.setState("serving");
+  typing.advance();
+  assert.equal(typing.attrs("lap").opacity, "0.00");
+  assert.equal(typing.attrs("trayC").opacity, "1.00");
+});
+
+test("error holds an open-handed shrug with a head tilt and an attached monocle", () => {
+  const shrug = renderMascot("error");
+  assert.match(shrug.attrs("gloveR").transform, /translate\(47.00 1(?:0[89]|1[01])\.\d+\) rotate\(-65.00\)/);
+  assert.match(shrug.attrs("gloveL").transform, /translate\(153.00 1(?:0[89]|1[01])\.\d+\) rotate\(65.00\)/);
+  assert.match(shrug.attrs("face").transform, /rotate\(-6.00 100 90\)/);
+  assert.match(shrug.attrs("crest").transform, /rotate\(-6.00 100 90\)/);
+  assert.equal(shrug.attrs("napkin").opacity, "0.00");
+  assert.equal(shrug.attrs("sweat").opacity, "0.00");
+  assert.ok(shrug.attrs("monocle").transform);
+});
+
+test("serving walks gently while reduced motion holds every new pose still", () => {
+  const walk = renderMascot("serving", { reducedMotion: false });
+  const before = walk.attrs("float").transform;
+  walk.advance(20);
+  assert.notEqual(walk.attrs("float").transform, before);
+  for (const state of ["working", "serving", "typing", "error"]) {
+    const still = renderMascot(state);
+    const before = still.snapshot();
+    still.advance(120);
+    assert.equal(still.snapshot(), before, state);
+  }
+});
+
+test("all states render finite attributes in every palette", () => {
+  const { states, palettes } = renderMascot("idle");
+  for (const palette of palettes) for (const state of states) {
+    const mascot = renderMascot(state, { palette });
+    assert.equal(mascot.api.getState(), state);
+    assert.doesNotMatch(mascot.snapshot(), /NaN|Infinity|undefined/, `${palette}/${state}`);
+    mascot.api.destroy();
+  }
+});
