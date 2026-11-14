@@ -33,6 +33,7 @@
     "files": [
       "main.mjs",
       "api.mjs",
+      "imessage/**/*.mjs",
       "mac.mjs",
       "logic.mjs",
       "stage.mjs",
@@ -51,7 +52,7 @@
       "hardenedRuntime": false,
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Vali listens while you hold the talk shortcut or press the microphone, so you can say your errand.",
-        "NSAppleEventsUsageDescription": "Vali reads the title and address of the browser tab in front, and copies the text you select when you press Ask Vali about this."
+        "NSAppleEventsUsageDescription": "Vali controls Messages to reply to linked iMessage senders when the iMessage bridge is enabled. Vali also reads the browser tab and copies selected text when you ask about it."
       }
     },
     "dmg": {

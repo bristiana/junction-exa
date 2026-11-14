@@ -84,3 +84,48 @@ async function addPersonalId() {
   dob ? dob.after(label) : box.append(label);
 }
 new MutationObserver(addPersonalId).observe($('profileFields'), { childList: true });
+
+// iMessage stays in the main process; this panel receives status and public handles only.
+const imessageBox = el('section', '', 'desktop-link');
+const imessageLabel = el('label', 'iMessage bridge');
+const imessageToggle = el('input'); imessageToggle.type = 'checkbox';
+imessageLabel.prepend(imessageToggle);
+const imessageMode = el('select', '', 'v-input'); imessageMode.setAttribute('aria-label', 'iMessage sender policy');
+for (const [value, text] of [['open', 'Anyone can link'], ['allowlist', 'Allowed senders only']]) {
+  const option = el('option', text); option.value = value; imessageMode.append(option);
+}
+const imessageAllowed = el('textarea', '', 'v-input'); imessageAllowed.setAttribute('aria-label', 'Allowed iMessage senders');
+imessageAllowed.placeholder = 'One sender per line: +358401234567 or name@icloud.com';
+const imessageStatus = el('p', '', 'muted small'); imessageStatus.setAttribute('role', 'status');
+const imessageLinks = el('div');
+const imessagePermissions = button('Open System Settings', 'v-btn v-btn--quiet', () => window.vali.call('imessagePermissions'));
+const imessageCode = button('Link iMessage: show code', 'v-btn v-btn--quiet', async () => {
+  const result = await window.vali.call('linkCode');
+  imessageStatus.textContent = result.ok ? `Send link ${result.data.code} to the dedicated Vali Apple ID within 10 minutes.` : result.error;
+});
+function renderImessage(value) {
+  imessageToggle.checked = value.enabled; imessageMode.value = value.mode;
+  if (document.activeElement !== imessageAllowed) imessageAllowed.value = value.allowed.join('\n');
+  imessageStatus.textContent = value.message || (value.enabled ? value.status === 'running' ? 'iMessage bridge is running.' : 'iMessage bridge needs attention. Check permissions and restart Vali.' : 'Off. Use a dedicated macOS user and Apple ID for Vali.');
+  imessagePermissions.hidden = !['needs_fda', 'needs_automation'].includes(value.status);
+  imessageLinks.replaceChildren();
+  for (const handle of value.linked) imessageLinks.append(button(`Unlink ${handle}`, 'v-btn v-btn--quiet', async () => {
+    try { renderImessage(await window.vali.call('imessageUnlink', handle)); } catch (e) { imessageStatus.textContent = e.message; }
+  }));
+}
+async function saveImessage() {
+  return window.vali.call('imessageSettings', { mode: imessageMode.value, allowed: imessageAllowed.value.split(/[\n,]/).map(s => s.trim()).filter(Boolean) });
+}
+imessageToggle.onchange = async () => {
+  imessageToggle.disabled = true;
+  try { await saveImessage(); renderImessage(await window.vali.imessageToggle(imessageToggle.checked)); }
+  catch (e) { imessageStatus.textContent = e.message; imessageToggle.checked = false; }
+  finally { imessageToggle.disabled = false; }
+};
+const imessageSave = button('Save allowed senders', 'v-btn v-btn--quiet', async () => {
+  try { renderImessage(await saveImessage()); } catch (e) { imessageStatus.textContent = e.message; }
+});
+imessageBox.append(el('h3', 'iMessage'), imessageLabel, imessageMode, imessageAllowed, imessageSave, imessageCode, imessageStatus, imessagePermissions, imessageLinks);
+advanced.before(imessageBox);
+window.vali.onImessage(renderImessage);
+window.vali.imessageStatus().then(renderImessage).catch(e => { imessageStatus.textContent = e.message; });

@@ -8,6 +8,7 @@ import { frontTab, grabSelection } from './mac.mjs';
 import { mascotState, notificationEvents, buildErrand, comingSoon, voiceOutcome, letterType, sealConfig, openConfig, badgeOf, MAX_VOICE_BYTES, talkError, redactSecrets } from './logic.mjs';
 import { asleep, restoreSpot } from './valet.mjs';
 import { createStage } from './stage.mjs';
+import { makeMessageBridge } from './imessage/runtime.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_URL = 'https://bogdan-c-2206--vali-web.us-east.modal.run';
 const smoke = process.argv.includes('--smoke');
@@ -25,6 +26,8 @@ const shortcuts = { quick: '', voice: '', ask: '', talk: '' };
 // Talk to Vali runs in the mascot window; it reports '', 'connecting', 'listening' or 'speaking'.
 let talking = '', facing = '', sleeping = false, lastBusyAt = Date.now();
 let persistChain = Promise.resolve();
+let imessage;
+const imessageView = () => imessage?.view() || { enabled: false, status: 'off', mode: 'open', allowed: [], linked: [] };
 // Saved settings that could not be decrypted stay untouched on disk until the user links an account on purpose.
 const LOCKED = 'Could not unlock saved settings. Unlock your login keychain and restart Vali, or link again in Settings.';
 let settingsLocked = false;
@@ -224,6 +227,23 @@ function toggleTalk() { if (mascot && !mascot.isDestroyed()) mascot.webContents.
 ipcMain.handle('vali', async (event, op, arg) => {
   if (!windows().some(w => w.webContents.id === event.sender.id)) throw new Error('Unknown window.');
   if (op === 'state') return state();
+  if (op === 'imessageStatus') return imessageView();
+  if (op === 'imessageSettings') {
+    if (smoke || talkCheck) throw new Error('iMessage is unavailable in check mode.');
+    return imessage.configure(arg);
+  }
+  if (op === 'imessageUnlink') {
+    if (smoke || talkCheck) throw new Error('iMessage is unavailable in check mode.');
+    return imessage.unlink(arg);
+  }
+  if (op === 'imessageToggle') {
+    if (smoke || talkCheck) throw new Error('iMessage is unavailable in check mode.');
+    return arg ? imessage.enable() : imessage.disable();
+  }
+  if (op === 'imessagePermissions') {
+    const pane = imessageView().status === 'needs_automation' ? 'Privacy_Automation' : 'Privacy_AllFiles';
+    await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?' + pane); return;
+  }
   if (op === 'talkSession') return event.sender === mascot.webContents ? talkSession() : { ok: false, error: 'Talk from the mascot.' };
   if (op === 'talk') { if (event.sender !== mascot.webContents) throw new Error('Talk from the mascot.');
     if (TALK_MODES.has(arg) && arg !== talking) { talking = arg; wake(); trayMenu(); publish(); } return; }
@@ -387,6 +407,8 @@ function trayMenu() {
     { label: talking ? 'Stop talking' : 'Talk to Vali', accelerator: shortcuts.talk || undefined, click: toggleTalk },
     { label: 'Say an errand', accelerator: shortcuts.voice || undefined, click: () => quickWithPage('voice') },
     { label: paused ? 'Resume' : 'Pause', type: 'checkbox', checked: paused, click: () => { paused = !paused; publish(); trayMenu(); if (!paused) poll().catch(() => {}); } },
+    { label: `iMessage: ${imessageView().enabled ? imessageView().status === 'running' ? 'On' : 'Needs permission' : 'Off'}`, type: 'checkbox', checked: imessageView().enabled, enabled: !!imessage,
+      click: () => (imessageView().enabled ? imessage.disable() : imessage.enable()).catch(() => openChat()) },
     { type: 'separator' }, { label: 'Quit Vali', click: () => app.quit() }
   ]));
 }
@@ -561,6 +583,8 @@ else {
       const onTalk = () => { if (Date.now() - lastTalk > 500) toggleTalk(); lastTalk = Date.now(); };
       if (globalShortcut.register('Alt+Shift+V', onTalk)) shortcuts.talk = 'Alt+Shift+V';
     }
+    if (!smoke && !talkCheck) imessage = makeMessageBridge({ getConfig: () => config, save, safeStorage, fetchImpl: apiFetch,
+      onStatus: value => { for (const w of windows()) w.webContents.send('vali:imessage', value); trayMenu(); } });
     trayMenu();
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Vali', submenu: [{ label: 'Open chat', click: () => openChat() }, { role: 'quit' }] }, { role: 'editMenu' }, { role: 'windowMenu' }]));
     await Promise.all([mascot.loadFile(path.join(root, 'renderer/mascot.html'), smoke || talkCheck ? { query: { check: '1' } } : {}), chat.loadFile(path.join(root, 'vendor/panel/panel.html')), quick.loadFile(path.join(root, 'renderer/quick.html')), glance.loadFile(path.join(root, 'renderer/glance.html'))]);
@@ -570,11 +594,11 @@ else {
     else {
       stageTimer = setInterval(() => { stage.tick({ hold: !!talking || glance.isVisible() || windows().some(w => w.isFocused()) }); wakeCheck(); }, 400);
       openChat();
-      connect().then(() => poll()).catch(e => { config.connectionError = e.message; changes({ connectionError: e.message }, {}); });
+      connect().then(async () => { if (config.imessage?.enabled) await imessage.enable(); await poll(); }).catch(e => { config.connectionError = e.message; changes({ connectionError: e.message }, {}); });
       pollTimer = setInterval(() => poll().catch(() => {}), 4000);
     }
   }).catch(e => { console.error(e.message); app.exit(1); });
 }
 app.on('activate', () => openChat());
 app.on('window-all-closed', () => {});
-app.on('before-quit', () => { quitting = true; clearInterval(pollTimer); clearInterval(stageTimer); globalShortcut.unregisterAll(); });
+app.on('before-quit', () => { quitting = true; imessage?.dispose(); clearInterval(pollTimer); clearInterval(stageTimer); globalShortcut.unregisterAll(); });

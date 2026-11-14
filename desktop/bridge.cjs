@@ -5,5 +5,8 @@ contextBridge.exposeInMainWorld('vali', {
   onChange: on('vali:change'),
   onState: on('vali:state'),
   onQuick: on('vali:quick'),
-  onTalk: on('vali:talk')
+  onTalk: on('vali:talk'),
+  imessageStatus: () => ipcRenderer.invoke('vali', 'imessageStatus'),
+  imessageToggle: on => ipcRenderer.invoke('vali', 'imessageToggle', on),
+  onImessage: on('vali:imessage')
 });
