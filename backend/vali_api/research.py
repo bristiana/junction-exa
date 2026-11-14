@@ -1,7 +1,15 @@
 """Request and response shapes shared with the extension."""
 import copy
+import logging
 import re
 from datetime import datetime, timezone
+
+logger = logging.getLogger('vali.research')
+
+
+def log_research_call(mode, elapsed, cache_hit):
+    logger.info('research mode=%s elapsed=%.2fs cache=%s', mode, elapsed, 'hit' if cache_hit else 'miss')
+
 
 SYSTEM_PROMPT = """You are Vali, a personal errand agent for people living in Finland, especially newcomers and international students who do not read Finnish well.
 Your job is to take a tedious errand off the user's hands: find what matters on the live web, work out what needs to happen, and prepare the next step so the user only has to approve it.
