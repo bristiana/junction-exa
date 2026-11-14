@@ -113,6 +113,8 @@ def render_ack(task, profile=None):
 
 
 def render_result(task, profile=None):
+    if (task.get("research") or {}).get("status") == "failed":
+        return render_error("Research failed. " + ((task.get("research") or {}).get("error") or "Please try again."))
     output = (task.get("research") or {}).get("output") or {}
     structured = output.get("structured") or {}
     numbered = number_sources(output.get("grounding"))

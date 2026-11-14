@@ -27,6 +27,7 @@ class Store:
         blob = 'BYTEA' if self.postgres else 'BLOB'
         tables = [
             'users(id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL, profile_json TEXT NOT NULL, wa_number TEXT UNIQUE)',
+            'wa_seen(message_id TEXT PRIMARY KEY, at TEXT NOT NULL)',
             'pair_codes(code TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL)',
             'tasks(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, source TEXT NOT NULL, mode TEXT NOT NULL, task TEXT NOT NULL, page_json TEXT NOT NULL, research_json TEXT NOT NULL, execution_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)',
             'watches(id TEXT PRIMARY KEY, user_id TEXT NOT NULL, query TEXT NOT NULL, exa_monitor_id TEXT, created_at TEXT NOT NULL)',
@@ -76,6 +77,18 @@ class Store:
             self.sql('UPDATE users SET wa_number=? WHERE id=?', (number, row['user_id']))
             return True
 
+    def find_user_by_number(self, number):
+        return self.sql('SELECT * FROM users WHERE wa_number=?', (number,), one=True)
+
+    def claim_whatsapp_message(self, message_id):
+        return bool(self.sql('INSERT INTO wa_seen VALUES(?,?) ON CONFLICT(message_id) DO NOTHING RETURNING message_id',
+                             (message_id, now())))
+
+    def approve_execution(self, tid, previous):
+        if not previous or previous.get('status') != 'awaiting_approval' or previous.get('approval_decision') is not None:
+            return False
+        return self.start_execution(tid, {**previous, 'approval_decision': 'approved'}, previous)
+
     @staticmethod
     def decode_task(row):
         if row is None:
@@ -103,7 +116,7 @@ class Store:
         if expected is not None:
             query += ' AND research_json=?'
             params += (json.dumps(expected),)
-        self.sql(query, params)
+        return bool(self.sql(query + ' RETURNING id', params))
 
     def update_execution(self, tid, execution):
         self.sql('UPDATE tasks SET execution_json=?, updated_at=? WHERE id=?', (json.dumps(execution), now(), tid))
