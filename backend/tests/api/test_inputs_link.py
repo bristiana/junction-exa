@@ -206,9 +206,10 @@ def test_device_expiry_replacement_auth_and_limits(api):
     assert client.post('/v1/link', json={'code': code}).status_code == 404
     del client.headers['Authorization']
     assert client.post('/v1/link/code').status_code == 401
-    for _ in range(8):
+    for _ in range(3):  # two wrong codes above, five in all, then a 15-minute lockout
         assert client.post('/v1/link', json={'code': '000000'}).status_code == 404
-    assert client.post('/v1/link', json={'code': '000000'}).status_code == 429
+    locked = client.post('/v1/link', json={'code': '000000'})
+    assert locked.status_code == 429 and 'wrong codes' in locked.json()['detail'] and int(locked.headers['retry-after']) > 800
 
 
 def test_device_issuance_limit(api):

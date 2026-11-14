@@ -24,7 +24,8 @@ from .companion import CompanionBody, companion_tip, make_cache
 from .config import Config
 from .exa import ExaClient, ExaError, TTLCache
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
-from .guard import RateLimited, SlidingWindow, authenticate, check_origin, check_task_budget, client_ip
+from .guard import (RateLimited, SlidingWindow, authenticate, check_code_tries, check_origin, check_task_budget, client_ip,
+                    public_start_url, resolve_host)
 from .research import ANSWER_FIRST, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .llm import make_fast_json
@@ -33,7 +34,7 @@ from .router import route
 from .services import create_router as services_router
 from .stats import pick_channel, summarize
 from .store import make_store, now
-from .uploads import oversized_request
+from .uploads import UploadLimit, oversized_request
 from .voice_agent import add_voice_routes
 from vali_wa.flow import WhatsAppFlow
 from vali_wa.webhook import parse_webhook, verify_signature
@@ -367,10 +368,12 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     application.state.llm = llm or make_fast_json(config.anthropic_api_key)
     application.state.companion_cache = make_cache()
     application.state.stats_cache = TTLCache(ttl=5, max_entries=1024)
+    application.state.resolve_host = resolve_host
     application.state.limiter = SlidingWindow()
     application.state.spawn_research_poller = spawn_research_poller or (lambda tid: spawn_thread(research_poller_loop, tid, application))
     application.state.spawn_browser_session = spawn_browser_session or (lambda tid, goal, url, profile: spawn_thread(run_browser_session, tid, goal, url, profile, application))
     application.state.whatsapp_api = whatsapp_api or ChannelAPI(config)
+    application.add_middleware(UploadLimit)
     application.add_middleware(CORSMiddleware,
         allow_origins=[o.strip() for o in config.allowed_origins.split(',') if o.strip() and o.strip() != 'extension'],
         allow_origin_regex=r'^(chrome-extension://[a-z]+|https?://(localhost|127\.0\.0\.1)(:\d+)?)$',
@@ -487,16 +490,18 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.post('/v1/link/code')
     def link_code(request: Request, user=Depends(authenticate)):
-        application.state.limiter.check('link-code:' + user['id'], 10)
+        application.state.limiter.check('link-code:' + user['id'], 10, 600)
         token = request.headers['authorization'].partition(' ')[2]
         return application.state.store.create_link_code(user['id'], token)
 
     @application.post('/v1/link')
     def link(body: LinkBody, request: Request):
-        ip = request.client.host if request.client else 'unknown'
-        application.state.limiter.check('link-redeem:' + ip, 10)
+        limiter, ip = application.state.limiter, client_ip(request)
+        limiter.check('link-redeem:' + ip, 10, 600)
+        check_code_tries(limiter, 'link-fail:' + ip)
         token = application.state.store.redeem_link_code(body.code)
         if not token:
+            limiter.failed('link-fail:' + ip)
             raise HTTPException(404, 'Link code not found or expired')
         return JSONResponse({'token': token}, headers={'Cache-Control': 'no-store'})
 
@@ -587,8 +592,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(422, 'Action index out of range')
         action = actions[index] if index < len(actions) else {}
         start_url = body.start_url or action.get('url') or (task.get('page') or {}).get('url')
-        if not start_url or not start_url.startswith(('https://', 'http://')):
-            raise HTTPException(422, 'An HTTP start URL is required')
+        if not public_start_url(start_url, application.state.resolve_host):
+            raise HTTPException(422, 'A public http(s) start URL is required')
         goal = json.dumps({'task': task['task'], 'goal': body.goal, 'answer': structured.get('answer'),
                            'key_facts': structured.get('key_facts', []), 'action': action, 'research': structured}, ensure_ascii=False)
         execution = dict(channel=channel, status='starting', goal=goal, start_url=start_url, current_url=start_url,
@@ -726,9 +731,21 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     async def create_whatsapp_task(user, text, source):
         return await asyncio.to_thread(create_task_for_user, TaskBody(task=text), user, source)
 
+    def link_number(code, number):
+        """A WhatsApp pairing code; five wrong ones from a number lock it out for 15 minutes."""
+        limiter = application.state.limiter
+        try:
+            check_code_tries(limiter, 'pair-fail:' + number)
+        except RateLimited:
+            return False
+        linked = application.state.store.link_number(code, number)
+        if not linked:
+            limiter.failed('pair-fail:' + number)
+        return linked
+
     application.state.whatsapp_flow = WhatsAppFlow(
         api=application.state.whatsapp_api, find_user_by_number=find_sender,
-        link_number=lambda code, number: application.state.store.link_number(code, number),
+        link_number=link_number,
         create_task=create_whatsapp_task,
         get_active_task=active_task,
         message=lambda tid, text: message_for_user(tid, MessageBody(text=text), sender.get(), 'whatsapp'),

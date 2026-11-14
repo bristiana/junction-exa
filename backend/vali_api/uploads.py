@@ -20,6 +20,36 @@ VISION_MAX_SIDE = 4096
 JPEG_QUALITY = 85
 
 
+class UploadLimit:
+    """ASGI guard that counts the streamed body of an upload, so a chunked request without Content-Length cannot
+    exceed the limit either; the body is replayed to the app once it fits."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http' or scope['path'] not in UPLOAD_PATHS:
+            return await self.app(scope, receive, send)
+        body, more = b'', True
+        while more:
+            message = await receive()
+            if message['type'] == 'http.disconnect':
+                return
+            body += message.get('body', b'')
+            more = message.get('more_body', False)
+            if len(body) > MAX_REQUEST:
+                from fastapi.responses import JSONResponse
+                return await JSONResponse({'detail': 'Upload exceeds 10 MB'}, status_code=413)(scope, receive, send)
+        replayed = False
+
+        async def replay():
+            nonlocal replayed
+            if replayed:
+                return await receive()
+            replayed = True
+            return {'type': 'http.request', 'body': body, 'more_body': False}
+        await self.app(scope, replay, send)
+
+
 def oversized_request(path, content_length):
     """True for an upload whose declared size is over the limit, before the body is parsed."""
     if path not in UPLOAD_PATHS or not content_length:

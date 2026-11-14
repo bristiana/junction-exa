@@ -64,6 +64,7 @@ def api():
             polls.append(tid)
     application = create_app(Config(sqlite_path=':memory:', whatsapp_app_secret=WA_SECRET), store, exa, spawn_poller,
                              lambda *args: browsers.append(args))
+    application.state.resolve_host = lambda host: {'93.184.216.34'}  # offline: every test host is public
     with signed(TestClient(application)) as client:
         user = client.post('/v1/users').json()
         client.headers['Authorization'] = 'Bearer ' + user['token']
@@ -1002,3 +1003,34 @@ def test_webhooks_fail_closed_without_their_secrets(api):
     assert client.post('/webhooks/exa?w=missing', json={}).status_code == 403
     config.voice_tool_secret = ''
     assert client.post('/v1/voice/tools/status', json={}).status_code == 503
+
+
+def test_limits_before_public_access(api, wa):
+    from vali_api.guard import public_start_url
+    resolve = {'example.com': {'93.184.216.34'}, 'rebind.example': {'10.0.0.7'}, 'v6.example': {'2606:4700::1'}}.get
+    assert public_start_url('https://example.com/form', resolve) and public_start_url('http://v6.example', resolve)
+    for url in ['ftp://example.com', 'https://localhost:8000', 'http://127.0.0.1/', 'http://169.254.169.254/latest',
+                'http://10.1.2.3', 'http://[::1]/', 'https://rebind.example/', 'https://printer.local', 'javascript:alert(1)',
+                'https://unknown.example']:
+        assert not public_start_url(url, lambda host: resolve(host) or set()), url
+    client, application, store, *_ = api
+    task = client.post('/v1/tasks', json={'task': 'find café in Helsinki'}).json()
+    assert client.post(f"/v1/tasks/{task['id']}/execute", json={'start_url': 'http://169.254.169.254/'}).status_code == 422
+    application.state.resolve_host = lambda host: {'192.168.1.1'}
+    assert client.post(f"/v1/tasks/{task['id']}/execute", json={}).status_code == 422
+    # Pairing: five wrong WhatsApp codes from one number lock it out, even for the right code.
+    _, graph, deliver = wa
+    for n in range(5):
+        deliver('link 000000', mid=f'wrong-{n}')
+    code = client.post('/v1/pair').json()['code']
+    deliver('link ' + code, mid='right')
+    assert client.get('/v1/me').json()['whatsapp_linked'] is False
+
+
+def test_a_chunked_upload_over_the_limit_is_cut_off(api):
+    client, *_ = api
+    def chunks():
+        for _ in range(12):
+            yield b'x' * (1024 * 1024)
+    response = client.post('/v1/letters', content=chunks(), headers={'Content-Type': 'multipart/form-data; boundary=b'})
+    assert response.status_code == 413 and response.json() == {'detail': 'Upload exceeds 10 MB'}
