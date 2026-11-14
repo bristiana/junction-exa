@@ -92,8 +92,9 @@ def test_transport_error_has_no_credentials():
 
 
 def flow_scenario(task, message, *, known=True, linked=True, transcribe=None, read_letter=None,
-                  mutation_result=None):
+                  mutation_result=None, reactions=None):
     calls, requests = [], []
+    reactions = [] if reactions is None else reactions
 
     def handler(request):
         requests.append(request)
@@ -135,6 +136,8 @@ def flow_scenario(task, message, *, known=True, linked=True, transcribe=None, re
             assert json.loads(requests[0].content) == {
                 "messaging_product": "whatsapp", "status": "read", "message_id": message.message_id}
             payloads = [json.loads(r.content) for r in requests[1:] if r.method == "POST"]
+            reactions.extend(p["reaction"]["emoji"] for p in payloads if p.get("type") == "reaction")
+            payloads = [p for p in payloads if p.get("type") != "reaction"]
             assert sent == payloads
             assert all(payload == {"messaging_product": "whatsapp", "to": NUMBER, "type": "text",
                 "text": {"body": payload["text"]["body"]}, "context": {"message_id": message.message_id}}
@@ -271,3 +274,11 @@ def test_channel_receipt_failure_logs_safely(caplog):
         assert run(api.mark_read('receipt-id')) is None
     assert 'message_id=receipt-id' in caplog.text
     assert 'status_code=400 code=99' in caplog.text
+
+
+def test_reactions_mark_what_vali_did(task):
+    seen = []
+    flow_scenario(task, msg("Book me a sauna on Friday"), reactions=seen)
+    flow_scenario(task, msg("link 123456"), reactions=seen)
+    flow_scenario(task, msg("help"), reactions=seen)
+    assert seen == ["👀", "🤝"]
