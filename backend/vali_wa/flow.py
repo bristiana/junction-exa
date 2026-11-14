@@ -88,9 +88,13 @@ class WhatsAppFlow:
             n = None
             if action == "choose" and ":" in tid:
                 tid, n = tid.rsplit(":", 1)
-            if not task or tid != task["id"] or action not in {"approve", "stop", "choose"} or (
+            if not task or tid != task["id"] or action not in {"approve", "stop", "choose", "watch"} or (
                     action == "choose" and not (n or "").isdigit()):
                 return render_error("That button is no longer active. Reply *status* for the current errand.")
+            if action == "watch":
+                watch = await _call(self.create_task, user, f"Watch for changes: {task['task']}", source="whatsapp")
+                self.reaction = "👁️"
+                return render_ack(watch)
             command = Command("choose", n=int(n)) if action == "choose" else parse_command(action)
         # Short answers (yes, a number, etc.) belong to an outstanding question.
         if self.message and task and msg.kind == "text" and text.strip() and (
