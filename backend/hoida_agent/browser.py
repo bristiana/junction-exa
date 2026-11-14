@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright, expect, TimeoutError as Browser
 
 _CAPTURE = r'''({start, limit}) => {
  const visible = el => { const r=el.getBoundingClientRect(), s=getComputedStyle(el);
-   return r.width>0 && r.height>0 && s.visibility!=='hidden' && s.display!=='none'; };
+   return r.width>0 && r.height>0 && s.visibility!=='hidden' && s.display!=='none' && !el.closest('[inert]'); };
  const clip = s => String(s||'').replace(/\s+/g,' ').trim().slice(0,240);
  const roots=[document], all=[];
  const walk = root => { for(const el of root.children || []) {
@@ -153,8 +153,29 @@ class Browser:
             || (el.getRootNode() instanceof ShadowRoot && /usercentrics|cookie|consent/i.test(el.getRootNode().host.id + ' ' + el.getRootNode().host.className))
         })''')
 
+    def _fallback_click(self, el, exc):
+        """Visually hidden radios/checkboxes are clicked through their label; covered or off-screen elements by a DOM click."""
+        how = el.evaluate('''el => {
+          if (el.matches('input[type=radio],input[type=checkbox]')) {
+            const label = el.labels?.[0] || el.closest('label');
+            if (label) { label.click(); return 'label'; }
+          }
+          el.click(); return 'dom';
+        }''')
+        if how not in ('label', 'dom'):
+            raise exc
+
     def click(self, ref):
-        self._element(ref).click()
+        el = self._element(ref)
+        try:
+            # Wizards often enable "Next" a moment after the last choice.
+            expect(el).to_be_enabled(timeout=3000)
+        except AssertionError:
+            raise ValueError('This button is disabled: fill or choose the required fields first, then read_page')
+        try:
+            el.click(timeout=3000)
+        except BrowserTimeout as exc:
+            self._fallback_click(el, exc)
         self._settle()
 
     def type(self, ref, text):
@@ -228,7 +249,11 @@ class Browser:
             except AssertionError as exc:
                 raise ValueError('Checkbox or switch did not reach requested state') from exc
         else:
-            el.set_checked(checked)
+            try:
+                el.set_checked(checked, timeout=3000)
+            except BrowserTimeout as exc:
+                if el.is_checked() != checked:
+                    self._fallback_click(el, exc)
         self._settle()
 
     def press(self, key):
@@ -272,7 +297,7 @@ class Browser:
                  || els.some(challengeFrame)
                  || els.some(el=>el.matches('input') && /captcha/i.test(attrs(el)))
                  || els.some(el=>!el.matches('iframe') && big(el) && /captcha|turnstile/i.test(attrs(el)) && !/grecaptcha-badge|invisible/i.test(attrs(el)+' '+(el.getAttribute('data-size')||'')))) found.push('captcha');
-              if(els.some(el=>el.matches('input') && /cc-number|card.?number|cardnumber/i.test([el.name,el.id,el.autocomplete,el.placeholder].join(' ')) || el.matches('iframe') && /stripe|adyen|braintree|checkout|paypal/i.test(el.src))) found.push('payment');
+              if(els.some(el=>el.matches('input') && /cc-number|card.?number|cardnumber/i.test([el.name,el.id,el.autocomplete,el.placeholder].join(' ')) || el.matches('iframe') && big(el) && /stripe|adyen|braintree|checkout|paypal/i.test(el.src))) found.push('payment');
               return found;
             }'''))
         return [kind for kind in ('login','captcha','payment') if kind in found]

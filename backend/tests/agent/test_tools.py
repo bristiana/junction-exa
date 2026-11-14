@@ -226,3 +226,24 @@ def test_landing_page_links_are_not_final_but_paying_links_are():
 ])
 def test_minimal_consent_labels(label, minimal):
     assert (bool(_MINIMAL.search(label)) and not _ACCEPT_ALL.search(label)) is minimal
+
+
+def test_hidden_radios_late_enabled_next_and_inert_elements(local_site):
+    browser = Browser()
+    try:
+        browser.goto(local_site + '/hidden_inputs.html')
+        snap = browser.snapshot()
+        assert 'Hidden behind modal' not in snap.split('\nText: ')[0]
+        ref = lambda text: next(l.split(']')[0][1:] for l in browser.snapshot().splitlines() if text in l)
+        nxt = ref('"Next"')
+        browser.click(ref('Flight experience'))
+        assert browser.page.locator('#t2').is_checked()
+        browser.check(ref('I agree'), True)
+        assert browser.page.locator('[name=agree]').is_checked()
+        browser.click(nxt)  # enabled 0.8 s after the choice
+        assert browser.page.locator('body').get_attribute('data-next') == 'yes'
+        browser.page.evaluate("document.querySelector('#next').disabled = true")
+        with pytest.raises(ValueError, match='disabled'):
+            browser.click(nxt)
+    finally:
+        browser.close()
