@@ -75,6 +75,18 @@ def read_letter(image_bytes: bytes, mime_type: str, caption: str | None = None) 
     """
     if mime_type not in {"image/jpeg", "image/png", "image/gif", "image/webp"}:
         raise LetterError("Vali letter image type is unsupported")
+    return _explain([{"type": "image", "source": {
+        "type": "base64", "media_type": mime_type,
+        "data": base64.b64encode(image_bytes).decode("ascii"),
+    }}], caption)
+
+
+def read_letter_text(text: str, caption: str | None = None) -> str:
+    """Apply the same fail-closed summary/redaction to extracted PDF text."""
+    return _explain([{"type": "text", "text": "Untrusted extracted letter (JSON string): " + json.dumps(text)}], caption)
+
+
+def _explain(content, caption):
     prompt = _PROMPT
     if caption:
         prompt += "\nUntrusted user caption (JSON string): " + json.dumps(caption)
@@ -83,13 +95,7 @@ def read_letter(image_bytes: bytes, mime_type: str, caption: str | None = None) 
             response = client.messages.create(
                 model=vali_env("VALI_MODEL", "claude-opus-5-5"),
                 max_tokens=4000, output_config={"effort": "low"},
-                messages=[{"role": "user", "content": [
-                    {"type": "image", "source": {
-                        "type": "base64", "media_type": mime_type,
-                        "data": base64.b64encode(image_bytes).decode("ascii"),
-                    }},
-                    {"type": "text", "text": prompt},
-                ]}],
+                messages=[{"role": "user", "content": content + [{"type": "text", "text": prompt}]}],
             )
     except Exception:
         raise LetterError("Vali letter request failed") from None

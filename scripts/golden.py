@@ -1,8 +1,8 @@
-"""Golden errands: three live runs against the deployed Vali API.
+"""Golden errands: four live runs against the deployed Vali API.
 
 Usage:
     backend/.venv/bin/python scripts/golden.py --token-file /path/to/tok
-    GOLDEN_TOKEN=... backend/.venv/bin/python scripts/golden.py [--api URL] [--only find,claim,execute]
+    GOLDEN_TOKEN=... backend/.venv/bin/python scripts/golden.py [--api URL] [--only find,claim,execute,letter]
 
 Errands (run in parallel, 4 minutes each):
     find     "Find a sauna in Helsinki open tonight for 6 people" ends completed with cited results.
@@ -10,6 +10,8 @@ Errands (run in parallel, 4 minutes each):
     execute  a task targeting the httpbin.org test order form (an echo service): research, /execute, wait for
              awaiting_approval (live.jpg must return a JPEG meanwhile), approve, wait for done.
              Approval is only ever sent when the start and current URL are on httpbin.org.
+
+    letter   uploads a synthetic Finnish rent notice to /v1/letters and checks for a completed answer.
 
 Prints one line per errand (PASS/FAIL, mode, seconds, cost, reason). Exit code 1 if any errand fails.
 The token is read from GOLDEN_TOKEN or --token-file and is never printed.
@@ -19,6 +21,7 @@ import asyncio
 import os
 import sys
 import time
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
@@ -106,6 +109,18 @@ async def claim(client, errand):
     return f'answer {len(answer)} chars, {len(citations(output))} citations'
 
 
+async def letter(client, errand):
+    fixture = Path(__file__).with_name('fixtures') / 'letter.png'
+    task = (await call(client, 'POST', '/v1/letters',
+                       files={'file': ('letter.png', fixture.read_bytes(), 'image/png')})).json()
+    errand.task_id, errand.mode = task['id'], task.get('mode', '-')
+    output = (await wait_research(client, errand, task))['research'].get('output') or {}
+    answer = ((output.get('structured') or {}).get('answer') or output.get('text') or '').strip()
+    if not answer:
+        raise Fail('completed without an answer')
+    return f'answer {len(answer)} chars'
+
+
 def on_safe_host(url):
     return (urlsplit(url or '').hostname or '').lower() == SAFE_HOST
 
@@ -189,7 +204,7 @@ async def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--api', default=DEFAULT_API)
     parser.add_argument('--token-file')
-    parser.add_argument('--only', default='find,claim,execute', help='comma-separated errands to run')
+    parser.add_argument('--only', default='find,claim,execute,letter', help='comma-separated errands to run')
     args = parser.parse_args()
     token = os.environ.get('GOLDEN_TOKEN', '').strip()
     if not token and args.token_file:
@@ -197,7 +212,7 @@ async def main():
             token = f.read().strip()
     if not token:
         parser.error('set GOLDEN_TOKEN or pass --token-file')
-    errands = {'find': find, 'claim': claim, 'execute': execute}
+    errands = {'find': find, 'claim': claim, 'execute': execute, 'letter': letter}
     names = [n.strip() for n in args.only.split(',') if n.strip()]
     unknown = [n for n in names if n not in errands]
     if unknown:

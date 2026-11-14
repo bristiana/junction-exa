@@ -10,7 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
@@ -35,6 +35,10 @@ class TaskBody(BaseModel):
     page: dict | None = None
     effort: Literal['minimal', 'low', 'medium', 'high', 'xhigh', 'auto', 'ultra'] = 'low'
     previous_task_id: str | None = None
+
+
+class LinkBody(BaseModel):
+    code: str = Field(pattern=r'^\d{6}$', max_length=6)
 
 
 class ProfileBody(BaseModel):
@@ -315,10 +319,10 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def pair(user=Depends(authenticate)):
         return application.state.store.create_pair_code(user['id'])
 
-    def create_task_for_user(body, user, source='extension'):
+    def create_task_for_user(body, user, source='extension', *, budget_checked=False):
         if not body.task.strip():
             raise HTTPException(422, 'Task must not be blank')
-        check_task_budget(application, user)
+        check_task_budget(application, user, count_request=not budget_checked)
         state = application.state
         mode, kind = route(body.task, body.page, classify=state.jev.classify if state.jev else None)
         previous_run = None
@@ -356,6 +360,57 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if kind == 'agent' and research['status'] not in TERMINAL:
             state.spawn_research_poller(task['id'])
         return state.store.get_task(task['id'])
+
+    @application.post('/v1/link/code')
+    def link_code(request: Request, user=Depends(authenticate)):
+        application.state.limiter.check('link-code:' + user['id'], 10)
+        token = request.headers['authorization'].partition(' ')[2]
+        return application.state.store.create_link_code(user['id'], token)
+
+    @application.post('/v1/link')
+    def link(body: LinkBody, request: Request):
+        ip = request.client.host if request.client else 'unknown'
+        application.state.limiter.check('link-redeem:' + ip, 10)
+        token = application.state.store.redeem_link_code(body.code)
+        if not token:
+            raise HTTPException(404, 'Link code not found or expired')
+        return JSONResponse({'token': token}, headers={'Cache-Control': 'no-store'})
+
+    @application.post('/v1/voice')
+    def voice_upload(audio: UploadFile = File(...), create: str | None = Form(None), user=Depends(authenticate)):
+        from .uploads import AUDIO_TYPES, read_upload
+        from vali_media.voice import transcribe, VoiceError
+        check_task_budget(application, user)
+        data, mime = read_upload(audio, AUDIO_TYPES)
+        if not config.elevenlabs_api_key:
+            raise HTTPException(503, 'Voice transcription is not configured')
+        try:
+            text = transcribe(data, mime).strip()
+        except VoiceError:
+            raise HTTPException(502, 'Voice transcription failed') from None
+        if not text:
+            raise HTTPException(400, 'No speech detected')
+        if create == '1':
+            if len(text) > 20000:
+                raise HTTPException(422, 'Transcript exceeds task length limit')
+            return {**create_task_for_user(TaskBody(task=text), user, budget_checked=True), 'text': text}
+        return {'text': text}
+
+    @application.post('/v1/letters')
+    def letter_upload(file: UploadFile = File(...), note: str | None = Form(None, max_length=20000), user=Depends(authenticate)):
+        from .uploads import LETTER_TYPES, read_upload, letter_summary
+        from vali_media.letters import LetterError
+        check_task_budget(application, user)
+        data, mime = read_upload(file, LETTER_TYPES)
+        if not config.anthropic_api_key:
+            raise HTTPException(503, 'Letter reading is not configured')
+        try:
+            summary = letter_summary(data, mime, note)
+        except LetterError:
+            raise HTTPException(502, 'Letter reading failed privacy validation or provider request') from None
+        page = {'title': 'Uploaded letter', 'url': '', 'text': summary, 'selection': summary}
+        body = TaskBody(task=(note or '').strip() or 'Explain this letter and tell me what to do', page=page)
+        return create_task_for_user(body, user, budget_checked=True)
 
     @application.post('/v1/tasks')
     def create_task(body: TaskBody, user=Depends(authenticate)):

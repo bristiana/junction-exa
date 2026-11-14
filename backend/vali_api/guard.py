@@ -43,9 +43,10 @@ def authenticate(request: Request):
     return user
 
 
-def check_task_budget(application, user):
+def check_task_budget(application, user, *, count_request=True):
     """Limit task creations and reject research once recorded daily costs reach the cap."""
     state = application.state
-    state.limiter.check('user:' + user['id'], state.limiter.user_limit)
+    if count_request:
+        state.limiter.check('user:' + user['id'], state.limiter.user_limit)
     if state.store.daily_spend(user['id']) >= state.config.daily_cap_usd:
         raise HTTPException(429, 'Daily research spend cap reached')

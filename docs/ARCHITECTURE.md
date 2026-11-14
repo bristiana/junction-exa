@@ -39,14 +39,14 @@ WhatsApp (Meta) ──┘     │  Postgres (Aiven)     └─ browser sandbox (
 
 ## Identity and shared context
 
-No accounts. The extension calls `POST /v1/users` once and keeps `{user_id, token}`. Every other call sends `Authorization: Bearer <token>`.
+No accounts. The extension calls `POST /v1/users` once and keeps `{user_id, token}`. Authenticated calls send `Authorization: Bearer <token>`. Device linking also lets a second device exchange a one-use code for that same token without creating another user.
 WhatsApp is linked by a pairing code: the extension calls `POST /v1/pair`, shows a 6-digit code, the user sends `link 123456` to the Vali WhatsApp number. From then on that number acts as that user: tasks started on either side appear on both.
 
 Personal details (name, email, address, ...) live in the extension. The LLMs only ever see placeholders like `{{name}}`; real values are substituted inside the sandbox at typing time and masked back to placeholders in every page snapshot the LLM sees. A user may opt in to `PUT /v1/profile` so tasks started from WhatsApp can fill forms too; that copy is stored in Postgres and only read by the sandbox.
 
 All `VALI_*` settings also accept the legacy `HOIDA_*` name when the new name is unset. An explicitly empty new value takes precedence. This includes `VALI_EFFORT` and `VALI_PRICES`.
 
-## API (all JSON, base `VALI_PUBLIC_URL`)
+## API (JSON except multipart uploads, base `VALI_PUBLIC_URL`)
 
 | Method and path | Body | Returns |
 |---|---|---|
@@ -56,6 +56,10 @@ All `VALI_*` settings also accept the legacy `HOIDA_*` name when the new name is
 | `PUT /v1/profile` | `{profile: {name, email, ...}}` (empty object deletes it) | `{ok}` |
 | `POST /v1/pair` | | `{code, expires_at}` (6 digits, 10 min) |
 | `POST /v1/tasks` | `{task, page?, effort?, previous_task_id?}` | Task |
+| `POST /v1/voice` | Bearer auth; multipart `audio` (webm/ogg/m4a/wav, max 10 MiB), `create?` (`"1"` creates task) | `{text}` or Task plus `text`; 400 empty/no speech, 413 oversized, 415 unsupported, 503 unconfigured |
+| `POST /v1/letters` | Bearer auth; multipart `file` (jpeg/png/webp/heic/pdf, max 10 MiB), `note?` | Task with note (default `Explain this letter and tell me what to do`) and redacted summary in `page: {title: "Uploaded letter", url: "", text, selection}`; 400 unreadable PDF/HEIC, 413 oversized, 415 unsupported, 503 unconfigured |
+| `POST /v1/link/code` | Bearer auth; no body | `{code: "123456", expires_in: 600}`; replaces that user's previous device code |
+| `POST /v1/link` | No auth; `{code: "123456"}` (string preserves leading zeros) | `{token}` (same bearer token); one use, 404 unknown/expired/spent, 429 rate limit |
 | `GET /v1/tasks?limit=30` | | `{tasks: [Task]}` newest first, both sources |
 | `GET /v1/tasks/{id}` | | Task |
 | `POST /v1/tasks/{id}/cancel` | | Task |
@@ -68,6 +72,8 @@ All `VALI_*` settings also accept the legacy `HOIDA_*` name when the new name is
 | `POST /webhooks/whatsapp` | Meta webhook, signature checked with `WHATSAPP_APP_SECRET` | `{ok}` |
 
 `page` is what the extension captured: `{url, title, selection, text, fields: [{id, label, type, required, options?}]}`. Page text is redacted in the extension before it is sent.
+
+Uploads share the task creation user rate limit and daily spend cap, including transcript-only voice requests. Provider failures return 502. PDFs require extractable text (up to 100 pages and 100000 characters); scanned PDFs are rejected. HEIC is converted to PNG before vision. Only the redacted summary is stored as letter context; filenames are not stored. Device codes are stored hashed in `device_link_codes` on both database engines; the bearer token is encrypted under a salted scrypt-derived code key for the ten-minute handoff. Issuance and redemption each allow 10 requests per ten minutes per user/IP respectively, in addition to the existing IP guard. Limits remain process-local, as for task creation. Link responses carry `Cache-Control: no-store`.
 
 ### Task
 
