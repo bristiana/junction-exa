@@ -16,6 +16,10 @@ Judging criteria (20% each): Use of Exa, Usefulness, Clarity of sources, Origina
 
 The letter is `scripts/fixtures/letter.png`.
 
+## Before the demo
+
+Run `backend/.venv/bin/python scripts/demo_seed.py --token-file <file>` once, 10 minutes ahead, on the demo account's token. It creates three finished research errands (a find, the EU261 claim, the letter) so the list is not empty when the app opens. It never executes or approves anything. Use `--dry-run` to see what it would create. The token is the one the Mac app uses: it is stored encrypted in the app's settings (`~/Library/Application Support/Vali`) and desktop/README.md does not document exporting it, so save the demo account's token to a file when the account is created (Settings > Advanced accepts a token).
+
 ## Before the judges arrive (T-15 min)
 
 1. `GOLDEN_TOKEN=... backend/.venv/bin/python scripts/golden.py`. All checks must pass. This also warms Modal.
