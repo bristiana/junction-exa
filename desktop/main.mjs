@@ -25,7 +25,7 @@ else if (process.env.VALI_USER_DATA) app.setPath('userData', process.env.VALI_US
 app.setName('Vali');
 let config = { backendUrl: DEFAULT_URL, effort: 'low', profile: {} }, session = {}, tasks = [], paused = false, polling = false, quitting = false;
 let mascot, chat, quick, glance, tray, pollTimer, configFile, lastTab = null, glanceTimer, stage, stageTimer;
-const shortcuts = { quick: '', voice: '', ask: '', talk: '' };
+const shortcuts = { quick: '', voice: '', ask: '', talk: '', glance: '' };
 // Talk to Vali runs in the mascot window; it reports '', 'connecting', 'listening' or 'speaking'.
 let talking = '', facing = '', sleeping = false, lastBusyAt = Date.now();
 let persistChain = Promise.resolve();
@@ -436,6 +436,7 @@ function trayMenu() {
     { label: 'Open chat', click: () => openChat() },
     { label: 'New errand', accelerator: shortcuts.quick || undefined, click: () => quickWithPage('type') },
     { label: talking ? 'Stop talking' : 'Talk to Vali', accelerator: shortcuts.talk || undefined, click: toggleTalk },
+    { label: 'Show errands', accelerator: shortcuts.glance || undefined, click: () => showGlance({ focus: true }) },
     { label: 'Say an errand', accelerator: shortcuts.voice || undefined, click: () => quickWithPage('voice') },
     { label: paused ? 'Resume' : 'Pause', type: 'checkbox', checked: paused, click: () => { paused = !paused; publish(); trayMenu(); if (!paused) poll().catch(() => {}); } },
     { label: `iMessage: ${imessageView().enabled ? imessageView().status === 'running' ? 'On' : 'Needs permission' : 'Off'}`, type: 'checkbox', checked: imessageView().enabled, enabled: !!imessage,
@@ -493,6 +494,15 @@ async function runSmoke() {
   showGlance({ focus: true });
   await waitFor(glance, `document.querySelectorAll('.item').length >= 6 && document.querySelector('.live img')?.naturalWidth > 0`, 'Glance with every state missing');
   await capture(glance, out, 'glance-all'); await captureLight(glance, out, 'glance-all');
+  // Keyboard: Down puts the ring on an errand, a second Down moves it to the next; the picture shows the ring and the key hint.
+  const focusAt = () => glance.webContents.executeJavaScript(`[...document.querySelectorAll('.item')].findIndex(li => li.classList.contains('focus'))`);
+  const pressDown = async want => {
+    glance.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Down' });
+    await waitFor(glance, `[...document.querySelectorAll('.item')].findIndex(li => li.classList.contains('focus')) === ${want}`, 'Arrow Down did not move the focus ring');
+  };
+  await pressDown(Math.max(await focusAt(), -1) + 1);
+  await pressDown(await focusAt() + 1);
+  await capture(glance, out, 'glance-keys');
   updateTasks(before);
   openChat();
   await captureLight(chat, out, 'chat');
@@ -713,6 +723,8 @@ else {
       };
       if (globalShortcut.register('Alt+Shift+Space', onVoice)) shortcuts.voice = 'Alt+Shift+Space';
       if (globalShortcut.register('Alt+Shift+A', () => askAboutThis())) shortcuts.ask = 'Alt+Shift+A';
+      // The list of every errand, focused so the keys work at once (a second press closes it). Alt+Shift+E if G is taken.
+      for (const key of ['Alt+Shift+G', 'Alt+Shift+E']) if (globalShortcut.register(key, toggleGlance)) { shortcuts.glance = key; break; }
       let lastTalk = 0;
       const onTalk = () => { if (Date.now() - lastTalk > 500) toggleTalk(); lastTalk = Date.now(); };
       if (globalShortcut.register('Alt+Shift+V', onTalk)) shortcuts.talk = 'Alt+Shift+V';
