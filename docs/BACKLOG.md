@@ -83,11 +83,14 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 ## H. Voice and iMessage
 - [x] V1 Talk to Vali: an ElevenLabs agent (created through the ElevenLabs API by a script in backend/scripts/, id stored as VALI_ELEVENLABS_AGENT_ID) with server tools that call our API: create errand, task status, read approval, approve, stop. POST /v1/voice/session returns a signed conversation URL for the authed user. The Mac app's mascot opens a live voice conversation (WebSocket/WebRTC from the ElevenLabs JS client). Verify with a real spoken round trip.
 - [x] V3 Live captions, state chip and mic ring while talking to Vali.
+- [x] V4 Voice verified end to end without a mic: ElevenLabs simulation test drives the real agent and our tool webhooks (scripts/voice_check.py, 14/14).
 - [ ] V2 Phone (only if Bogdan buys a Twilio number): import it into ElevenLabs, inbound calls reach the same agent, and Vali calls you when an approval is waiting (POST /v1/convai/twilio/outbound-call).
 - [x] I1 Spec: docs/IMESSAGE.md. No official iMessage API for bots (Apple Messages for Business needs an approved provider). Workable path: a Mac signed in to a dedicated Vali Apple ID runs a bridge in the Mac app that reads ~/Library/Messages/chat.db (Full Disk Access) and replies through AppleScript to Messages. Allowed senders only, linked to a Vali account with a code. Works while that Mac is on.
 - [x] I2 Build the bridge in desktop/ (imessage.mjs in the main process, a Settings toggle, allowed handles, link code flow), reusing the WhatsApp flow logic: errand in, result out, "da"/"stop" for approvals. Test with a fixture chat.db; live test needs the dedicated Apple ID.
 
 ## Needs Bogdan
+- Voice: in one real call, check whether the agent says its mood tags out loud ([happy], [calm]). If it does, remove them in the ElevenLabs agent settings.
+- Rotate the keys pasted in chat during the event (Exa, Anthropic, ElevenLabs, Meta, Aiven, Modal).
 - Codex runs: the permission classifier sometimes blocks `codex exec` (sends code to OpenAI). Allow it with a Bash permission rule if you want Codex workers; until then Claude workers take those tasks.
 - WhatsApp (parked): Meta rejects every outbound message with 131031 "Business Account locked". In WhatsApp Manager, check why the account is locked and request a review. Until then Vali receives messages but cannot reply (A1, plus a live check of A3-A5).
 
@@ -103,3 +106,4 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - 06:20 Merged #19 mascot bubble (approval vs question vs hand-off) and #20 Exa cache (10 min, hit costs 0). Extension visual review done, ships with Exa during form runs. Running: Exa during form runs, 10-errand sweep on new sites, Mac first run.
 - 06:50 Merged #21-#25: how-to questions route to check, Mac first-run welcome, live captions while talking, Exa lookups during form runs (masked before sending, shown in the trail), extension polish. New-site sweep 8/10 (dentist routing fixed; Espoo form was down for maintenance). Golden 4/4. Running: outage hand-off + address suggestion guard fix, extension leftovers, demo docs, dmg rebuild.
 - 07:45 Merged #26-#35: demo docs, one-line composer, mascot narrates Exa and has a searching pose, golden lookup check, Mac live end-to-end check (demo flow passed twice), plain answers read Done, keyboard control of the list, site outages become a hand-off and address suggestions click (stricter guard kept for 'Place order'). Golden 5/5 after fixing the lookup errand's delivery time.
+- 08:30 Merged #37-#39: 08:00 regression 20/21 (sauna payment hand-off is intended, eval updated), voice check end to end (citation markers no longer spoken), letters reply to the sender and done text shows your details only on your device (company contact details checked in code). Live = main, golden 5/5. dmg rebuilt.
