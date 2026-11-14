@@ -10,6 +10,7 @@ import { fillPlaceholders } from "./lib/actions.js";
 import { redactText } from "./lib/redact.js";
 import * as backend from "./lib/backend.js";
 import { isLinkSender, linkCodeInput } from "./lib/device-link.js";
+import { planFill, errandValues } from "./lib/fill-here.js";
 import { cacheKey, helpfulPage, companionPayload, cleanTip, cachedEntry, remember } from "./lib/companion.js";
 
 const MAX_TASKS = 30;
@@ -270,6 +271,21 @@ async function fillForm(taskId) {
   const [res] = await chrome.scripting.executeScript({ target: { tabId: target }, func: fillPage, args: [resolved] });
   return res?.result || { filled: 0, skipped: [] };
 }
+// "Fill it here": the form on the tab the user is on, from this browser's details and the errand's values.
+// Never submits; passwords, cards and bank fields are left alone (lib/fill-here.js). Vali on the page says the rest.
+async function fillHere(taskId, tabId) {
+  const { profile } = await settings();
+  const t = taskId ? await findTask(taskId) : null;
+  const tab = tabId ? await chrome.tabs.get(tabId).catch(() => null) : (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];
+  if (!tab?.id || !/^https?:/.test(tab.url || "")) return { filled: 0, error: "Open the page with the form first." };
+  const [cap] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage });
+  const plan = planFill(cap?.result?.fields, { profile, values: errandValues(t) });
+  if (!plan.length) return { filled: 0, error: "I found nothing here I can fill from your details. Check them in settings." };
+  const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPage, args: [plan.map(({ field_id, value }) => ({ field_id, value }))] });
+  const filled = res?.result?.filled || 0;
+  if (filled) chrome.tabs.sendMessage(tab.id, { type: "vali-say", text: `I filled ${filled} field${filled === 1 ? "" : "s"}. Check and send it yourself.` }).catch(() => {});
+  return { filled };
+}
 function sameDoc(a, b) {
   try { const x = new URL(a), y = new URL(b); return x.origin === y.origin && x.pathname === y.pathname; } catch (_) { return false; }
 }
@@ -387,6 +403,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     "companion-tip": () => companionTip(msg.page, sender),
     "companion-seen": () => markTipSeen(sender.url),
     fill: () => fillForm(msg.taskId),
+    fillHere: () => fillHere(msg.taskId, msg.tabId),
     cancel: async () => {
       const t = await findTask(msg.taskId);
       if (t?.backend) {

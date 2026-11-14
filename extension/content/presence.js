@@ -407,6 +407,11 @@
     maybeShow();
   }, 1000);
 
+  // After "Fill it here" in the panel: "Check and send it yourself."
+  ext.runtime.onMessage.addListener((msg) => {
+    if (msg?.type === "vali-say" && typeof msg.text === "string") say(msg.text.slice(0, 200), 10000);
+  });
+
   // ---------- the setting ----------
   try {
     ext.storage.local.get("presence").then((r) => { if (r.presence === false) { page.off = true; hide(); } }, () => {});
