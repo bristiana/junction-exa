@@ -146,3 +146,8 @@ test('the mascot searches during research and serves during browser runs', () =>
   assert.equal(mascotState([research, task('completed', { status: 'awaiting_approval' }, 1)]), 'needs_approval');
   assert.equal(bubbleLine({ pose: 'searching', badge: { count: 1 } }), 'I’m on it.');
 });
+
+test('captions hide expressive voice tags', async () => {
+  const { talkCaption } = await import('../logic.mjs');
+  assert.equal(talkCaption({ agent: '[happy] Good news, Löyly is open. [calm]', agentAt: 2, userAt: 1, now: 10000 }).text, 'Good news, Löyly is open.');
+});

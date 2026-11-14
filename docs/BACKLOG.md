@@ -89,7 +89,6 @@ WhatsApp is parked: Meta blocks sending from unverified business portfolios (131
 - [x] I2 Build the bridge in desktop/ (imessage.mjs in the main process, a Settings toggle, allowed handles, link code flow), reusing the WhatsApp flow logic: errand in, result out, "da"/"stop" for approvals. Test with a fixture chat.db; live test needs the dedicated Apple ID.
 
 ## Needs Bogdan
-- Voice: in one real call, check whether the agent says its mood tags out loud ([happy], [calm]). If it does, remove them in the ElevenLabs agent settings.
 - Rotate the keys pasted in chat during the event (Exa, Anthropic, ElevenLabs, Meta, Aiven, Modal).
 - Codex runs: the permission classifier sometimes blocks `codex exec` (sends code to OpenAI). Allow it with a Bash permission rule if you want Codex workers; until then Claude workers take those tasks.
 - WhatsApp (parked): Meta rejects every outbound message with 131031 "Business Account locked". In WhatsApp Manager, check why the account is locked and request a review. Until then Vali receives messages but cannot reply (A1, plus a live check of A3-A5).
