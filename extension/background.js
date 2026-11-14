@@ -14,7 +14,7 @@ import { cacheKey, helpfulPage, companionPayload, cleanTip, cachedEntry, remembe
 
 const MAX_TASKS = 30;
 const MAX_HIDDEN = 200;
-
+const EXPLAIN_QUESTION = "What does this mean and what should I do?"; // "Ask Vali about this" on a selection
 // ---------- storage (serialized so two polls never overwrite each other) ----------
 let chain = Promise.resolve();
 function withTasks(fn) {
@@ -39,7 +39,7 @@ async function findTask(id) {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "vali-selection", title: "Vali: take care of this", contexts: ["selection"] });
+    chrome.contextMenus.create({ id: "vali-selection", title: "Ask Vali about this", contexts: ["selection"] });
     chrome.contextMenus.create({ id: "vali-page", title: "Vali: help with this page", contexts: ["page", "link"] });
   });
   schedulePoll();
@@ -53,13 +53,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
   // Must run synchronously inside the click to count as a user gesture.
   chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+  const selection = info.selectionText || "";
   await chrome.storage.session.set({
     prefill: {
       at: Date.now(),
       tabId: tab.id,
-      selection: info.selectionText || "",
+      selection,
       link: info.linkUrl || "",
       pageTitle: tab.title || "",
+      ...(selection ? { source: "explain", task: EXPLAIN_QUESTION, usePage: true } : {}),
     },
   });
 });
@@ -303,8 +305,6 @@ function openWithPrefill(msg, sender, reply, prefill) {
   opening.then((opened) => reply({ ok: true, data: { opened } }));
   return true;
 }
-
-const EXPLAIN_QUESTION = "What does this mean and what should I do?";
 
 // "Do it" on a tip: the tip's errand starts right away, with this page attached, and the panel shows it.
 function startFromTip(msg, sender, reply) {

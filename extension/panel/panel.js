@@ -850,13 +850,15 @@ async function load() {
 function applyPrefill(p) {
   prefill = p;
   if (p.task) {
-    // from the badge on a form page: "Help me fill in this form", with this page attached
+    // a ready question with this page attached: "Help me fill in this form" from the badge on a form page, or
+    // "What does this mean and what should I do?" from "Ask Vali about this" on a selection (one press on Send)
     $("task").value = p.task;
     $("usePage").checked = p.usePage !== false;
   } else if (p.link && !p.selection) {
     $("task").value = `Help me with this link: ${p.link}\n`;
   }
-  $("task").focus();
+  fitTask();
+  (p.source === "explain" ? $("send") : $("task")).focus();
   refreshActiveTab();
 }
 
