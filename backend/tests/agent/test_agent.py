@@ -113,6 +113,12 @@ def test_privacy():
         substitute('{{missing}}', PROFILE)
 
 
+def test_public_fields_are_not_masked():
+    profile = PROFILE | {'city': 'Helsinki', 'country': 'Finland'}
+    assert mask('City of Helsinki, Finland: Test Person', profile) == 'City of Helsinki, Finland: {{name}}'
+    assert substitute('{{city}}', profile) == 'Helsinki'
+
+
 def test_strict_schemas():
     for tool in TOOLS:
         schema = tool['input_schema']

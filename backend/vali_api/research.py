@@ -198,7 +198,8 @@ def build_run_request(task, page=None, profile=None, effort='low'):
 
 FIND_SCHEMA = {'type': 'object', 'properties': {
     'answer': {'type': 'string'},
-    'options': {'type': 'array', 'items': {'type': 'object', 'properties': {
+    'options': {'type': 'array', 'description': '3 to 5 different options (places, products or services), '
+                'each with its own page to book or buy', 'items': {'type': 'object', 'properties': {
         k: {'type': 'string'} for k in ('name', 'detail', 'price', 'url')},
         'required': ['name', 'detail', 'price', 'url']}},
     'next_step': {'type': 'string'}}, 'required': ['answer', 'options', 'next_step']}
