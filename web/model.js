@@ -208,7 +208,7 @@ export function countersOf(stats, tasks) {
   const found = tasks.map((task) => findStats(task, sourcesOf(task)));
   return {
     errands: tasks.length,
-    searches: found.reduce((sum, f) => sum + f.searches, 0),
+    searches: found.reduce((sum, f) => sum + f.searches, 0) || null, // older tasks rarely log searches: unknown, not zero
     pages: found.reduce((sum, f) => sum + f.pages, 0),
     cost: found.reduce((sum, f) => sum + (f.cost || 0), 0),
   };

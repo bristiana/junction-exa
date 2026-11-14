@@ -69,4 +69,6 @@ test("errand rows: who acts next, which channel, and counters with or without /v
   assert.equal(channelOf({ source: "extension", page: { title: "Uploaded letter" } }), "letter");
   assert.deepEqual(countersOf({ total: 42, exa: { searches: 120, pages_read: 310 }, cost_usd: 0.81 }, []), { errands: 42, searches: 120, pages: 310, cost: 0.81 });
   assert.deepEqual(countersOf(null, [legacy]), { errands: 1, searches: 1, pages: 2, cost: 0.025 });
+  assert.equal(countersOf(null, [{ research: { status: "completed" } }]).searches, null);
 });
+
