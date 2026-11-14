@@ -60,7 +60,9 @@ async function call(method, path, body) {
 }
 
 export const api = {
-  createTask: (task, previousTaskId) => call('POST', '/v1/tasks', { task, previous_task_id: previousTaskId || undefined }),
+  // knownDetails: names of the saved details (never values), so the research writes {{name}} instead of asking.
+  createTask: (task, previousTaskId, knownDetails = []) => call('POST', '/v1/tasks',
+    { task, previous_task_id: previousTaskId || undefined, known_details: knownDetails.length ? knownDetails : undefined }),
   task: (id) => call('GET', `/v1/tasks/${encodeURIComponent(id)}`),
   tasks: () => call('GET', '/v1/tasks?limit=50'),
   stats: () => call('GET', '/v1/stats'),

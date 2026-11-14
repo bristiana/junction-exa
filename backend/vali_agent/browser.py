@@ -468,18 +468,23 @@ class Browser:
             }''', status))
         return [kind for kind in ('unavailable','login','captcha','payment') if kind in found]
 
-    def screenshot_jpeg(self, quality=60, profile=None):
+    def screenshot_jpeg(self, quality=60, profile=None, all_fields=False):
         if not profile:
             return self.page.screenshot(type='jpeg', quality=quality)
-        # Cover profile-bearing DOM regions so image tools cannot reveal typed values.
-        self.page.evaluate('''values => {
+        if all_fields and any(frame.evaluate('() => !!document.querySelector("input,textarea,select,[contenteditable]")')
+                              for frame in self.page.frames if frame is not self.page.main_frame):
+            return None  # a form inside a frame cannot be masked from here: no picture at all
+        # Cover profile-bearing DOM regions so image tools cannot reveal typed values. all_fields also covers every
+        # text field and select, so a value the page reformatted (a phone with spaces removed) stays hidden too.
+        self.page.evaluate('''([values, allFields]) => {
           document.querySelectorAll('[data-vali-private]').forEach(el=>el.removeAttribute('data-vali-private'));
           const privateText=s=>values.some(v=>String(s||'').toLowerCase().includes(v.toLowerCase()));
           for(const el of document.querySelectorAll('body *')) {
             if(privateText(el.value) || [...el.childNodes].some(n=>n.nodeType===3 && privateText(n.textContent)) || [...el.attributes].some(a=>privateText(a.value))) el.setAttribute('data-vali-private','1');
           }
+          if(allFields) document.querySelectorAll('input:not([type=radio]):not([type=checkbox]):not([type=submit]):not([type=button]):not([type=hidden]),textarea,select,[contenteditable]').forEach(el=>el.setAttribute('data-vali-private','1'));
           if(document.querySelector('canvas')) document.body.setAttribute('data-vali-private','1');
-        }''', list(private_values(profile).values()))
+        }''', [list(private_values(profile).values()), all_fields])
         try:
             return self.page.screenshot(type='jpeg', quality=quality, mask=[self.page.locator('[data-vali-private]')])
         finally:

@@ -184,7 +184,7 @@ def clip(value, n):
     return value[:n] + '…' if len(value) > n else value
 
 
-def build_query(task, page=None, profile=None):
+def build_query(task, page=None, profile=None, known_details=()):
     profile, page = profile or {}, page or {}
     parts = [f'Errand: {task.strip()}']
     detected, lang = detect(task), (profile.get('language') or '').strip()
@@ -194,7 +194,7 @@ def build_query(task, page=None, profile=None):
                      'language of the errand; search and read sources in Finnish or English as needed.')
     elif lang:
         parts.append(f'Answer in: {lang}.')
-    known = [k for k in PROFILE_FIELDS if k != 'language' and profile.get(k)]
+    known = [k for k in PROFILE_FIELDS if k != 'language' and (profile.get(k) or k in known_details)]  # names only
     if known:
         parts.append('The user has saved these details (use placeholders, the values stay on their device): ' + ', '.join(known) + '.')
     if profile.get('city'):
@@ -236,8 +236,8 @@ Only what the source says:
 - When you assume something, say so plainly in the answer ("Assuming your flight left from Helsinki, ...")."""
 
 
-def build_run_request(task, page=None, profile=None, effort='low'):
-    return dict(query=build_query(task, page, profile), systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST,
+def build_run_request(task, page=None, profile=None, effort='low', known_details=()):
+    return dict(query=build_query(task, page, profile, known_details), systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST,
                 effort=effort, outputSchema=output_schema(bool((page or {}).get('fields'))), metadata={'app': 'vali'})
 
 

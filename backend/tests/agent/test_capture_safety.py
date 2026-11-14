@@ -35,6 +35,10 @@ def test_capture_stops_before_personal_substitution(monkeypatch, fill_fails):
         def blockers(self): return []
         def personal_field(self, ref, approved=False): pass
         def screenshot_jpeg(self, **kwargs):
+            if kwargs.get('all_fields'):  # the last picture after finish, every field masked
+                assert kwargs['profile'] and events[-1] == 'fill'
+                events.append('masked')
+                return b'masked'
             events.append('screenshot')
             assert 'fill' not in events
             return b'jpeg'
@@ -59,8 +63,8 @@ def test_capture_stops_before_personal_substitution(monkeypatch, fill_fails):
     result = run_browser_agent('Fill email', 'https://example.com', {'email': 'secret@example.com'},
                                hooks, model, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
     assert result.status == 'done'
-    assert events == ['screenshot', 'closed', 'fill']
-    assert frames[0] == b'jpeg' and all(frame is None for frame in frames[1:])
+    assert events == ['screenshot', 'closed', 'fill', 'masked']
+    assert frames[0] == b'jpeg' and frames[-1] == b'masked' and all(frame is None for frame in frames[1:-1])
     assert 'Images paused' in str(model.received[-1])
     assert 'secret@example.com' not in str(model.received)
 

@@ -25,9 +25,10 @@ const fake = { name: "Test Person", email: "test@example.com", phone: "+358 40 0
 test("Your details stay out of the errand and go only with Fill it for me", async () => {
   assert.equal(saveProfile(fake), true);
   requests.length = 0;
-  await api.createTask("Order a pizza on https://httpbin.org/forms/post with my name and email");
+  await api.createTask("Order a pizza on https://httpbin.org/forms/post with my name and email", null, Object.keys(loadProfile()));
   const create = requests.find((r) => r.url.endsWith("/v1/tasks"));
   assert.ok(create && !("profile" in create.body));
+  assert.deepEqual(create.body.known_details, ["name", "email", "phone"]); // names only
   for (const r of requests) {
     for (const value of Object.values(fake)) {
       assert.ok(!JSON.stringify(r.body ?? "").includes(value), "no detail in " + r.url);
@@ -40,6 +41,8 @@ test("Your details stay out of the errand and go only with Fill it for me", asyn
   assert.deepEqual(execute.body, { action_index: 0, profile: fake });
   await api.execute("t_1", 0, {});
   assert.deepEqual(requests.at(-1).body, { action_index: 0 });
+  await api.createTask("Find a sauna", null, []);
+  assert.deepEqual(requests.at(-1).body, { task: "Find a sauna" });
 });
 
 test("Delete my details clears this browser's copy", () => {

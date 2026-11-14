@@ -33,3 +33,17 @@ def test_execute_uses_only_the_profile_it_carries(api):
     client.post(f"/v1/tasks/{task['id']}/execute", json={'profile': {'name': 'Aino Virtanen'}})
     assert browsers[-1][3] == {'name': 'Aino Virtanen'}
     assert 'Aino' not in json.dumps(store.get_task(task['id'])) and 'Aino' not in json.dumps(store.get_user(user['user_id']))
+
+
+def test_errands_carry_only_the_names_of_saved_details(api):
+    client, application, store, calls, polls, browsers, user = api
+    kinds = set()
+    for text in ['find café in Helsinki', 'Register my new address with DVV and fill the form']:
+        task = client.post('/v1/tasks', json={'task': text, 'known_details': ['email', 'name', 'email']}).json()
+        kinds.add(task['research']['kind'])
+        query = [body for method, path, body in calls if method == 'POST' and body and 'query' in body][-1]['query']
+        assert 'The user has saved these details (use placeholders, the values stay on their device): name, email.' in query
+        assert task['research']['known_details'] == ['email', 'name']
+    assert kinds == {'search', 'agent'}  # both research paths get the hint
+    for bad in [['Test Person'], ['test@example.com'], ['language'], ['name'] * 10, 'name']:
+        assert client.post('/v1/tasks', json={'task': 'find café', 'known_details': bad}).status_code == 422
