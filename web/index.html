@@ -18,6 +18,7 @@
   <a class="brand" href="#/">Vali</a>
   <div class="top-right">
     <button type="button" id="to-errands" class="link-btn">Your errands</button>
+    <button type="button" id="to-trust" class="link-btn">Privacy</button>
     <span class="by-exa">Search by <b>Exa</b></span>
     <div class="palette-picker">
       <button type="button" id="palette" class="palette-btn" aria-label="Vali's colours" aria-haspopup="menu"></button>
@@ -59,5 +60,13 @@
   <section id="working" class="view working" hidden></section>
   <section id="answer" class="view answer" hidden></section>
 </main>
+
+<dialog id="trust" class="sheet" aria-labelledby="trust-title">
+  <form method="dialog" class="sheet-head">
+    <h2 id="trust-title">What Vali keeps private</h2>
+    <button class="link-btn" aria-label="Close">Close</button>
+  </form>
+  <div id="trust-body"></div>
+</dialog>
 </body>
 </html>

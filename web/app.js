@@ -7,6 +7,7 @@ import { renderAnswer } from './answer.js';
 import { startMic } from './mic.js';
 import { renderDashboard } from './dashboard.js';
 import { createMascot, mountPalettePicker } from './mascot.js';
+import { openTrust } from './trust.js';
 
 const POLL_MS = 1500;
 const DASHBOARD_MS = 10000;
@@ -124,6 +125,9 @@ $('to-errands').addEventListener('click', () => {
   if (location.hash.startsWith('#/t/')) location.hash = '#/';
   requestAnimationFrame(() => $('errands').scrollIntoView({ behavior: 'smooth' }));
 });
+
+$('to-trust').addEventListener('click', () => openTrust(followed?.task));
+$('trust').addEventListener('click', (event) => { if (event.target === $('trust')) $('trust').close(); });
 
 // ---------- routes ----------
 function route() {
