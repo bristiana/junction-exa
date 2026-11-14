@@ -1,8 +1,10 @@
 """One persistent browser page with snapshot references."""
 import re
+from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright, expect, TimeoutError as BrowserTimeout
 from .privacy import private_values
 from .guard import is_final_submit
+from .scope import site
 
 _CAPTURE = r'''({start, limit}) => {
  const visible = el => { const r=el.getBoundingClientRect(), s=getComputedStyle(el);
@@ -91,6 +93,7 @@ _CAPTURE = r'''({start, limit}) => {
 class Browser:
     def __init__(self, headless=True):
         self._refs = {}
+        self._sites = set()
         self._runtime = sync_playwright().start()
         try:
             self._browser = self._runtime.chromium.launch(headless=headless)
@@ -148,6 +151,10 @@ class Browser:
             if open_pages:
                 self.page, self._refs = open_pages[-1], {}
 
+        # Page-controlled redirects/popups may continue the flow on another site.
+        if self.page.url.startswith(('http://', 'https://')):
+            self._sites.add(site(self.page.url))
+
     def _wait_quiet(self, quiet_ms=250, cap_ms=2500):
         """Wait until the DOM stops changing and shows no "Loading..." or a lone "…" placeholder:
         calendars, slot lists and suggestion lists often fill in after network idle."""
@@ -172,9 +179,31 @@ class Browser:
             raise ValueError('Unknown element reference; call read_page')
         return frame.locator(f'[data-vali-ref="{ref}"]')
 
+    def _check_url(self, url):
+        destination = site(url)
+        if self._sites and destination not in self._sites:
+            raise ValueError('Destination is outside the start site and its page redirects')
+        return destination
+
+    def personal_field(self, ref):
+        """Personal substitutions belong in ordinary fields on the authorized site only."""
+        frame = self._refs[ref]
+        self._check_url(frame.url)
+        safe = self._element(ref).evaluate(r"""el => {
+          const metadata = [el.name, el.id, el.getAttribute('aria-label'), el.placeholder,
+            el.getAttribute('autocomplete')].filter(Boolean).join(' ');
+          return (el.localName === 'select' || el.localName === 'input' &&
+            ['text','email','tel','number','date','time','datetime-local'].includes(el.type)) &&
+            !/search|query|message|comment|chat|recipient|compose|url|website/i.test(metadata);
+        }""")
+        if not safe:
+            raise ValueError('Personal placeholders require a personal-data field, never search or messages')
+
     def goto(self, url):
+        destination = self._check_url(url)
         if not re.match(r'^https?://', url, re.I):
             raise ValueError('Only http and https URLs are supported')
+        self._sites.add(destination)
         self._refs = {}
         try:
             # Public-sector sites can take well over 5 s to load.
@@ -235,8 +264,10 @@ class Browser:
         if how not in ('label', 'dom'):
             raise exc
 
-    @staticmethod
-    def _guard_click(el, approved=False):
+    def _guard_click(self, el, approved=False):
+        href = el.evaluate("el => el.closest('a[href]')?.getAttribute('href') || ''")
+        if href:
+            self._check_url(urljoin(self.page.url, href))
         description, label = el.evaluate("""el => [el.outerHTML + ' ' +
             [...(el.labels || [])].map(label => label.innerText).join(' ') + ' ' +
             (el.localName === 'button' ? 'button type=' + el.type : ''),

@@ -18,7 +18,7 @@ def test_selection_rejects_plain_send_button_before_click():
 @pytest.mark.parametrize('label', ['Send', 'Pay', 'Vahvista', 'Boka'])
 def test_selection_guards_combobox_opener(label):
     element = Mock()
-    element.evaluate.side_effect = [False, True, ('<div role=combobox>', label)]
+    element.evaluate.side_effect = [False, True, '', ('<div role=combobox>', label)]
     browser = Browser.__new__(Browser)
     browser._element = lambda ref: element
     browser._refs = {'e1': SimpleNamespace()}
@@ -30,11 +30,11 @@ def test_selection_guards_combobox_opener(label):
 def test_selection_guards_internal_option_click():
     option = Mock()
     option.inner_text.return_value = 'Send'
-    option.evaluate.return_value = ('<div role=option>Send</div>', 'Send')
+    option.evaluate.side_effect = ['', ('<div role=option>Send</div>', 'Send')]
     candidates = Mock()
     candidates.all.return_value = [option]
     opener = Mock()
-    opener.evaluate.side_effect = [False, True, ('<div role=combobox>', 'Destination'), '']
+    opener.evaluate.side_effect = [False, True, '', ('<div role=combobox>', 'Destination'), '']
     frame = Mock()
     frame.locator.return_value.locator.return_value.filter.return_value = candidates
     browser = Browser.__new__(Browser)
