@@ -17,7 +17,8 @@ from hoida_api.exa import ExaClient, ExaError
 from hoida_api.research import SYSTEM_PROMPT, output_schema, build_query, build_run_request, FIND_SCHEMA, progress_from_events
 from hoida_api.router import route
 from hoida_api.store import SQLiteStore
-from hoida_api.whatsapp import handle_whatsapp_message, send_whatsapp_message
+from hoida_wa.api import GraphAPIClient
+import asyncio
 
 
 @pytest.fixture
@@ -69,13 +70,13 @@ def test_pairing(api):
     client, _, store, *rest = api
     code = client.post('/v1/pair').json()['code']
     assert len(code) == 6
-    assert 'linked' in handle_whatsapp_message(store, '+358401234567', 'link ' + code, None)
+    assert store.link_number(code, '+358401234567')
     assert client.get('/v1/me').json()['whatsapp_last4'] == '4567'
-    assert 'invalid' in handle_whatsapp_message(store, '+358401234567', 'link ' + code, None)
+    assert not store.link_number(code, '+358401234567')
     code = client.post('/v1/pair').json()['code']
     store.sql('UPDATE pair_codes SET expires_at=? WHERE code=?', ('2000-01-01T00:00:00+00:00', code))
-    assert 'expired' in handle_whatsapp_message(store, '+358401234567', 'link ' + code, None)
-    assert 'invalid' in handle_whatsapp_message(store, '+358401234567', 'link 000000', None)
+    assert not store.link_number(code, '+358401234567')
+    assert not store.link_number('000000', '+358401234567')
 
 
 def test_search_and_isolation(api):
@@ -216,7 +217,7 @@ def test_webhooks_and_send_shape(api):
     assert client.get('/webhooks/whatsapp').status_code == 403
     config.whatsapp_app_secret = 'fake-app-secret'
     code = client.post('/v1/pair').json()['code']
-    payload = {'entry': [{'changes': [{'value': {'messages': [{'from': '+358401234567', 'text': {'body': 'link ' + code}}]}}]}]}
+    payload = {'entry': [{'changes': [{'value': {'messages': [{'from': '+358401234567', 'id': 'pair-message', 'type': 'text', 'text': {'body': 'link ' + code}}]}}]}]}
     raw = json.dumps(payload).encode()
     assert client.post('/webhooks/whatsapp', content=raw).status_code == 403
     signature = 'sha256=' + hmac.new(config.whatsapp_app_secret.encode(), raw, hashlib.sha256).hexdigest()
@@ -229,7 +230,10 @@ def test_webhooks_and_send_shape(api):
         assert request.headers['authorization'] == 'Bearer fake-token'
         assert json.loads(request.content) == {'messaging_product': 'whatsapp', 'to': '+358401234567', 'type': 'text', 'text': {'body': 'Test'}}
         return httpx.Response(200, json={'messages': [{'id': 'fake-message'}]})
-    send_whatsapp_message(config, '+358401234567', 'Test', transport=httpx.MockTransport(outbound))
+    async def send():
+        async with GraphAPIClient('fake-phone-id', 'fake-token', transport=httpx.MockTransport(outbound)) as graph:
+            await graph.send_text('+358401234567', 'Test')
+    asyncio.run(send())
 
 
 def test_exa_errors():
@@ -268,6 +272,10 @@ def test_browser_hooks_offline(api, monkeypatch):
     client, application, store, *_ = api
     task = client.post('/v1/tasks', json={'task': 'find café'}).json()
     tid = task['id']
+    graph = FakeWhatsApp()
+    application.state.whatsapp_api = graph
+    store.sql('UPDATE users SET wa_number=? WHERE id=?', ('358401234567', task['user_id']))
+    store.sql('UPDATE tasks SET source=? WHERE id=?', ('whatsapp', tid))
     assert client.post(f'/v1/tasks/{tid}/execute', json={}).status_code == 200
     @dataclass
     class FakeHooks:
@@ -291,6 +299,8 @@ def test_browser_hooks_offline(api, monkeypatch):
     assert execution['steps'][0]['shot'] == 1
     assert execution['shots'][0]['url'].endswith('/shots/1.jpg')
     assert store.get_shot(tid, 1) == b'fake-jpeg'
+    assert len(graph.sent) == 2
+    assert 'Reply *yes*' in graph.sent[0][1] and graph.sent[1][1] == 'Finished'
 
 
 def test_stop_cannot_be_overwritten(api):
@@ -335,3 +345,233 @@ def test_live_frame_is_served_to_the_owner_only(tmp_path):
         r = client.get(f"/v1/tasks/{task['id']}/live.jpg", params={'t': owner['token']})
         assert r.status_code == 200 and r.content == b'\xff\xd8frame2' and r.headers['cache-control'] == 'no-store'
         assert client.get(f"/v1/tasks/{task['id']}/live.jpg", params={'t': other['token']}).status_code == 404
+
+
+class FakeWhatsApp:
+    def __init__(self):
+        self.sent, self.read, self.media = [], [], []
+        self.fail_send = False
+
+    async def send_text(self, to, body, reply_to=None):
+        if self.fail_send:
+            raise RuntimeError('fake send failure')
+        self.sent.append((to, body, reply_to))
+
+    async def mark_read(self, mid):
+        self.read.append(mid)
+
+    async def get_media_url(self, mid):
+        self.media.append(mid)
+        return 'https://media.example/audio'
+
+    async def download_media(self, url):
+        return b'fake audio'
+
+
+@pytest.fixture
+def wa(api):
+    client, application, store, *_, user = api
+    graph = FakeWhatsApp()
+    application.state.whatsapp_api = graph
+    application.state.whatsapp_flow.api = graph
+    def deliver(text='', mid='message-1', number='358401234567', **media):
+        message = {'from': number, 'id': mid, 'type': 'text', 'text': {'body': text}, **media}
+        return client.post('/webhooks/whatsapp', json={'entry': [{'changes': [{'value': {'messages': [message]}}]}]})
+    return api, graph, deliver
+
+
+def pair_whatsapp(api, deliver):
+    code = api[0].post('/v1/pair').json()['code']
+    assert deliver('link ' + code, mid='pair').status_code == 200
+
+
+def test_whatsapp_unknown_pairing_and_shared_tasks(wa):
+    api, graph, deliver = wa
+    client, application, store, _, polls, _, user = api
+    assert deliver('claim refund', mid='unknown').status_code == 200
+    assert 'link 123456' in graph.sent[-1][1]
+    assert client.get('/v1/tasks').json()['tasks'] == []
+    pair_whatsapp(api, deliver)
+    assert client.get('/v1/me').json()['whatsapp_linked']
+    assert deliver('claim refund').status_code == 200
+    task = client.get('/v1/tasks').json()['tasks'][0]
+    assert task['user_id'] == user['user_id'] and task['source'] == 'whatsapp'
+    assert polls == [task['id']]
+    assert deliver('claim refund').status_code == 200
+    assert len(client.get('/v1/tasks').json()['tasks']) == 1
+    assert graph.read.count('message-1') == 1
+    before = len(graph.sent)
+    assert poll_research_once(task['id'], application)
+    assert len(graph.sent) == before + 1
+    assert 'Done' in graph.sent[-1][1] and 'Reply 1' in graph.sent[-1][1]
+    poll_research_once(task['id'], application)
+    assert len(graph.sent) == before + 1
+
+
+def test_whatsapp_inline_search_budget_and_watch(wa):
+    api, graph, deliver = wa
+    client, application, store, calls, polls, *_ = api
+    pair_whatsapp(api, deliver)
+    deliver('find café')
+    task = client.get('/v1/tasks').json()['tasks'][0]
+    assert task['mode'] == 'find' and task['source'] == 'whatsapp'
+    assert not polls and calls[-1][1] == '/search'
+    assert any('An option.' in body for _, body, _ in graph.sent)
+    deliver('watch for flats', mid='watch')
+    assert len(client.get('/v1/watches').json()['watches']) == 1
+    application.state.config.daily_cap_usd = 0.01
+    deliver('claim refund', mid='over-budget')
+    assert len(client.get('/v1/tasks').json()['tasks']) == 2
+
+
+def test_whatsapp_commands_use_shared_execution(wa):
+    api, graph, deliver = wa
+    client, application, store, _, _, browsers, _ = api
+    pair_whatsapp(api, deliver)
+    # An extension task can be selected from WhatsApp; newer unfinished research is skipped.
+    task = client.post('/v1/tasks', json={'task': 'find café'}).json()
+    client.post('/v1/tasks', json={'task': 'claim refund'})
+    deliver('1')
+    assert len(browsers) == 1 and browsers[0][0] == task['id']
+    assert 'https://example.com/form' == browsers[0][2]
+    assert json.loads(browsers[0][1])['action']['label'] == 'Option'
+    store.patch_execution(task['id'], {'status': 'awaiting_approval'})
+    deliver('yes', mid='approve')
+    assert store.get_task(task['id'])['execution']['approval_decision'] == 'approved'
+    deliver('yes', mid='approve-again')
+    assert client.post(f"/v1/tasks/{task['id']}/approve").status_code == 409
+    deliver('stop', mid='stop')
+    execution = store.get_task(task['id'])['execution']
+    assert execution['status'] == 'stopped' and execution['approval_decision'] == 'stopped'
+    assert 'Stopped' in graph.sent[-1][1]
+    assert client.post(f"/v1/tasks/{task['id']}/approve").status_code == 409
+
+
+def test_whatsapp_voice_and_unavailable_media(wa):
+    api, graph, deliver = wa
+    client, application, *_ = api
+    pair_whatsapp(api, deliver)
+    application.state.whatsapp_flow.transcribe = None
+    deliver(mid='unavailable', type='audio', audio={'id': 'audio', 'mime_type': 'audio/ogg'})
+    assert 'not available' in graph.sent[-1][1] and not graph.media
+    seen = []
+    def transcribe(data, mime):
+        seen.append((data, mime))
+        return 'find café from transcript'
+    application.state.whatsapp_flow.transcribe = transcribe
+    deliver(mid='voice', type='audio', audio={'id': 'audio', 'mime_type': 'audio/ogg'})
+    assert seen == [(b'fake audio', 'audio/ogg')] and graph.media == ['audio']
+    task = client.get('/v1/tasks').json()['tasks'][0]
+    assert task['task'] == 'find café from transcript' and task['source'] == 'whatsapp'
+
+
+def test_whatsapp_failed_push_does_not_break_poller(wa):
+    api, graph, deliver = wa
+    client, application, store, *_ = api
+    pair_whatsapp(api, deliver)
+    deliver('claim refund')
+    task = client.get('/v1/tasks').json()['tasks'][0]
+    graph.fail_send = True
+    assert poll_research_once(task['id'], application)
+    assert store.get_task(task['id'])['research']['status'] == 'completed'
+
+
+def test_whatsapp_dedupe_across_store_connections(tmp_path):
+    path = str(tmp_path / 'shared.db')
+    first, second = SQLiteStore(path), SQLiteStore(path)
+    try:
+        assert first.claim_whatsapp_message('redelivered')
+        assert not second.claim_whatsapp_message('redelivered')
+    finally:
+        first.close()
+        second.close()
+
+
+def test_whatsapp_response_is_sent_before_processing(wa):
+    api, graph, _ = wa
+    _, application, *_ = api
+    events = []
+    async def handle(message):
+        events.append('processing')
+    application.state.whatsapp_flow.handle = handle
+    raw = json.dumps({'entry': [{'changes': [{'value': {'messages': [
+        {'from': '358401234567', 'id': 'background', 'type': 'text', 'text': {'body': 'hello'}}]}}]}]}).encode()
+    async def request():
+        sent = False
+        async def receive():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {'type': 'http.request', 'body': raw, 'more_body': False}
+            await asyncio.sleep(10)
+            return {'type': 'http.disconnect'}
+        async def send(message):
+            if message['type'] == 'http.response.start':
+                assert message['status'] == 200
+            if message['type'] == 'http.response.body' and not message.get('more_body'):
+                events.append('response')
+        await application({'type': 'http', 'asgi': {'version': '3.0', 'spec_version': '2.4'},
+                           'http_version': '1.1', 'method': 'POST', 'scheme': 'http',
+                           'path': '/webhooks/whatsapp', 'raw_path': b'/webhooks/whatsapp',
+                           'query_string': b'', 'headers': [(b'content-type', b'application/json')],
+                           'client': ('127.0.0.1', 1234), 'server': ('testserver', 80)}, receive, send)
+    asyncio.run(request())
+    assert events == ['response', 'processing']
+
+
+@pytest.mark.parametrize('status', ['failed', 'stopped'])
+def test_whatsapp_browser_terminal_push(wa, monkeypatch, status):
+    import sys
+    import types
+    from hoida_api.app import run_browser_session
+    api, graph, deliver = wa
+    client, application, store, *_ = api
+    pair_whatsapp(api, deliver)
+    # Execution from WhatsApp opts an extension task into notifications too.
+    task = client.post('/v1/tasks', json={'task': 'find café'}).json()
+    deliver('1')
+    graph.sent.clear()
+    def agent(**kwargs):
+        return {'status': status, 'error': 'Fake failure', 'result': '', 'final_url': 'https://example.com'}
+    monkeypatch.setitem(sys.modules, 'hoida_agent', types.SimpleNamespace(
+        run_browser_agent=agent, AgentHooks=lambda **kwargs: kwargs))
+    run_browser_session(task['id'], 'goal', 'https://example.com', {}, application)
+    assert len(graph.sent) == 1
+    assert ('could not finish' if status == 'failed' else 'Stopped') in graph.sent[0][1]
+    assert store.get_task(task['id'])['execution']['status'] == status
+
+
+def test_whatsapp_failed_research_push(wa):
+    api, graph, deliver = wa
+    client, application, store, *_ = api
+    pair_whatsapp(api, deliver)
+    deliver('claim refund')
+    task = client.get('/v1/tasks').json()['tasks'][0]
+    graph.sent.clear()
+    failed_exa = ExaClient('fake', httpx.MockTransport(lambda request: httpx.Response(404, json={})))
+    application.state.exa = failed_exa
+    try:
+        assert poll_research_once(task['id'], application)
+        assert len(graph.sent) == 1 and 'Research failed' in graph.sent[0][1]
+        assert poll_research_once(task['id'], application)
+        assert len(graph.sent) == 1
+    finally:
+        failed_exa.close()
+
+
+def test_atomic_approval_rejects_stale_state(tmp_path):
+    path = str(tmp_path / 'approval.db')
+    first, second = SQLiteStore(path), SQLiteStore(path)
+    try:
+        user = first.create_user()
+        task = first.create_task(user['user_id'], 'test', None, 'check', {'status': 'completed'})
+        waiting = {'status': 'awaiting_approval', 'approval_decision': None}
+        first.update_execution(task['id'], waiting)
+        assert first.approve_execution(task['id'], waiting)
+        assert not second.approve_execution(task['id'], waiting)
+        second.patch_execution(task['id'], {'status': 'stopped', 'approval_decision': 'stopped'})
+        assert not first.approve_execution(task['id'], waiting)
+        assert first.get_task(task['id'])['execution']['approval_decision'] == 'stopped'
+    finally:
+        first.close()
+        second.close()

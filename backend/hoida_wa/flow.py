@@ -56,8 +56,8 @@ class WhatsAppFlow:
         if msg.kind in {"audio", "image"}:
             reader = self.transcribe if msg.kind == "audio" else self.read_letter
             if reader is None:
-                return render_error("Voice notes are coming soon. Please send your errand in text."
-                                    if msg.kind == "audio" else "Please describe the letter in text.")
+                return render_error("Voice notes are not available. Please send your errand in text."
+                                    if msg.kind == "audio" else "Letter reading is not available. Please describe the letter in text.")
             if not msg.media_id:
                 return render_error("This message has no downloadable media. Please send it again.")
             url = await self.api.get_media_url(msg.media_id)

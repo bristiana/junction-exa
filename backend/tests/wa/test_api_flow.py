@@ -212,7 +212,7 @@ def test_audio_and_photo(task):
         assert calls[-1] == ("create", "u_test", text, "whatsapp")
         assert len([r for r in requests if r.method == "GET"]) == 2
     assert media_calls == [(b"media bytes", "audio/ogg"), (b"media bytes", "image/jpeg", "Please explain")]
-    for message, expected in [(audio, "coming soon"), (image, "describe the letter in text")]:
+    for message, expected in [(audio, "not available"), (image, "describe the letter in text")]:
         bodies, _, requests = flow_scenario(task, message)
         assert expected in bodies[0]
         assert not any(r.method == "GET" for r in requests)

@@ -1,5 +1,6 @@
 """Vali HTTP API and injectable research/browser workers."""
-import hashlib
+import asyncio
+from contextvars import ContextVar
 import hmac
 import json
 from io import BytesIO
@@ -9,7 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
@@ -21,7 +22,10 @@ from .research import FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request
 from .jev import JevClient
 from .router import route
 from .store import make_store, now
-from .whatsapp import handle_whatsapp_message, send_whatsapp_message
+from hoida_wa.flow import WhatsAppFlow
+from hoida_wa.webhook import parse_webhook, verify_signature
+from hoida_wa.render import render_result, render_execution_update, render_error
+from .wa_channel import ChannelAPI, push_task
 
 TERMINAL = {'completed', 'failed', 'cancelled'}
 
@@ -87,7 +91,8 @@ def poll_research_once(task_id, application=None):
         if exc.status != 404:
             return False
         research = {**previous, 'status': 'failed', 'error': 'The run was not found.'}
-    store.update_research(task_id, research, expected=previous)
+    if store.update_research(task_id, research, expected=previous) and research['status'] in {'completed', 'failed'}:
+        push_task(application, task_id, render_result)
     return research['status'] in TERMINAL
 
 
@@ -102,17 +107,25 @@ def research_poller_loop(task_id, application=None):
     task = store.get_task(task_id)
     if task and task['research']['status'] not in TERMINAL:
         old = task['research']
-        store.update_research(task_id, {**old, 'status': 'failed', 'error': 'Research timed out.'}, expected=old)
+        if store.update_research(task_id, {**old, 'status': 'failed', 'error': 'Research timed out.'}, expected=old):
+            push_task(application, task_id, render_result)
 
 
 def run_browser_session(task_id, goal, start_url, profile, application=None):
     """Wire the separately owned browser agent to persistent execution state."""
     application = application or app
     store = application.state.store
+    def patch_execution(tid, patch=None, **kwargs):
+        previous = (store.get_task(tid)['execution'] or {}).get('status')
+        execution = store.patch_execution(tid, patch, **kwargs)
+        if execution.get('status') != previous and execution.get('status') in {'awaiting_approval', 'done', 'failed', 'stopped'}:
+            push_task(application, tid, render_execution_update)
+        return execution
+
     try:
         from hoida_agent import run_browser_agent, AgentHooks
     except ImportError:
-        store.patch_execution(task_id, {'status': 'failed', 'error': 'Browser sandbox only on Modal.'})
+        patch_execution(task_id, {'status': 'failed', 'error': 'Browser sandbox only on Modal.'})
         return
 
     def should_stop():
@@ -134,12 +147,12 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
                                   api_secret=unquote(credentials.password or ''), secure=True)
                 url = cloudinary.uploader.upload(BytesIO(jpeg_bytes), resource_type='image')['secure_url']
             shot = {'n': n, 'url': url}
-        store.patch_execution(task_id, step={'n': n, 'at': now(), 'text': text, 'shot': n if shot else None}, shot=shot)
+        patch_execution(task_id, step={'n': n, 'at': now(), 'text': text, 'shot': n if shot else None}, shot=shot)
 
     def wait_for_approval(summary, filled):
         if should_stop():
             return False
-        store.patch_execution(task_id, {'status': 'awaiting_approval', 'approval_decision': None,
+        patch_execution(task_id, {'status': 'awaiting_approval', 'approval_decision': None,
                                         'approval': {'summary': summary, 'filled': filled}})
         deadline = time.monotonic() + 600
         while time.monotonic() < deadline:
@@ -147,10 +160,10 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
             if execution.get('approval_decision') == 'stopped':
                 return False
             if execution.get('approval_decision') == 'approved':
-                store.patch_execution(task_id, {'status': 'submitting'})
+                patch_execution(task_id, {'status': 'submitting'})
                 return True
             time.sleep(2)
-        store.patch_execution(task_id, {'status': 'stopped', 'approval_decision': 'stopped', 'error': 'Approval timed out.'})
+        patch_execution(task_id, {'status': 'stopped', 'approval_decision': 'stopped', 'error': 'Approval timed out.'})
         return False
 
     def on_frame(jpeg):
@@ -188,7 +201,7 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
     try:
         if should_stop():
             return
-        store.patch_execution(task_id, {'status': 'running'})
+        patch_execution(task_id, {'status': 'running'})
         base = dict(on_step=on_step, wait_for_approval=wait_for_approval, should_stop=should_stop)
         try:
             hooks = AgentHooks(**base, on_frame=on_frame, on_usage=on_usage, pending_messages=pending_messages, ask_user=ask_user)
@@ -196,18 +209,18 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
             hooks = AgentHooks(**base)
         result = run_browser_agent(goal=goal, start_url=start_url, profile=profile, hooks=hooks)
         value = result if isinstance(result, dict) else vars(result)
-        store.patch_execution(task_id, {'status': 'stopped' if should_stop() else value['status'],
+        patch_execution(task_id, {'status': 'stopped' if should_stop() else value['status'],
                                        'result': value.get('result', ''), 'current_url': value.get('final_url'), 'error': value.get('error'),
                                        **{k: value[k] for k in ('usage', 'sources', 'filled') if value.get(k) is not None}})
     except Exception:
-        store.patch_execution(task_id, {'status': 'stopped' if should_stop() else 'failed', 'error': 'Browser session failed.'})
+        patch_execution(task_id, {'status': 'stopped' if should_stop() else 'failed', 'error': 'Browser session failed.'})
 
 
 def spawn_thread(target, *args):
     threading.Thread(target=target, args=args, daemon=True).start()
 
 
-def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None):
+def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None, whatsapp_api=None):
     config = config or Config()
 
     @asynccontextmanager
@@ -230,7 +243,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     application.state.limiter = SlidingWindow()
     application.state.spawn_research_poller = spawn_research_poller or (lambda tid: spawn_thread(research_poller_loop, tid, application))
     application.state.spawn_browser_session = spawn_browser_session or (lambda tid, goal, url, profile: spawn_thread(run_browser_session, tid, goal, url, profile, application))
-    application.state.send_whatsapp = lambda to, text: send_whatsapp_message(config, to, text)
+    application.state.whatsapp_api = whatsapp_api or ChannelAPI(config)
     application.add_middleware(CORSMiddleware,
         allow_origins=[o.strip() for o in config.allowed_origins.split(',') if o.strip() and o.strip() != 'extension'],
         allow_origin_regex=r'^(chrome-extension://[a-z]+|https?://(localhost|127\.0\.0\.1)(:\d+)?)$',
@@ -279,18 +292,17 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def pair(user=Depends(authenticate)):
         return application.state.store.create_pair_code(user['id'])
 
-    @application.post('/v1/tasks')
-    def create_task(body: TaskBody, request: Request, user=Depends(authenticate)):
+    def create_task_for_user(body, user, source='extension'):
         if not body.task.strip():
             raise HTTPException(422, 'Task must not be blank')
-        check_task_budget(request, user)
+        check_task_budget(application, user)
         state = application.state
         mode, kind = route(body.task, body.page, classify=state.jev.classify if state.jev else None)
         previous_run = None
         if body.previous_task_id:
             previous_run = owned(body.previous_task_id, user)['research'].get('run_id')
         research = dict(kind=kind, status='queued', run_id=None, progress=[], output=None, cost=None, stop_reason=None, error=None)
-        task = state.store.create_task(user['id'], body.task, body.page, mode, research)
+        task = state.store.create_task(user['id'], body.task, body.page, mode, research, source=source)
         try:
             if kind == 'search':
                 response = state.exa.search(dict(query=build_query(body.task, body.page), type='auto', numResults=5,
@@ -314,10 +326,17 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             state.store.update_research(task['id'], research)
         except ExaError:
             state.store.update_research(task['id'], {**research, 'status': 'failed', 'error': 'Research service request failed.'})
+            push_task(application, task['id'], render_result)
             raise
+        if research['status'] in {'completed', 'failed'}:
+            push_task(application, task['id'], render_result)
         if kind == 'agent' and research['status'] not in TERMINAL:
             state.spawn_research_poller(task['id'])
         return state.store.get_task(task['id'])
+
+    @application.post('/v1/tasks')
+    def create_task(body: TaskBody, user=Depends(authenticate)):
+        return create_task_for_user(body, user)
 
     @application.get('/v1/tasks')
     def list_tasks(limit: int = Query(30, ge=1, le=100), user=Depends(authenticate)):
@@ -337,8 +356,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             application.state.store.update_research(tid, {**research, 'status': 'cancelled'})
         return application.state.store.get_task(tid)
 
-    @application.post('/v1/tasks/{tid}/execute')
-    def execute(tid: str, body: ExecuteBody, user=Depends(authenticate)):
+    def execute_for_user(tid, body, user, channel=None):
         task = owned(tid, user)
         if task['research']['status'] != 'completed':
             raise HTTPException(409, 'Research must be completed')
@@ -355,19 +373,22 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(422, 'An HTTP start URL is required')
         goal = json.dumps({'task': task['task'], 'goal': body.goal, 'answer': structured.get('answer'),
                            'key_facts': structured.get('key_facts', []), 'action': action, 'research': structured}, ensure_ascii=False)
-        execution = dict(status='starting', goal=goal, start_url=start_url, current_url=start_url,
+        execution = dict(channel=channel, status='starting', goal=goal, start_url=start_url, current_url=start_url,
                          steps=[], shots=[], approval=None, approval_decision=None, result=None, error=None)
         if not application.state.store.start_execution(tid, execution, task['execution']):
             raise HTTPException(409, 'Execution already changed')
         application.state.spawn_browser_session(tid, goal, start_url, body.profile if body.profile is not None else json.loads(user['profile_json']))
         return application.state.store.get_task(tid)
 
+    @application.post('/v1/tasks/{tid}/execute')
+    def execute(tid: str, body: ExecuteBody, user=Depends(authenticate)):
+        return execute_for_user(tid, body, user)
+
     @application.post('/v1/tasks/{tid}/approve')
     def approve(tid: str, user=Depends(authenticate)):
         task = owned(tid, user)
-        if not task['execution'] or task['execution']['status'] != 'awaiting_approval' or task['execution'].get('approval_decision') == 'stopped':
+        if not application.state.store.approve_execution(tid, task['execution']):
             raise HTTPException(409, 'Execution is not awaiting approval')
-        application.state.store.patch_execution(tid, {'approval_decision': 'approved'})
         return application.state.store.get_task(tid)
 
     @application.post('/v1/tasks/{tid}/messages')
@@ -378,13 +399,18 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         application.state.store.patch_execution(tid, message={'at': now(), 'text': body.text, 'source': 'extension'})
         return application.state.store.get_task(tid)
 
-    @application.post('/v1/tasks/{tid}/stop')
-    def stop(tid: str, user=Depends(authenticate)):
+    def stop_for_user(tid, user, notify=True):
         task = owned(tid, user)
         if not task['execution']:
             raise HTTPException(409, 'Execution has not started')
-        application.state.store.patch_execution(tid, {'approval_decision': 'stopped'})
+        application.state.store.patch_execution(tid, {'status': 'stopped', 'approval_decision': 'stopped'})
+        if notify and task['execution'].get('status') != 'stopped':
+            push_task(application, tid, render_execution_update)
         return application.state.store.get_task(tid)
+
+    @application.post('/v1/tasks/{tid}/stop')
+    def stop(tid: str, user=Depends(authenticate)):
+        return stop_for_user(tid, user)
 
     @application.get('/v1/tasks/{tid}/shots/{n}.jpg')
     def shots(tid: str, n: int, t: str):
@@ -425,29 +451,75 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(403, 'Verification failed')
         return PlainTextResponse(params.get('hub.challenge', ''))
 
+    sender = ContextVar('whatsapp_sender')
+
+    def find_sender(number):
+        user = application.state.store.find_user_by_number(number)
+        sender.set(user)
+        return user
+
+    def active_task(user):
+        # The latest actionable task across both channels, even behind newer research.
+        tasks = application.state.store.list_tasks(user['id'], 100)
+        return next((task for task in tasks if
+                     (task.get('execution') or {}).get('status') in {'starting', 'running', 'awaiting_approval', 'submitting'}),
+                    next((task for task in tasks if task['research']['status'] == 'completed'
+                          and not task.get('execution')), tasks[0] if tasks else None))
+
+    def transcribe(data, mime):
+        from hoida_media.voice import transcribe
+        return transcribe(data, mime or 'audio/ogg')
+
+    def read_letter(data, mime, caption):
+        from hoida_media.letters import read_letter
+        return read_letter(data, mime or 'image/jpeg', caption)
+
+    async def create_whatsapp_task(user, text, source):
+        return await asyncio.to_thread(create_task_for_user, TaskBody(task=text), user, source)
+
+    application.state.whatsapp_flow = WhatsAppFlow(
+        api=application.state.whatsapp_api, find_user_by_number=find_sender,
+        link_number=lambda code, number: application.state.store.link_number(code, number),
+        create_task=create_whatsapp_task,
+        get_active_task=active_task,
+        execute=lambda tid, index: execute_for_user(tid, ExecuteBody(action_index=index), sender.get(), 'whatsapp'),
+        approve=lambda tid: approve(tid, sender.get()), stop=lambda tid: stop_for_user(tid, sender.get(), notify=False),
+        transcribe=transcribe if config.elevenlabs_api_key else None,
+        read_letter=read_letter if config.anthropic_api_key else None)
+
+    def process_messages(messages):
+        # Sync background work gets a worker thread, keeping blocking providers off ASGI.
+        async def process():
+            for message in messages:
+                if not message.from_number or not message.message_id:
+                    continue
+                if not application.state.store.claim_whatsapp_message(message.message_id):
+                    continue
+                try:
+                    await application.state.whatsapp_flow.handle(message)
+                except Exception:
+                    # Never expose provider responses or private message contents.
+                    try:
+                        for body in render_error('Could not process this message. Please try again.'):
+                            await application.state.whatsapp_api.send_text(message.from_number, body)
+                    except Exception:
+                        pass
+        asyncio.run(process())
+
     @application.post('/webhooks/whatsapp')
-    async def whatsapp(request: Request):
+    async def whatsapp(request: Request, background_tasks: BackgroundTasks):
         raw = await request.body()
-        if config.whatsapp_app_secret:
-            expected = 'sha256=' + hmac.new(config.whatsapp_app_secret.encode(), raw, hashlib.sha256).hexdigest()
-            if not hmac.compare_digest(request.headers.get('x-hub-signature-256', ''), expected):
-                raise HTTPException(403, 'Invalid signature')
+        if config.whatsapp_app_secret and not verify_signature(
+                raw, request.headers.get('x-hub-signature-256', ''), config.whatsapp_app_secret):
+            raise HTTPException(403, 'Invalid signature')
         try:
             payload = json.loads(raw)
         except ValueError:
             raise HTTPException(400, 'Invalid JSON')
         if not isinstance(payload, dict):
             raise HTTPException(400, 'Expected an object')
-        for entry in payload.get('entry', []):
-            for change in entry.get('changes', []):
-                for message in change.get('value', {}).get('messages', []):
-                    number = message.get('from')
-                    if not number:
-                        continue
-                    media = message.get('audio') or message.get('image') or message.get('document') or {}
-                    reply = handle_whatsapp_message(application.state.store, number, (message.get('text') or {}).get('body'), media.get('id'))
-                    if config.whatsapp_token and config.whatsapp_phone_number_id:
-                        application.state.send_whatsapp(number, reply)
+        messages = parse_webhook(payload).messages
+        background_tasks.add_task(process_messages, messages)
         return {'ok': True}
 
     @application.post('/webhooks/exa')
