@@ -69,7 +69,9 @@ export const api = {
   places: (q) => call('GET', `/v1/places?q=${encodeURIComponent(q)}&city=helsinki`),
   company: (name) => call('GET', `/v1/company?name=${encodeURIComponent(name)}`),
   cancel: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/cancel`),
-  execute: (id, actionIndex) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/execute`, { action_index: actionIndex }),
+  // The only request that carries Your details: the cloud browser types them into this one form.
+  execute: (id, actionIndex, profile = {}) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/execute`,
+    { action_index: actionIndex, profile: Object.keys(profile).length ? profile : undefined }),
   approve: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/approve`),
   stop: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/stop`),
   message: (id, text) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/messages`, { text }),

@@ -9,6 +9,8 @@ import { startMic } from './mic.js';
 import { renderDashboard } from './dashboard.js';
 import { createMascot, mountPalettePicker } from './mascot.js';
 import { openTrust } from './trust.js';
+import { openDetails } from './details.js';
+import { loadProfile } from './profile.js';
 import { openHub } from './hub.js';
 
 const POLL_MS = 2000;
@@ -63,7 +65,8 @@ const handlers = {
   onReply: (text, button) => act(() => api.message(followed.id, text), button),
   onCancel: (button) => act(() => api.cancel(followed.id), button),
   onFollowUp: (text) => ask(text, followed.id),
-  onExecute: (index, button) => act(() => api.execute(followed.id, index), button),
+  onExecute: (index, button) => act(() => api.execute(followed.id, index, loadProfile()), button),
+  onDetails: (needed) => openDetails(needed),
   onApprove: (button) => act(() => api.approve(followed.id), button),
   onStop: (button) => act(() => api.stop(followed.id), button),
 };
@@ -156,9 +159,14 @@ $('to-errands').addEventListener('click', () => {
 
 $('to-trust').addEventListener('click', () => openTrust(followed?.task));
 $('trust').addEventListener('click', (event) => { if (event.target === $('trust')) $('trust').close(); });
+$('to-details').addEventListener('click', () => openDetails());
+$('details').addEventListener('click', (event) => { if (event.target === $('details')) $('details').close(); });
+// Saved or deleted details change the open answer's hint and approval values, so it redraws.
+$('details').addEventListener('close', () => { if (followed?.task) { followed.key = null; render(followed.task); } });
 
 // ---------- routes ----------
 function route() {
+  if ($('details').open) $('details').close();
   notice(leaving);
   leaving = '';
   const match = location.hash.match(/^#\/t\/([\w-]+)$/);

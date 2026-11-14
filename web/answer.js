@@ -3,6 +3,7 @@ import { h, show } from './dom.js';
 import { claimsOf, factsOf, runStatus, findStats, missingInfo, primaryAction, publishedStamp, readStamp, sourcesOf, stepsOf } from './model.js';
 import { renderExecution } from './execution.js';
 import { citePill } from './cite.js';
+import { loadProfile, missingDetails } from './profile.js';
 
 export function renderAnswer(task, handlers) {
   const research = task.research || {};
@@ -80,13 +81,19 @@ function steps(items) {
 }
 
 // Fill it for me runs the browser agent on the prepared page; it always stops for your OK before the last step.
-function actions(task, { onExecute }) {
+// When the plan uses details you haven't saved, a hint opens Your details first.
+function actions(task, { onExecute, onDetails }) {
   const action = primaryAction(task);
   if (!action) return null;
   const busy = ['starting', 'running', 'awaiting_approval', 'submitting'].includes(runStatus(task));
-  return h('div', { class: 'actions' },
-    h('button', { type: 'button', class: 'btn', disabled: busy, onclick: (e) => onExecute(action.index, e.currentTarget) }, 'Fill it for me'),
-    h('a', { class: 'btn soft', href: action.url, target: '_blank', rel: 'noopener noreferrer' }, `Open ${action.domain}`));
+  const missing = busy ? [] : missingDetails(task, loadProfile());
+  return h('div', {},
+    h('div', { class: 'actions' },
+      h('button', { type: 'button', class: 'btn', disabled: busy, onclick: (e) => onExecute(action.index, e.currentTarget) }, 'Fill it for me'),
+      h('a', { class: 'btn soft', href: action.url, target: '_blank', rel: 'noopener noreferrer' }, `Open ${action.domain}`)),
+    missing.length ? h('p', { class: 'needs-details' },
+      `This form needs: ${missing.map((d) => d.label.toLowerCase()).join(', ')}. `,
+      h('button', { type: 'button', class: 'link-btn', onclick: () => onDetails(missing) }, 'Your details')) : null);
 }
 
 function sourceList(task, sources) {

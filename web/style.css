@@ -221,6 +221,15 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .promise-title { font-weight: 800; margin-bottom: 2px !important; }
 .touched { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
 .touched a { font-weight: 600; overflow-wrap: anywhere; }
+.details-intro { margin: 0 0 14px; font-size: 14px; }
+.details-needed { margin: 0 0 14px; padding: 10px 14px; border-radius: 14px; background: var(--warn-soft); color: var(--warn); font-size: 14px; font-weight: 600; }
+.details-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.details-form .actions { grid-column: 1 / -1; margin-top: 6px; }
+.detail-field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.detail-field input { border: 1px solid var(--line-2); border-radius: 12px; padding: 9px 12px; background: var(--fill-2); color: var(--ink); font-size: 15px; font-weight: 500; min-width: 0; }
+.details-status { margin: 10px 0 0; font-size: 13px; min-height: 1.5em; }
+.needs-details { margin: 10px 0 0; font-size: 14px; color: var(--warn); }
+.needs-details .link-btn { color: var(--accent); text-decoration: underline; padding: 0; }
 
 /* ---------- first weeks (student hub) ---------- */
 .hub { max-width: 760px; margin: 0 auto; }
@@ -277,13 +286,14 @@ a.link-btn { text-decoration: none; }
 
 @media (max-width: 640px) {
   .top { flex-wrap: wrap; row-gap: 4px; }
-  .top-right { width: 100%; justify-content: space-between; gap: 6px; }
-  .link-btn, .by-exa { font-size: 13px; }
+  .top-right { width: 100%; justify-content: space-between; gap: 2px 10px; flex-wrap: wrap; }
+  .link-btn, .by-exa { font-size: 13px; white-space: nowrap; }
   .svc-tags, .svc-detail { margin-left: 0; }
   .counters { width: 100%; justify-content: space-between; }
   .counters div { text-align: left; }
   .errand-when { display: none; }
   .facts { grid-template-columns: minmax(0, 1fr); }
+  .details-form { grid-template-columns: minmax(0, 1fr); }
   .top { padding: 14px 16px; }
   main { padding: 0 16px 110px; }
   .ask { flex-wrap: wrap; border-radius: 20px; }

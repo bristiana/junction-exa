@@ -7,7 +7,8 @@ export function openTrust(task) {
   const pages = task ? pagesTouched(task) : [];
   show('trust-body',
     h('ul', { class: 'promises' },
-      promise('The AI sees placeholders, not you.', 'The AI only sees placeholders like {{name}}. If you approve a form, your details go to Vali’s cloud browser for that one form and are not stored.'),
+      promise('The AI sees placeholders, not you.', 'For what you save in Your details, the AI only sees placeholders like {{name}}. Your details stay in this browser. When you press Fill it for me, they go to Vali’s cloud browser for that one form and are not stored.'),
+      promise('Errand text is not hidden.', 'What you type in an errand is sent as text to the AI and the search. Don’t type ID numbers there; save details in Your details instead.'),
       promise('Nothing goes out without your OK.', 'Vali prepares forms, emails and bookings, then stops. It never submits, pays or sends anything until you press Approve.'),
       promise('Your first-weeks choices stay here.', 'EU/non-EU, degree/exchange and your ticks are saved in this browser only. When you press Ask Vali on a step, those two choices are written into the errand text.'),
       promise('Every fact shows its page.', 'Each claim carries the number of the official page it came from, with the quote when Vali found one.')),
