@@ -5,9 +5,12 @@ import { TERMINAL, isActive } from './model.js';
 import { renderWorking, tickClock } from './working.js';
 import { renderAnswer } from './answer.js';
 import { startMic } from './mic.js';
+import { renderDashboard } from './dashboard.js';
 
 const POLL_MS = 1500;
+const DASHBOARD_MS = 10000;
 let followed = null; // { id, task, timer, clock }
+let dashboardTimer = 0;
 
 function showView(name) {
   for (const id of ['home', 'working', 'answer']) $(id).hidden = id !== name;
@@ -101,6 +104,22 @@ function unfollow() {
   followed = null;
 }
 
+// ---------- your errands ----------
+// Refreshes while the home view is open; /v1/stats is optional until the API ships it.
+async function loadDashboard() {
+  clearTimeout(dashboardTimer);
+  try {
+    const [{ tasks }, stats] = await Promise.all([api.tasks(), api.stats().catch(() => null)]);
+    if (!$('home').hidden) renderDashboard(tasks, stats);
+  } catch { /* the list stays as it was; the next refresh tries again */ }
+  if (!$('home').hidden) dashboardTimer = setTimeout(loadDashboard, DASHBOARD_MS);
+}
+
+$('to-errands').addEventListener('click', () => {
+  if (location.hash.startsWith('#/t/')) location.hash = '#/';
+  requestAnimationFrame(() => $('errands').scrollIntoView({ behavior: 'smooth' }));
+});
+
 // ---------- routes ----------
 function route() {
   notice('');
@@ -108,6 +127,7 @@ function route() {
   if (match) return follow(match[1]);
   unfollow();
   showView('home');
+  loadDashboard();
 }
 
 window.addEventListener('hashchange', route);
