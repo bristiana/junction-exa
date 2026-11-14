@@ -27,13 +27,13 @@ from .exa import ExaClient, ExaError, TTLCache
 from .monitors import provision_watch, delete_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
 from .guard import (RateLimited, SlidingWindow, authenticate, check_code_tries, check_origin, check_task_budget, client_ip,
                     public_start_url, resolve_host)
-from .research import ANSWER_FIRST, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
+from .research import ANSWER_FIRST, FIND_RULES, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
 from .jev import JevClient
 from .llm import make_fast_json
 from .questions import early_question, with_answer
 from .router import route
 from .services import create_router as services_router
-from .stats import pick_channel, summarize
+from .stats import channel_of_origin, pick_channel, summarize
 from .store import make_store, now
 from .uploads import UploadLimit
 from .voice_agent import add_voice_routes
@@ -184,7 +184,7 @@ def missing_info_question(output):
 def find_research(state, task, text):
     """One Exa search+answer call; the quote check follows in the poller, off the request."""
     response = state.exa.search(dict(query=build_query(text, task['page']), type='auto', numResults=5,
-                                     contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST))
+                                     contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST + FIND_RULES))
     found = dict(output=map_find_output(response), cost=(response.get('costDollars') or {}).get('total') or 0,
                  activity=activity.from_search(task, text, response))
     return quoting(task, found)
@@ -498,14 +498,14 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                 if watch is None:
                     state.store.update_research(task['id'], {**research, 'status': 'failed', 'error': message})
                     raise HTTPException(409, message)
+                criteria, live = watch_criteria(body.task), bool(watch.get('secret'))
                 research.update(status='completed', watch_id=watch['id'], activity=[activity.opening(task)],
-                    monitor_stubbed=not bool(watch.get('secret')),
-                    output={'text': message, 'structured': {
-                        'answer': message, 'status': 'info_only',
-                        'key_facts': [], 'steps': [], 'actions': [], 'missing_info': []}, 'grounding': []})
-                try:  # answer what is true today first; the watch reports what changes later
-                    found = find_research(state, task, watch_criteria(body.task))
-                    research.update(found, output=with_watch(found['output'], watch_criteria(body.task), message))
+                    monitor_stubbed=not live, output=with_watch({'text': '', 'structured': {
+                        'answer': '', 'status': 'info_only',
+                        'key_facts': [], 'steps': [], 'actions': [], 'missing_info': []}, 'grounding': []}, criteria, message, live))
+                try:  # what is watched first, then what is true today; the watch reports what changes later
+                    found = find_research(state, task, criteria)
+                    research.update(found, output=with_watch(found['output'], criteria, message, live))
                 except ExaError:
                     pass
             state.store.update_research(task['id'], research)
@@ -580,7 +580,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.post('/v1/tasks')
     def create_task(body: TaskBody, request: Request, user=Depends(authenticate)):
-        return create_task_for_user(body, user, pick_channel(request.headers.get('x-vali-channel'), body.channel))
+        return create_task_for_user(body, user, pick_channel(request.headers.get('x-vali-channel'), body.channel,
+                                                             default=channel_of_origin(request.headers.get('origin'))))
 
     @application.post('/v1/companion')
     def companion(body: CompanionBody, user=Depends(authenticate)):

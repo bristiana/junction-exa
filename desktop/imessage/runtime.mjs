@@ -14,7 +14,7 @@ export function makeMessageBridge({ getConfig, save, safeStorage, onStatus, fetc
       const config = getConfig();
       if (settings.backendUrl && settings.backendUrl !== config.backendUrl) throw new Error('Restore the linked iMessage server before using the bridge.');
       settings.backendUrl ||= config.backendUrl;
-      return makeApi({ baseUrl: config.backendUrl, token, fetchImpl });
+      return makeApi({ baseUrl: config.backendUrl, token, fetchImpl, channel: 'imessage' });
     },
     encrypt: token => {
       if (!safeStorage.isEncryptionAvailable()) throw new Error('Unlock your login keychain before linking iMessage.');

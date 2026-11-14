@@ -40,13 +40,14 @@ def test_channel_is_stored_and_stats_are_per_user():
     application = create_app(Config(sqlite_path=':memory:', anthropic_api_key=''), store, exa, lambda tid: None, lambda *a: None)
     with TestClient(application) as client:
         client.headers['Authorization'] = 'Bearer ' + client.post('/v1/users').json()['token']
-        assert client.post('/v1/tasks', json={'task': 'find a café'}).json()['channel'] == 'extension'
+        assert client.post('/v1/tasks', json={'task': 'find a café'}).json()['channel'] == 'api'  # no header, no Origin
+        assert client.post('/v1/tasks', json={'task': 'find a café'}, headers={'Origin': 'chrome-extension://abc'}).json()['channel'] == 'extension'
         assert client.post('/v1/tasks', json={'task': 'find a café', 'channel': 'mac'}).json()['channel'] == 'mac'
         task = client.post('/v1/tasks', json={'task': 'find a café', 'channel': 'mac'}, headers={'X-Vali-Channel': 'web'}).json()
         assert task['channel'] == task['source'] == 'web'
         stats = client.get('/v1/stats').json()
-        assert stats['total'] == 3 and stats['by_channel'] == {'extension': 1, 'mac': 1, 'web': 1}
-        assert stats['today']['errands'] == 3 and stats['exa']['searches'] == 3
+        assert stats['total'] == 4 and stats['by_channel'] == {'api': 1, 'extension': 1, 'mac': 1, 'web': 1}
+        assert stats['today']['errands'] == 4 and stats['exa']['searches'] == 4
         client.headers['Authorization'] = 'Bearer ' + client.post('/v1/users').json()['token']
         assert client.get('/v1/stats').json()['total'] == 0
         del client.headers['Authorization']

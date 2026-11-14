@@ -44,10 +44,10 @@ export function normalizeBaseUrl(input) {
 
 const clean = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => v !== undefined && v !== null && v !== ""));
 
-export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.fetch } = {}) {
+export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.fetch, channel = "extension" } = {}) {
   async function call(path, { method = "GET", body, auth = true } = {}) {
     if (!baseUrl) throw new BackendError(0, "Set the Vali server in settings.");
-    const headers = { Accept: "application/json" };
+    const headers = { Accept: "application/json", "X-Vali-Channel": channel };
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (auth) {
       if (!token) throw new BackendError(401, "Press Connect in settings first.");

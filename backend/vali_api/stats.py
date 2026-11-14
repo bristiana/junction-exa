@@ -2,7 +2,7 @@
 from collections import Counter
 from datetime import datetime, timezone
 
-CHANNELS = ('web', 'extension', 'mac', 'voice', 'letter', 'whatsapp', 'imessage')
+CHANNELS = ('web', 'extension', 'mac', 'voice', 'letter', 'whatsapp', 'imessage', 'api')
 
 
 def pick_channel(header=None, body=None, default='extension'):
@@ -12,6 +12,14 @@ def pick_channel(header=None, body=None, default='extension'):
         if value in CHANNELS:
             return value
     return default
+
+
+def channel_of_origin(origin):
+    """An errand that names no channel: a browser extension page, a web page, or a plain API call (no Origin)."""
+    origin = (origin or '').strip().lower()
+    if origin.startswith(('chrome-extension://', 'moz-extension://', 'safari-web-extension://')):
+        return 'extension'
+    return 'web' if origin.startswith(('https://', 'http://')) else 'api'
 
 
 def exa_usage(task):

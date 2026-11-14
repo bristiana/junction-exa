@@ -241,8 +241,16 @@ def build_run_request(task, page=None, profile=None, effort='low'):
                 effort=effort, outputSchema=output_schema(bool((page or {}).get('fields'))), metadata={'app': 'vali'})
 
 
+FIND_RULES = """
+Options found:
+- Give each option the price its page states, with the unit (for example "from 22.90 €", "9.89 snt/kWh + 5.90 €/month").
+- The answer names the concrete figure first (the lowest price found and which option it is). Never answer only
+  "prices vary": give the range the pages state. Only when no page states a price, say that no source gives one."""
+
 FIND_SCHEMA = {'type': 'object', 'properties': {
-    'answer': {'type': 'string'},
+    'answer': {'type': 'string', 'description': 'In the errand\'s language, 1-3 sentences. For a price or cost '
+               'question, lead with the figure the pages state (the lowest price found and the option it is for); '
+               '"varies" only together with those figures. Only when no page states a price, say so.'},
     'options': {'type': 'array', 'description': '3 to 5 different options (places, products or services), '
                 'each with its own page to book or buy', 'items': {'type': 'object', 'properties': {
         k: {'type': 'string'} for k in ('name', 'detail', 'price', 'url')},
@@ -250,11 +258,25 @@ FIND_SCHEMA = {'type': 'object', 'properties': {
     'next_step': {'type': 'string'}}, 'required': ['answer', 'options', 'next_step']}
 
 
+def priced_answer(answer, options):
+    """An answer with no figure while its options carry prices gets the first two priced options appended."""
+    if re.search(r'\d', answer or ''):
+        return answer
+    priced = [o for o in options if re.search(r'\d', str(o.get('price') or '')) and o.get('name')][:2]
+    figures = ' '.join(f"{squash_line(o['name'])}: {squash_line(o['price'])}." for o in priced)
+    return ' '.join(filter(None, [(answer or '').strip(), figures]))
+
+
+def squash_line(value):
+    return re.sub(r'\s+', ' ', str(value or '')).strip().rstrip('.')
+
+
 def map_find_output(response):
     output = response.get('output') or {}
     content = output.get('content') or {}
     options = content.get('options') or []
     next_step = content.get('next_step') or ''
+    content['answer'] = priced_answer(content.get('answer', ''), options)
     structured = {'answer': content.get('answer', ''), 'status': 'info_only',
                   'key_facts': [{'label': o.get('name', ''), 'value': ' · '.join(filter(None, [o.get('detail'), o.get('price')]))} for o in options],
                   'steps': [{'title': 'Next step', 'detail': next_step}] if next_step else [],

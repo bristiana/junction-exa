@@ -132,7 +132,7 @@ class ExaClient:
         return self.cached_post('/search', body, 'search')
 
     def contents(self, urls):
-        return self.cached_post('/contents', {'urls': urls, 'text': {'maxCharacters': 8000}}, 'contents')
+        return self.cached_post('/contents', {'urls': urls, 'text': {'maxCharacters': 30000}}, 'contents')
 
     def close(self):
         self.client.close()

@@ -2,11 +2,11 @@
 // endpoints. Plain Node, no Electron, so scripts/live-check.mjs drives exactly what the app uses.
 import { createClient, BackendError } from './vendor/lib/backend.js';
 
-export function makeApi({ baseUrl, token = '', fetchImpl = globalThis.fetch, timeoutMs = 20000 } = {}) {
-  const base = createClient({ baseUrl, token, fetchImpl });
+export function makeApi({ baseUrl, token = '', fetchImpl = globalThis.fetch, timeoutMs = 20000, channel = 'mac' } = {}) {
+  const base = createClient({ baseUrl, token, fetchImpl, channel });
   async function send(path, { method = 'POST', json, form, auth = true, timeout = timeoutMs } = {}) {
     if (!baseUrl) throw new BackendError(0, 'Set the Vali server in settings.');
-    const headers = { Accept: 'application/json' };
+    const headers = { Accept: 'application/json' }; // uploads keep their own channel: voice or letter
     if (json !== undefined) headers['Content-Type'] = 'application/json';
     if (auth && !token) throw new BackendError(401, 'Not connected yet.');
     if (token && auth !== false) headers.Authorization = 'Bearer ' + token;

@@ -141,6 +141,12 @@ export function primaryAction(task) {
   return index < 0 ? null : { index, url: safeUrl(actions[index].url), domain: domainOf(actions[index].url), label: String(actions[index].label || '') };
 }
 
+// Drafts Vali wrote for the user to send or paste: email and copy_text actions with a body.
+export function draftsOf(task) {
+  return list(structured(task).actions).filter((a) => ['email', 'copy_text'].includes(a?.type) && String(a?.body || '').trim())
+    .map((a) => ({ type: a.type, label: String(a.label || ''), to: String(a.to || ''), subject: String(a.subject || ''), body: String(a.body).trim() }));
+}
+
 export function missingInfo(task) {
   return list(structured(task).missing_info).map(String).filter(Boolean);
 }

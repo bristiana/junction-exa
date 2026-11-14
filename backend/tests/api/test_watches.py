@@ -71,6 +71,8 @@ def test_create_signed_update_seen_and_delete(watched):
     client, store, calls, *_ = watched
     task = create(client)
     assert task['research']['monitor_stubbed'] is False
+    answer = task['research']['output']['structured']['answer']  # what is watched, how often and where, first
+    assert answer.startswith('I will watch for ') and 'once a day with Exa' in answer.split('\n')[0]
     watch = client.get('/v1/watches').json()['watches'][0]
     body = json.loads(calls[0].content)
     assert calls[0].url.path == '/monitors'
