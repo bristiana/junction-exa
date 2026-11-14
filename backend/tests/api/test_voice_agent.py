@@ -228,7 +228,8 @@ def test_agent_script_creates_then_updates():
     assert schema['request_headers'] == {'X-Vali-Tool-Secret': {'secret_id': 'sec_1'},
                                          'X-Vali-Session': {'variable_name': 'secret__vali_session'}}
     assert schema['request_body_schema']['required'] == ['text']
-    assert 'request_body_schema' not in configs['list_errands']['api_schema']
+    # ElevenLabs requires a body schema on every POST tool, so list_errands takes an optional limit.
+    assert configs['list_errands']['api_schema']['request_body_schema']['required'] == []
     agent = posts[-1][2]
     assert agent['platform_settings']['auth']['enable_auth'] is True
     assert agent['conversation_config']['agent']['prompt']['tool_ids'] == [f'tool_{n}' for n in range(7)]
