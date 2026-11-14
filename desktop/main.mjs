@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { normalizeBaseUrl, toLocalTask, isActive } from './vendor/lib/backend.js';
 import { makeApi } from './api.mjs';
 import { frontTab, grabSelection } from './mac.mjs';
-import { mascotState, notificationEvents, buildErrand, comingSoon, voiceOutcome, letterType, sealConfig, openConfig, badgeOf, MAX_VOICE_BYTES, talkError, redactSecrets } from './logic.mjs';
+import { mascotState, notificationEvents, buildErrand, comingSoon, voiceOutcome, letterType, sealConfig, openConfig, badgeOf, MAX_VOICE_BYTES, talkError, micError, caption, redactSecrets } from './logic.mjs';
 import { asleep, restoreSpot } from './valet.mjs';
 import { welcomeStep, SAMPLE_ERRAND, WELCOME_LINE } from './welcome.mjs';
 import { createStage } from './stage.mjs';
@@ -124,8 +124,12 @@ function welcomeAction(what) {
 function addTask(remote) {
   const t = toLocalTask(remote); updateTasks([t, ...tasks.filter(x => x.id !== t.id)]); return t;
 }
+// A poll asked for while one is in flight (say, right after Vali creates an errand by voice) runs once that one ends,
+// so the new errand is not missed by a request that started before it existed.
+let pollAgain = false;
 async function poll() {
-  if (paused || polling || smoke || !config.backendToken || config.backendTokenUrl !== config.backendUrl) return;
+  if (polling) { pollAgain = true; return; }
+  if (paused || smoke || !config.backendToken || config.backendTokenUrl !== config.backendUrl) return;
   polling = true;
   try {
     const result = await api().listTasks(50);
@@ -144,7 +148,10 @@ async function poll() {
   } catch (e) {
     changes({ connectionError: e.message }, { connectionError: config.connectionError }); config.connectionError = e.message;
     throw e;
-  } finally { polling = false; }
+  } finally {
+    polling = false;
+    if (pollAgain) { pollAgain = false; poll().catch(() => {}); }
+  }
 }
 const fail = (e, soon) => ({ ok: false, error: comingSoon(e) && soon ? soon : e.message, status: e.status, comingSoon: comingSoon(e) && !!soon });
 async function startErrand({ text, selection, page }) {
@@ -542,6 +549,32 @@ async function smokeWelcome(out) {
   if (welcoming) throw new Error('Welcome came back after it was dismissed.');
   console.log('Welcome: card, sample errand, link and dismiss checked');
 }
+// A call as talk.js reports it (no microphone, no ElevenLabs): the state chip, live captions for both sides, the mic
+// ring, hanging up and a denied microphone. The user's words stay up a moment before Vali's answer replaces them.
+async function smokeTalk(out, pose) {
+  const mascotHas = (test, label) => waitFor(mascot, test, label);
+  const talk = event => mascot.webContents.executeJavaScript(`window.__smokeTalk(${JSON.stringify(event)})`);
+  const shows = (status, line, who, label) => waitFor(mascot, `(() => { const s = document.getElementById('status'), b = document.getElementById('bubble');
+    return (s.hidden ? '' : s.textContent) === ${JSON.stringify(status)} && document.getElementById('line').textContent === ${JSON.stringify(line)} && (b.dataset.who || '') === ${JSON.stringify(who)}; })()`, label);
+  const said = caption('Hei! I looked at every public sauna in Helsinki for Saturday evening. Kotiharju is open until ten and costs fifteen euros. Shall I book it?', 110);
+  if (!said.startsWith('…') || said.length > 111) throw new Error(`Caption was not trimmed: ${said}`);
+  await talk({ mode: 'connecting' });
+  await shows('Connecting…', 'One moment…', 'vali', 'Connecting state missing'); await capture(mascot, out, 'mascot-talk-connecting');
+  await talk({ mode: 'listening', caption: 'Find a sauna open on Saturday evening', who: 'you', level: 0.7 });
+  await shows('Listening', 'Find a sauna open on Saturday evening', 'you', 'User caption missing');
+  await pose(); await capture(mascot, out, 'mascot-talk-listening');
+  await talk({ mode: 'speaking', caption: said, level: 0.6 });
+  await mascotHas(`document.getElementById('wrap').classList.contains('speaking') && document.getElementById('talk').textContent.includes('Stop')`, 'Talking state missing');
+  await shows('Vali is speaking', said, 'vali', 'Vali caption did not replace the user caption');
+  await pose(); await capture(mascot, out, 'mascot-talk'); await captureLight(mascot, out, 'mascot-talk');
+  await talk({ mode: '', ended: true });
+  await mascotHas(`document.getElementById('status').textContent === 'Call ended' && !document.getElementById('wrap').classList.contains('talking')`, 'Call ended missing');
+  await capture(mascot, out, 'mascot-talk-ended');
+  const denied = micError({ name: 'NotAllowedError' });
+  await talk({ mode: 'connecting' }); await talk({ mode: '', error: denied, mic: true });
+  await mascotHas(`document.getElementById('line').textContent === ${JSON.stringify(denied)} && document.getElementById('status').hidden && document.querySelector('#bubble .v-btn')?.textContent === 'Open settings'`, 'Microphone message missing');
+  await pose(); await capture(mascot, out, 'mascot-talk-mic');
+}
 // The mascot's reactions, the talking state and the walk to the edge (window positions are checked, not captured).
 async function smokeValet(out) {
   const mascotHas = (test, label) => waitFor(mascot, test, label);
@@ -553,13 +586,10 @@ async function smokeValet(out) {
     await mascotHas(`document.getElementById('line').textContent === 'I need you to finish a step.'`, `${kind} hand-off bubble missing`);
   }
   updateTasks(fixture);
-  await mascot.webContents.executeJavaScript(`window.__smokeTalk('speaking', 'Hei! I found two saunas open on Saturday. Shall I book the one in Kallio?')`);
-  await mascotHas(`document.getElementById('wrap').classList.contains('speaking') && document.getElementById('talk').textContent.includes('Stop')`, 'Talking state missing');
-  await pose(); await capture(mascot, out, 'mascot-talk');
-  await captureLight(mascot, out, 'mascot-talk');
-  await mascot.webContents.executeJavaScript(`window.__smokeTalk('')`);
+  await smokeTalk(out, pose);
   updateTasks(fixture.filter(t => t.id === 'smoke-research'));
-  await mascotHas(`document.getElementById('line').textContent.includes('on it')`, 'mascot-working line missing');
+  // The microphone message holds the bubble for 8 s before the errand line comes back.
+  await waitFor(mascot, `document.getElementById('line').textContent.includes('on it')`, 'mascot-working line missing', 12000);
   await pose(); await capture(mascot, out, 'mascot-working'); await captureLight(mascot, out, 'mascot-working');
   for (const [name, keep, words] of [['mascot-done', 'smoke-done', 'All done'], ['mascot-error', 'smoke-done', 'couldn']]) {
     updateTasks(fixture.filter(t => t.id === keep).map(t => name === 'mascot-error' ? { ...t, status: 'failed' } : t));

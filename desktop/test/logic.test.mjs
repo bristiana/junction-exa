@@ -82,3 +82,23 @@ test('console lines lose tokens before they reach stderr', () => {
   assert.ok(!/abc123|eyJ|q\.w|u\.1\.h|zz/.test(out), out);
   assert.match(out, /n=1/);
 });
+import { talkStatus, talkCaption } from '../logic.mjs';
+test('the call state reads in plain words', () => {
+  assert.equal(talkStatus('connecting'), 'Connecting…');
+  assert.equal(talkStatus('listening'), 'Listening');
+  assert.equal(talkStatus('speaking'), 'Vali is speaking');
+  assert.equal(talkStatus('ended'), 'Call ended');
+  assert.equal(talkStatus(''), '');
+});
+test('captions show the user briefly, then Vali, and a hint before anyone spoke', () => {
+  assert.deepEqual(talkCaption({ mode: 'connecting' }), { who: 'vali', text: 'One moment…' });
+  assert.match(talkCaption({ mode: 'listening' }).text, /listening/);
+  const user = { user: 'Find a sauna', userAt: 1000 };
+  assert.deepEqual(talkCaption({ ...user, now: 1500 }), { who: 'you', text: 'Find a sauna' });
+  // Vali answers right away: the user's words stay up for the hold, then his line takes over.
+  const both = { ...user, agent: 'Kotiharju is open.', agentAt: 1200 };
+  assert.equal(talkCaption({ ...both, now: 2000 }).who, 'you');
+  assert.deepEqual(talkCaption({ ...both, now: 3600 }), { who: 'vali', text: 'Kotiharju is open.' });
+  // The user's newest words stay until Vali says something after them.
+  assert.equal(talkCaption({ agent: 'Hei!', agentAt: 500, ...user, now: 9000 }).who, 'you');
+});
