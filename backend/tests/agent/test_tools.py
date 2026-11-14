@@ -258,3 +258,36 @@ def test_form_pages_skip_footer_links_and_long_menus(local_site):
         assert 'Footer link' not in lines and 'Menu link' not in lines
     finally:
         browser.close()
+
+
+def test_follows_a_popup_window_and_keeps_streaming(local_site):
+    frames, steps = [], []
+
+    def in_popup(messages):
+        snap = messages[-1]['content'][0]['content']
+        assert 'Booking window' in snap and 'input[email]' in snap
+        ref = next(l.split(']')[0][1:] for l in snap.splitlines() if 'input[email]' in l)
+        return 'type_text', {'ref': ref, 'text': '{{email}}'}
+    llm = Scripted([('click', {'ref': 'e1'}), in_popup, ('finish', {'result': 'ok'})])
+    hooks = AgentHooks(lambda t, j: steps.append(t), lambda s, f: True, lambda: False, on_frame=frames.append)
+    result = run_browser_agent('x', local_site + '/popup.html', PROFILE, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done', result
+    assert result.final_url.endswith('/popup_child.html') and frames
+
+
+def test_reading_does_not_use_up_actions_but_model_calls_are_capped(local_site):
+    llm = Scripted([('read_page', {}), ('look', {}), ('read_page', {}), ('scroll', {'direction': 'down'}), ('finish', {'result': 'ok'})])
+    result = run_browser_agent('x', local_site + '/claim.html', {}, plain_hooks(), llm, max_steps=1, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'done' and result.steps == 5
+    llm = Scripted([('read_page', {})] * 10)
+    result = run_browser_agent('x', local_site + '/claim.html', {}, plain_hooks(), llm, max_model_calls=3, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'failed' and 'limit' in result.result and llm.turn == 3
+
+
+def test_payment_page_still_gets_the_approval_summary(local_site):
+    approvals = []
+    llm = Scripted([('request_approval', {'summary': 'Pay 208 EUR for the sauna', 'filled': []}), ('finish', {'result': 'handed over'})])
+    hooks = AgentHooks(lambda t, j: None, lambda s, f: approvals.append(s) or False, lambda: False)
+    browser_payment = local_site + '/payment.html'
+    result = run_browser_agent('x', browser_payment, {}, hooks, llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert approvals == ['Pay 208 EUR for the sauna'] and result.status == 'stopped'
