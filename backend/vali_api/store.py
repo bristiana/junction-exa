@@ -42,7 +42,9 @@ class Store:
             'watch_updates(watch_id TEXT NOT NULL, event_id TEXT NOT NULL, data_json TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(watch_id,event_id))',
             'failures(id TEXT PRIMARY KEY, task_id TEXT NOT NULL, stage TEXT NOT NULL, error TEXT NOT NULL, at TEXT NOT NULL)',
             f'shots(task_id TEXT NOT NULL, n INTEGER NOT NULL, jpeg {blob} NOT NULL, PRIMARY KEY(task_id,n))',
-            f'live_frames(task_id TEXT PRIMARY KEY, jpeg {blob} NOT NULL, updated_at TEXT NOT NULL)']
+            f'live_frames(task_id TEXT PRIMARY KEY, jpeg {blob} NOT NULL, updated_at TEXT NOT NULL)',
+            # "Continue in my browser": the cloud browser's page and cookies. Secrets: never in execution_json.
+            'handoffs(task_id TEXT PRIMARY KEY, data_json TEXT NOT NULL, expires_at TEXT NOT NULL)']
         for table in tables:
             self.sql('CREATE TABLE IF NOT EXISTS ' + table)
         self._add_column('tasks', 'lang TEXT')
@@ -423,6 +425,23 @@ class Store:
     def get_live_frame(self, tid):
         row = self.sql('SELECT jpeg FROM live_frames WHERE task_id=?', (tid,), one=True)
         return bytes(row['jpeg']) if row else None
+
+    HANDOFF_SECONDS = 900
+
+    def put_handoff(self, tid, url, cookies):
+        current = datetime.now(timezone.utc)
+        self.sql('DELETE FROM handoffs WHERE expires_at<=?', (current.isoformat(),))
+        expires = (current + timedelta(seconds=self.HANDOFF_SECONDS)).isoformat()
+        self.sql('INSERT INTO handoffs VALUES(?,?,?) ON CONFLICT(task_id) DO UPDATE SET data_json=excluded.data_json, '
+                 'expires_at=excluded.expires_at', (tid, json.dumps({'url': url, 'cookies': cookies}), expires))
+
+    def take_handoff(self, tid):
+        """One fetch only: DELETE RETURNING is atomic on both engines, and an expired hand-off is gone too."""
+        row = self.sql('DELETE FROM handoffs WHERE task_id=? RETURNING data_json, expires_at', (tid,), one=True)
+        return json.loads(row['data_json']) if row and row['expires_at'] > now() else None
+
+    def handoff_live(self, tid):
+        return bool(self.sql('SELECT 1 AS x FROM handoffs WHERE task_id=? AND expires_at>?', (tid, now()), one=True))
 
     def close(self):
         self.connection.close()

@@ -19,6 +19,9 @@ class AgentHooks:
     ask_user: Callable[[str], str | None] | None = None
     # Optional: every Exa call so far (kind, query or url, result urls and titles, cost), after each call.
     on_exa: Callable[[list[dict]], None] | None = None
+    # Optional: the page and its site's cookies when the user may take over in their own browser (at approval or a
+    # payment blocker). The cookies are secrets: never log or show them.
+    on_handoff: Callable[[str, list[dict]], None] | None = None
 
 
 class ConsoleHooks(AgentHooks):
