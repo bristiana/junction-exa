@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Feedback wizard</title>
+<style>.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);margin:-1px}
+#modal{position:fixed;inset:0;background:#0004;display:none}</style><body>
+<fieldset><legend>Topic</legend>
+<input class="vh" type="radio" name="topic" id="t1" value="airport"><label for="t1">Airport experience</label>
+<input class="vh" type="radio" name="topic" id="t2" value="flight"><label for="t2">Flight experience</label></fieldset>
+<label><input class="vh" type="checkbox" name="agree"> I agree</label>
+<button type="button" id="next" disabled onclick="document.body.dataset.next='yes'">Next</button>
+<div id="behind" inert><button type="button">Hidden behind modal</button></div>
+<script>document.querySelectorAll('input[name=topic]').forEach(r=>r.addEventListener('change',()=>setTimeout(()=>document.querySelector('#next').disabled=false,800)));</script>
+</body></html>
