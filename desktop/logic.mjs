@@ -248,8 +248,14 @@ const TALK_STATUS = { connecting: 'Connecting…', listening: 'Listening', speak
 export const talkStatus = mode => TALK_STATUS[mode] || '';
 // The caption under Vali during a call: the user's words while they are the newest line (and for at least `hold` ms,
 // so they are readable before Vali's answer replaces them), otherwise Vali's last line, otherwise a hint.
+// Expressive voice tags like [happy] shape the voice; they are not words to show.
+export function withoutVoiceTags(text = '') {
+  return text.replace(/\[[a-z][a-z ]{0,20}\]\s*/gi, '').trim();
+}
+
 export function talkCaption({ mode = '', agent = '', agentAt = 0, user = '', userAt = 0, now = Date.now(), hold = 2500 } = {}) {
   if (user && (userAt >= agentAt || now - userAt < hold)) return { who: 'you', text: user };
-  if (agent) return { who: 'vali', text: agent };
+  const said = withoutVoiceTags(agent);
+  if (said) return { who: 'vali', text: said };
   return { who: 'vali', text: mode === 'connecting' ? 'One moment…' : 'I’m listening. Tell me the errand.' };
 }
