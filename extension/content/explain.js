@@ -1,7 +1,8 @@
 // Explain this: select text on a page and a small "Ask Vali" button appears next to it. A click opens the side panel
 // with the selection attached and "What does this mean and what should I do?" ready to send as an errand.
 // Never for text inside fields or editors (what the user typed), never on the sites presence.js blocks, off when
-// settings.presence === false. Classic content script; runs after content/presence.js, which defines the site rules.
+// settings.presence === false. Classic content script; runs after content/presence.js, which defines the site rules
+// and adds the "Vali Jakarta" font.
 (function () {
   "use strict";
   if (globalThis.__valiExplain || typeof document === "undefined" || window.top !== window) return;
@@ -17,7 +18,7 @@
   :host { all: initial; }
   .pill { position: fixed; z-index: 2147483646; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px;
     border: 1px solid #e6dcef; border-radius: 999px; background: #fff; color: #34305a; cursor: pointer;
-    font: 600 12.5px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: 600 12.5px/1 "Vali Jakarta", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     box-shadow: 0 8px 24px rgba(52,48,90,.16), 0 1px 3px rgba(52,48,90,.10);
     opacity: 0; transform: translateY(4px); transition: opacity .15s ease, transform .2s cubic-bezier(.16,1,.3,1); }
   .pill.in { opacity: 1; transform: none; }

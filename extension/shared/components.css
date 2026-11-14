@@ -1,4 +1,5 @@
-/* Vali components. Uses only shared/tokens.css. Load tokens.css first. */
+/* Vali components. Uses only shared/tokens.css. Load tokens.css first.
+   Primary buttons are ink, secondary ones outlined, cards white on the pastel background. */
 
 .v-app { background: var(--v-bg); color: var(--v-text); font: var(--v-fs-md)/var(--v-lh) var(--v-font); -webkit-font-smoothing: antialiased; }
 .v-app *, .v-app *::before, .v-app *::after { box-sizing: border-box; }
@@ -10,15 +11,15 @@
 .v-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--v-s-2);
   min-height: var(--v-tap); padding: 0 var(--v-s-4); border: 1px solid transparent; border-radius: var(--v-r-md);
-  background: var(--v-accent); color: var(--v-on-accent); font: 600 var(--v-fs-md)/1 var(--v-font);
+  background: var(--v-primary); color: var(--v-on-primary); font: 700 var(--v-fs-md)/1 var(--v-font);
   white-space: nowrap; cursor: pointer; text-decoration: none;
   transition: background-color var(--v-dur-fast) var(--v-ease), transform var(--v-dur-fast) var(--v-ease);
 }
-.v-btn:hover { background: var(--v-accent-hover); }
+.v-btn:hover { background: var(--v-primary-hover); }
 .v-btn:active { transform: scale(0.98); }
-.v-btn--quiet { background: transparent; color: var(--v-accent); }
-.v-btn--quiet:hover { background: var(--v-accent-soft); }
-.v-btn--soft { background: var(--v-accent-soft); color: var(--v-accent); }
+.v-btn--quiet { background: transparent; color: var(--v-text); border-color: var(--v-line-2); }
+.v-btn--quiet:hover { background: var(--v-surface-2); }
+.v-btn--soft { background: var(--v-accent-soft); color: var(--v-text); }
 .v-btn--soft:hover { background: var(--v-accent-soft); border-color: var(--v-ring); }
 .v-btn--danger { background: var(--v-danger-soft); color: var(--v-danger); }
 .v-btn--danger:hover { background: var(--v-danger); color: var(--v-on-danger); }
@@ -32,7 +33,7 @@
 .v-hint { margin: var(--v-s-1) 0 0; font-size: var(--v-fs-sm); color: var(--v-muted); }
 .v-input, .v-textarea {
   display: block; width: 100%; min-height: var(--v-tap); padding: var(--v-s-2) var(--v-s-3);
-  border: 1px solid var(--v-line); border-radius: var(--v-r-md); background: var(--v-surface); color: var(--v-text);
+  border: 1px solid var(--v-line-2); border-radius: var(--v-r-md); background: var(--v-surface); color: var(--v-text);
   font: var(--v-fs-md)/var(--v-lh) var(--v-font); transition: border-color var(--v-dur-fast) var(--v-ease);
 }
 .v-textarea { min-height: 88px; resize: vertical; }
@@ -60,7 +61,7 @@
 .v-badge--warning { background: var(--v-warning-soft); color: var(--v-warning); }
 .v-badge--danger { background: var(--v-danger-soft); color: var(--v-danger); }
 .v-badge--muted { background: var(--v-surface-2); color: var(--v-muted); }
-.v-badge--count { min-width: 20px; height: 20px; justify-content: center; padding: 0 6px; background: var(--v-accent); color: var(--v-on-accent); font-variant-numeric: tabular-nums; line-height: 20px; }
+.v-badge--count { min-width: 20px; height: 20px; justify-content: center; padding: 0 6px; background: var(--v-primary); color: var(--v-on-primary); font-variant-numeric: tabular-nums; line-height: 20px; }
 
 /* Row: lead, title + one-line status, inline actions (wrap under on narrow panels) */
 .v-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--v-s-2) var(--v-s-3); min-height: 64px; padding: var(--v-s-3) var(--v-s-4); }
