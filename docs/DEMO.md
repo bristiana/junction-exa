@@ -1,10 +1,20 @@
 # Vali: 3-minute demo script
 
-For the Exa "Internet Butler" judging, Sun 15 Nov 10:00. The main path starts on the Mac app, then shows the extension. Every errand below comes from verified runs (see `docs/SANDBOX_REPORT.md` and `scripts/golden.py`). Real sites always stop before the final button. Never click "Approve" on a real site.
+For the Exa "Internet Butler" judging, Sun 15 Nov 10:00. The main path starts on the Mac app, then shows the extension. Every errand below passed live in the overnight eval (`scripts/evals/scorecard.md`, errand texts in `scripts/evals/errands.json`). Real sites always stop before the final button. Never click "Approve" on a real site.
 
-Rehearse the Löylykontti step through the Mac app at least once. Its verified runs started the sandbox directly; the Helsinki form and the httpbin form were verified end to end through the API.
+Rehearse the Löylykontti step through the Mac app at least once. Paste the errand texts exactly as written below.
 
-Judging criteria (20% each): **Use of Exa**, **Usefulness**, **Clarity of sources**, **Originality**, **Working implementation**. Each step below says which one it hits. The three Exa moments are marked **Exa moment**: search, research with sources, and Exa lookups mid-form.
+Judging criteria (20% each): **Use of Exa**, **Usefulness**, **Clarity of sources**, **Originality**, **Working implementation**. Each step below says which one it hits. The three Exa moments are marked **Exa moment**: research with sources, research before a booking, and Exa lookups mid-form.
+
+## The five demo errands
+
+| # | Id | Paste this | Ends at | Time |
+|---|---|---|---|---|
+| 1 | book-sauna | `Book a shared sauna for 8 people next Saturday evening (21 November) at Löylykontti Sörnäinen` | approval before pay: the slot, 208 EUR total, sources | about 145 s |
+| 2 | claim-pothole-form | `Report a deep pothole at Mannerheimintie 5 in Helsinki to the city. I want a reply by email.` | approval before Send: 7 values | about 150 s |
+| 3 | claim-ta-defect | `The kitchen tap in my TA rental flat is leaking. Report it to TA.` | approval before submit, after property autocomplete and preview | about 95 s |
+| 4 | book-allas-tickets | `Buy 2 adult tickets for Allas Sea Pool for Sunday 22 November afternoon` | approval before payment, after a 4-step wizard with guest checkout | about 85 s |
+| 5 | claim-eu261 | `My Finnair flight from Helsinki to Barcelona last Tuesday landed 4 hours late. What can I get?` | answer: 400 EUR with the EU rule cited (research only) | about 25 s |
 
 ## Before the judges arrive (T-15 min)
 
@@ -12,13 +22,14 @@ Judging criteria (20% each): **Use of Exa**, **Usefulness**, **Clarity of source
 2. Mac app: running (`cd desktop && npm start`, or the installed dmg build from `npm run dist`). The mascot is bottom right. Server is `https://bogdan-c-2206--vali-web.us-east.modal.run`. Settings > Profile holds made-up test data only (a fake name, an `example.com` email, a fake `+358` number). macOS has granted the microphone, Accessibility and Automation once, so no permission prompt appears on stage.
 3. Link the extension: in the extension settings press Show code and type it in the Mac app (Settings > Link with the extension), or the other way round. Both must show the same errand list. If linking fails, paste the extension token under Advanced.
 4. Chrome: the extension is loaded unpacked and Settings shows the same server. Its "Your details" holds the same made-up data.
-5. Open three tabs:
+5. Open four tabs:
    - `https://www.loylykontti.fi/en/reserve` (sauna booking, keep this one in front)
-   - `https://palautteet.hel.fi/vikailmoitus-lomake` (Helsinki "Report a problem", backup)
-   - `https://httpbin.org/forms/post` (test form, last-resort backup)
-6. Put a sample Finnish letter (photo or PDF, made-up details, under 10 MB) on the desktop, in a Finder window next to the mascot.
-7. Backups ready: a screen recording of one full Löylykontti run up to the approval card, and yesterday's completed tasks still in the list (find, claim, sauna at approval).
-8. Use an account that has not spent much today. The API stops research for an account at $2 per day (`VALI_DAILY_CAP_USD`) and allows 30 new errands per 10 minutes. If rehearsals used the account, create a fresh one.
+   - `https://palautteet.hel.fi/vikailmoitus-lomake` (Helsinki "Report a problem")
+   - `https://asunnonhakijalle.production.kenno.pandia.fi/defect-notice/create?slug=t2&lang=en` (TA fault report)
+   - `https://shop.allaspool.fi/en/shop/tickets` (Allas Sea Pool shop)
+6. At T-5 min, start errands 2, 3 and 4 from the quick box (Alt+Space) and let them run to their approval cards. They take 85-150 s each, so they cannot run live inside 3 minutes. They are shown at 1:00 as finished cards.
+7. Backups ready: a screen recording of one full Löylykontti run up to the approval card, and yesterday's completed tasks still in the list.
+8. Use an account that has not spent much today. The API stops research for an account at $2 per day (`VALI_DAILY_CAP_USD`) and allows 30 new errands per 10 minutes. The five errands cost about $0.90 together. If rehearsals used the account, create a fresh one.
 9. WhatsApp is parked and is not part of the demo. Do not open it.
 
 ## The script
@@ -31,98 +42,71 @@ Judging criteria (20% each): **Use of Exa**, **Usefulness**, **Clarity of source
 
 **Hits:** Usefulness (a named group with real errands).
 
-### 0:10-0:30 Quick box: find a sauna (Mac app)
+### 0:10-0:25 Start the booking (Mac app, errand 1: book-sauna)
 
-**Do:** press Alt+Space. The quick box opens in the middle of the screen. Type: `Find a sauna in Helsinki open tonight for 6 people`. Press Enter. (A chip with the Chrome tab may be attached; remove it with its x.)
+**Do:** press Alt+Space. The tab title and address come along as a chip. Paste: `Book a shared sauna for 8 people next Saturday evening (21 November) at Löylykontti Sörnäinen`. Press Enter.
 
-**Shows:** the mascot switches to working. In about 3 seconds the answer appears with options, prices and opening hours, each with numbered sources. Click one source to show it is a real page.
+**Say:** "Same box, and it knows the page I am on. This runs for a couple of minutes, so while Exa researches the booking, let me show a claim."
 
-**Say:** "This is Exa search with structured output, live. Tonight's hours and prices are not in any model's training data. Every fact has its source."
+**If it fails:** if Alt+Space does nothing, try Alt+V or use the menu bar icon, "New errand". If the Mac app is down, type the same errand in the extension side panel (Alt+V in Chrome).
 
-**Exa moment 1: search.** **Hits:** Use of Exa, Clarity of sources, Working implementation.
+### 0:25-1:00 Claim with sources (errand 5: claim-eu261)
 
-**If it fails:** if Alt+Space does nothing, try Alt+V or use the menu bar icon, "New errand". If the Mac app is down, type the same errand in the extension side panel (Alt+V in Chrome). If the answer is slow, open the completed sauna task from earlier and say "this ran an hour ago, same query".
+**Do:** press Alt+Space again. Paste: `My Finnair flight from Helsinki to Barcelona last Tuesday landed 4 hours late. What can I get?`. Press Enter. Open the errand when it is done (about 25 s; a macOS notification also fires).
 
-### 0:30-0:50 Talk to Vali: a claim
+**Shows:** 400 EUR under EU261, the 3-hour threshold, and the next step. Each fact carries its citation. Click one source to show it is a real page.
 
-**Do:** hold Alt+Shift+Space and say: "My Finnair flight Helsinki to Barcelona was four hours late, what can I get?" Let go. The text appears in the box and the errand starts.
+**Say:** "These numbers come from the regulation and Finnair's own pages, read just now. Every fact has its source." If the answer cites the 2-month window, add: "That deadline comes from a Finnish court ruling this April. A model without live search does not know it."
 
-**Shows:** the mascot listens, then works. The Exa Agent starts reading the regulation and Finnair's own pages (10-90 seconds).
+**Exa moment 1: research with sources.** **Hits:** Use of Exa, Clarity of sources, Usefulness.
 
-**Say:** "I can also just say it. The recording goes to speech-to-text, and the errand starts. The claim goes to the Exa Agent while I carry on."
+**If it fails:** the Agent can take up to 90 seconds. If it is not back, say "it is still reading, we come back to it" and go on. If it failed, open the completed claim task from earlier. Do not run the Finnair wizard itself: it checks a real booking reference.
 
-**Hits:** Originality (voice, letters and text into one butler), Working implementation.
+### 1:00-1:50 Forms that stop at the last button (errands 2, 3, 4)
 
-**If it fails:** if the microphone does not pick up, type the claim in the quick box (Alt+Space): `My Finnair flight HEL-BCN was 4 hours late, what can I get?`. Optional extra if the voice agent is configured (`/health` shows `voice_agent`): press Alt+Shift+V and talk with Vali, then press it again to stop. Skip it if there is any doubt.
+**Do:** hover the mascot to open all errands at a glance. Open the pothole errand (claim-pothole-form), then the TA fault report (claim-ta-defect), then the Allas tickets (book-allas-tickets). Show each approval card for a few seconds.
 
-### 0:50-1:05 Drop a letter
+**Shows:**
+- Pothole: the real Helsinki "Report a problem" form, stopped before Send, with 7 values filled.
+- TA: the fault report with the property picked from the autocomplete, stopped at the preview before submit.
+- Allas: a 4-step shop wizard with guest checkout, stopped before payment.
 
-**Do:** drag the sample letter from Finder onto the mascot.
+**Say:** "Three different real sites, three different shapes: a city form, an iframe form with a preview, a shop wizard. Each one stops before the final button. Claude decides each step but never sees my details. It types `{{name}}` and `{{email}}`; the real values stay on this Mac and go in at the last moment."
 
-**Shows:** the mascot reads the letter and a new errand appears: "Explain this letter and tell me what to do", with a short plain summary and next steps.
+**Hits:** Working implementation, Usefulness, Originality.
 
-**Say:** "Finnish letters are the worst part. I drop it on Vali. It reads the photo or PDF, strips personal data, and tells me what to do and by when."
+**If it fails:** if a card is missing, rerun that errand live from the quick box and say "this takes about 90 seconds, here is yesterday's run" while you open the completed one. Last resort: the screen recording.
 
-**Hits:** Usefulness, Originality.
+### 1:50-2:20 Talk to Vali (optional)
 
-**If it fails:** say "reading takes a few seconds" and move on. If it errors (unreadable file, over 10 MB), skip it. Scanned PDFs without text are rejected by design; use a photo or a text PDF.
+Only do this if `/health` shows `voice_agent` and the room is quiet. Skip it otherwise.
 
-### 1:05-1:20 Start the booking
+**Do:** press Alt+Shift+V on the Mac. Ask out loud: "What do I need to bring to the sauna booking?" The ElevenLabs agent answers. Press Alt+Shift+V again to stop.
 
-**Do:** click Chrome so the Löylykontti tab is in front. Press Alt+Space. The tab title and address come along as a chip. Type: `Book a shared sauna for 8 at Löylykontti Sörnäinen next Saturday evening, 2 hours`. Press Enter.
+**Say:** "I can also just talk to Vali. It is a voice agent on the same butler."
 
-**Say:** "Same box, but this time it knows the page I am on. While Exa researches the booking, let me show the claim."
+**Hits:** Originality.
 
-**If it fails:** use the extension instead: Alt+V, type the same errand on the Löylykontti tab.
+**If it fails:** if there is no sound or any doubt, stop and go on. Do not retry on stage.
 
-### 1:20-1:40 Claim answer with sources
+### 2:20-2:40 The sauna approval card (errand 1)
 
-**Do:** hover the mascot to open all errands at a glance. Open the claim errand when it is done (a macOS notification also fires).
-
-**Shows:** the amount under EU261 (for HEL-BCN, an intra-EU flight over 1,500 km, expect €400; read what Vali says), the 3-hour threshold, the 2-month filing window Finnair enforces after the Market Court ruling of April 2026, and the next step with a link to Finnair's claim wizard. Each fact carries its citation.
-
-**Say:** "These numbers come from the regulation and Finnair's own pages, read just now. Vali also tells me what it still needs: the booking reference." If the answer cites the 2-month window, add: "That deadline comes from a Finnish court ruling this April. A model without live search does not know it."
-
-**Exa moment 2: research with sources.** **Hits:** Use of Exa, Clarity of sources, Usefulness.
-
-**If it fails:** the Agent can take up to 90 seconds. If it is not back, say "it is still reading, we come back to it" and go to the next step. If it failed, open the completed claim task from earlier.
-
-Do not run the Finnair wizard itself: it checks a real booking reference, so with test data it stops at that step.
-
-### 1:40-2:25 Do it: book the sauna (live run to approval)
-
-**Do:**
-1. In the glance list, open the sauna errand. When research is done, click **Let Vali do it**.
-2. The live view appears: the cloud browser opens loylykontti.fi, picks the location, moves to Saturday. Steps scroll under the picture.
-3. Vali asks which free start time to take (the slots are live). Answer in the list, for example `the earliest one after 19:00`, and click Send answer.
-4. It sets 8 people and 2 hours, fills name, email and phone, picks online banking, then stops. The mascot gets an amber ring and a notification. The approval card shows what Vali will submit: the slot, sauna, 8 people, 2 h, the total, and every filled value.
-5. Click **Stop**. Never approve here.
-
-**Say (while it fills):** "This is a real Finnish booking site in a browser on Modal. Claude decides each step, but it never sees my details. It types `{{name}}` and `{{email}}`; the real values stay on this Mac and are put in at the last moment, and they are blurred in the live view. Anything that pays, sends or confirms is blocked until I approve."
+**Do:** open the sauna errand. If the run is still going, show the live view while it fills. It reaches the approval card about 145 s after the start. The card shows the slot, the 8 people, 2 h, the 208 EUR total, every filled value, and the sources. Click **Stop**. Never approve here.
 
 **Say (at the approval card):** "It stopped before 'Accept terms and pay'. I can approve with one click, or stop. I stop, because this is a real sauna."
 
-**Exa moment 3: Exa mid-form.** Point at a step or a source on the card that came from a lookup while the form stayed open (opening hours, a slot rule, a price). Say: "It did not leave the form to look that up. It asked Exa from inside the run, and the source is on the card." Only say this if you can see such a step or source. Otherwise skip the line.
+**Exa moment 2: research before the booking.** Point at the 208 EUR total and the sources on the card. Say: "Exa researched the price and the rules before the browser started, and the sources are on the card."
+
+**Exa moment 3: Exa mid-form.** Only if you can see a step or source on the card that came from a lookup while the form stayed open (a slot rule, a price). Say: "It did not leave the form to look that up. It asked Exa from inside the run." Otherwise skip the line.
 
 **Hits:** Use of Exa, Originality (research to a done form with an approval gate), Working implementation, Usefulness.
 
 **If it fails:**
 - Run stops as `needs payment` with the same summary: show it, it is the same stop point. Say "it reached the pay step and handed it back".
-- Run fails or hangs before 2:15: switch to the Helsinki tab and hand off `A deep pothole at Mannerheimintie 5, I want a reply by email`, then Let Vali do it (verified 3 of 4 runs, about 60 seconds). If time is short, play the recording instead.
-- Modal or the site is down: the httpbin tab. Hand off `Order a medium pizza with bacon and cheese, delivery at 19:00, ring the bell` on the httpbin test order form. httpbin is an echo service, so here you may approve and show the run finish with the echoed order.
-- Last resort: the screen recording of a full Löylykontti run.
+- Run is not ready at 2:40: show the pothole card from step 1:00 again and say "same thing, finished earlier". Then play the recording of the full Löylykontti run.
+- Modal or the sites are down: the recording and yesterday's completed tasks.
 
-### 2:25-2:35 All errands at a glance
-
-**Do:** hover the mascot once more.
-
-**Shows:** the list with every errand: the sauna find, the claim, the letter, the booking (stopped), each with one status line. The badge counts what is running and an amber ring shows what needs you.
-
-**Say:** "One place for everything Vali is doing for me."
-
-**Hits:** Clarity, Usefulness.
-
-### 2:35-2:55 The extension
+### 2:40-2:55 The extension
 
 **Do:** switch to Chrome and press Alt+V. The side panel opens with the same errands, because the two apps are linked. On the Helsinki tab, show the mascot peeking in on the form.
 
@@ -132,7 +116,7 @@ Do not run the Finnair wizard itself: it checks a real booking reference, so wit
 
 **Hits:** Working implementation, Originality (one butler across surfaces).
 
-**If it fails:** if the panel list is empty, the link is not set up. Say "the extension has its own list too" and show a completed find in it. If the panel does not open, skip to the close.
+**If it fails:** if the panel list is empty, the link is not set up. Say "the extension has its own list too" and show a completed claim in it. If the panel does not open, skip to the close.
 
 ### 2:55-3:00 Close
 
@@ -140,17 +124,19 @@ Do not run the Finnair wizard itself: it checks a real booking reference, so wit
 
 Hand the laptop to the judges with the quick box ready (Alt+Space).
 
+**Proof:** 20/20 live errands passed in the overnight eval, $1.47 in total. Scorecard: `scripts/evals/scorecard.md` (errands in `scripts/evals/errands.json`).
+
 ## When the judges try their own errand
 
 - "Find" errands answer in seconds and are the safest live query. Good prompts: a restaurant, a café open now, a laptop under a budget. They can type, or hold Alt+Shift+Space and say it.
 - "Check" and "claim" errands use the Exa Agent and take 10-90 seconds. Say so before they press Enter.
 - If they ask for "do it" on a new site: it works on forms without login. Sites behind Suomi.fi, bank ID, a login, a CAPTCHA or Cloudflare (Kela, Vero, Migri, HSL) stop with a one-line reason and a "Finish in your tab" button. That is the designed behaviour; show it rather than apologise.
-- Do not demo "watch" errands: Exa Monitors are not wired yet, so a watch is only saved locally.
+- Do not demo "watch" errands: watching is not wired to Exa yet, so a watch is only saved locally.
 - WhatsApp is parked, so do not offer it. If asked: "Meta blocks sending from unverified business portfolios, so we moved the chat idea to iMessage. The plan is in docs/IMESSAGE.md."
 
 ## Timing notes
 
-- Find: about 3 seconds.
-- Agent research: 10-90 seconds (22-28 seconds in the verified runs).
-- Sandbox on a real site: 50-60 seconds to the approval card, plus about 25 seconds of research before Let Vali do it is available. That is why the booking starts at 1:05 and the claim answer is read while it researches.
+- Research only (claim-eu261): about 25 seconds.
+- Agent research: 10-90 seconds.
+- Sandbox runs in the eval: Allas 85 s, TA 95 s, sauna 144 s, pothole 151 s, from start to the approval card.
 - Live view runs at about 1 frame per second; it pauses when the page is still.
