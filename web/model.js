@@ -214,6 +214,21 @@ export function countersOf(stats, tasks) {
   };
 }
 
+// Every page Vali touched for one errand: read by Exa during research or the fill, or opened in the cloud browser.
+export function pagesTouched(task) {
+  const run = task?.execution || {};
+  const read = [
+    ...activityOf(task).filter((l) => l.kind === 'read').map((l) => l.url),
+    ...sourcesOf(task).map((s) => s.url),
+    ...list(run.sources).map((s) => s?.url ?? s),
+    ...list(run.exa).filter((e) => e?.kind === 'read').map((e) => e.url),
+  ];
+  const pages = new Map();
+  for (const url of [run.start_url, run.current_url].map(safeUrl).filter(Boolean)) pages.set(url, 'opened in the browser');
+  for (const url of read.map(safeUrl).filter(Boolean)) if (!pages.has(url)) pages.set(url, 'read by Exa');
+  return [...pages].map(([url, how]) => ({ url, domain: domainOf(url), how }));
+}
+
 // The mascot's pose for an errand (states of vendor/butler.js).
 export function moodOf(task) {
   const run = task?.execution?.status;

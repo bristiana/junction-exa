@@ -198,6 +198,18 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line-2); background: linear-gradient(135deg, var(--c1), var(--c2) 60%, var(--c3)); cursor: pointer; padding: 0; }
 .swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--ink); }
 
+/* ---------- privacy sheet ---------- */
+.sheet { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--line); border-radius: 22px; padding: 22px 24px; color: var(--ink); background: var(--card); box-shadow: 0 24px 64px rgba(52, 48, 90, .25); }
+.sheet::backdrop { background: rgba(52, 48, 90, .28); }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.sheet-head h2 { margin: 0; font-size: 20px; }
+.promises { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 12px; }
+.promises li { background: var(--fill-2); border-radius: 14px; padding: 12px 14px; }
+.promises p { margin: 0; font-size: 14px; }
+.promise-title { font-weight: 800; margin-bottom: 2px !important; }
+.touched { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
+.touched a { font-weight: 600; overflow-wrap: anywhere; }
+
 @keyframes pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 

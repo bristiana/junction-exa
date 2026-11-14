@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, activityLine, channelOf, claimsOf, countersOf, errandStatus, factsOf, moodOf, findStats, primaryAction, publishedStamp, questionOf, sourcesOf, stepsOf } from "../web/model.js";
+import { activityOf, activityLine, channelOf, claimsOf, countersOf, errandStatus, factsOf, moodOf, pagesTouched, findStats, primaryAction, publishedStamp, questionOf, sourcesOf, stepsOf } from "../web/model.js";
 
 const legacy = {
   created_at: "2026-11-14T10:00:00Z", updated_at: "2026-11-14T10:00:20Z",
@@ -77,4 +77,10 @@ test("the mascot's pose follows the errand", () => {
   assert.equal(moodOf(legacy), "success");
   assert.equal(moodOf({ ...legacy, execution: { status: "awaiting_approval" } }), "needs_approval");
   assert.equal(moodOf({ research: { status: "failed" } }), "error");
+});
+
+test("the privacy sheet lists each page once, browser pages first", () => {
+  const task = { ...legacy, execution: { status: "done", start_url: "https://www.posti.fi/en/moving", exa: [{ kind: "read", url: "https://kela.fi/x" }] } };
+  assert.deepEqual(pagesTouched(task).map((p) => [p.domain, p.how]),
+    [["posti.fi", "opened in the browser"], ["dvv.fi", "read by Exa"], ["kela.fi", "read by Exa"]]);
 });
