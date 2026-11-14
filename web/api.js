@@ -85,6 +85,9 @@ export const api = {
     { action_index: actionIndex, profile: Object.keys(profile).length ? profile : undefined }),
   approve: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/approve`),
   stop: (id) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/stop`),
+  // Restart a stopped browser run from where it stopped; answer is what it was waiting for.
+  resume: (id, answer, profile = {}) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/continue`,
+    { answer: answer || undefined, profile: Object.keys(profile).length ? profile : undefined }),
   message: (id, text) => call('POST', `/v1/tasks/${encodeURIComponent(id)}/messages`, { text }),
   transcribe(blob) {
     const form = new FormData();
