@@ -2,17 +2,28 @@
 import { h, show } from './dom.js';
 import { activityLine, activityOf, clock, elapsedSeconds, questionOf } from './model.js';
 
+let announced = '';
+
 export function renderWorking(task, { onReply, onCancel }) {
   const lines = activityOf(task).slice(-8);
+  announce(lines.at(-1));
   show('working',
     h('div', { class: 'stage-slot', 'data-slot': 'working' }),
     h('p', { class: 'eyebrow' }, 'Working on'),
     h('h2', { class: 'errand-title' }, task.task),
     h('p', { class: 'clock', id: 'clock' }, timerText(task)),
-    h('ol', { class: 'trail', 'aria-live': 'polite' },
+    h('ol', { class: 'trail' },
       lines.length ? lines.map(trailItem) : h('li', { class: 'trail-item pending' }, 'Asking Exa where the official answer lives…')),
     questionBlock(questionOf(task), onReply),
-    h('button', { type: 'button', class: 'btn quiet', onclick: onCancel }, 'Stop this errand'));
+    h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onCancel(e.currentTarget) }, 'Stop this errand'));
+}
+
+// Screen readers hear only the newest step, once, not the whole rebuilt list.
+function announce(line) {
+  const text = line ? activityLine(line) : '';
+  if (!text || text === announced) return;
+  announced = text;
+  document.getElementById('announce').textContent = text;
 }
 
 // The clock ticks between polls without redrawing the list.
@@ -33,11 +44,11 @@ function trailItem(line) {
 export function questionBlock(question, onReply) {
   if (!question) return null;
   const input = h('input', { type: 'text', class: 'reply-input', maxlength: '2000', placeholder: 'Type your answer', 'aria-label': 'Your answer' });
-  const submit = (text) => text.trim() && onReply(text.trim());
+  const submit = (text, button) => text.trim() && onReply(text.trim(), button);
   return h('div', { class: 'question card' },
     h('p', { class: 'question-text' }, question.text),
     question.options.length ? h('div', { class: 'chips' },
-      question.options.map((option) => h('button', { type: 'button', class: 'chip', onclick: () => submit(option) }, option))) : null,
-    h('form', { class: 'reply', onsubmit: (event) => { event.preventDefault(); submit(input.value); } },
+      question.options.map((option) => h('button', { type: 'button', class: 'chip', onclick: (e) => submit(option, e.currentTarget) }, option))) : null,
+    h('form', { class: 'reply', onsubmit: (event) => { event.preventDefault(); submit(input.value, event.submitter); } },
       input, h('button', { type: 'submit', class: 'btn' }, 'Send')));
 }

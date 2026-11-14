@@ -4,6 +4,7 @@ import { $ } from './dom.js';
 import { TERMINAL, isActive, moodOf } from './model.js';
 import { renderWorking, tickClock } from './working.js';
 import { renderAnswer } from './answer.js';
+import { stopFrames } from './execution.js';
 import { startMic } from './mic.js';
 import { renderDashboard } from './dashboard.js';
 import { createMascot, mountPalettePicker } from './mascot.js';
@@ -53,22 +54,33 @@ startMic($('mic'), { onText: (text) => { $('errand').value = text; $('errand').f
 // ---------- one errand ----------
 // Only the open errand is polled: every 2 s while it runs, never while the tab is hidden, and after a 429 it waits
 // for Retry-After (or 10 s).
+let pollGen = 0;     // only the newest poll may schedule the next one
+let acting = false;  // one action request at a time: Approve, Stop and Fill it for me can't double-submit
+let leaving = '';    // a note to show once the page is back home
+
 const handlers = {
-  onReply: (text) => act(() => api.message(followed.id, text)),
-  onCancel: () => act(() => api.cancel(followed.id)),
+  onReply: (text, button) => act(() => api.message(followed.id, text), button),
+  onCancel: (button) => act(() => api.cancel(followed.id), button),
   onFollowUp: (text) => ask(text, followed.id),
-  onExecute: (index) => act(() => api.execute(followed.id, index)),
-  onApprove: () => act(() => api.approve(followed.id)),
-  onStop: () => act(() => api.stop(followed.id)),
+  onExecute: (index, button) => act(() => api.execute(followed.id, index), button),
+  onApprove: (button) => act(() => api.approve(followed.id), button),
+  onStop: (button) => act(() => api.stop(followed.id), button),
 };
 
-async function act(request) {
+async function act(request, button) {
+  if (acting) return;
+  acting = true;
+  if (button) button.disabled = true;
   try {
     render(await request());
     notice('');
     poll();
   } catch (error) {
-    notice(error.message);
+    if (error.status === 429) notice(`Vali is busy. Try again in ${error.retryAfter || BUSY_MS / 1000} s.`, true);
+    else notice(error.message);
+  } finally {
+    acting = false;
+    if (button) button.disabled = false;
   }
 }
 
@@ -87,24 +99,27 @@ function render(task) {
 }
 
 async function poll() {
-  const current = followed;
+  const current = followed, gen = ++pollGen;
   if (!current) return;
   clearTimeout(current.timer);
   if (document.hidden) return;
   try {
     const task = await api.task(current.id);
-    if (followed !== current) return;
+    if (gen !== pollGen) return;
     if (!$('notice').hidden && $('notice').classList.contains('quiet')) notice('');
     render(task);
     if (isActive(task)) current.timer = setTimeout(poll, POLL_MS);
   } catch (error) {
-    if (followed !== current) return;
-    if (error.status === 429) {
+    if (gen !== pollGen) return;
+    if (error.status === 404) {
+      leaving = 'That errand is not in this browser’s account.';
+      location.hash = '#/';
+    } else if (error.status === 429) {
       notice('Busy, retrying…', true);
       current.timer = setTimeout(poll, error.retryAfter ? error.retryAfter * 1000 : BUSY_MS);
     } else {
-      notice(error.status === 404 ? 'That errand is not on this device.' : `Lost touch with Vali: ${error.message}`);
-      if (error.status !== 404) current.timer = setTimeout(poll, BUSY_MS);
+      notice(`Lost touch with Vali: ${error.message}`);
+      current.timer = setTimeout(poll, BUSY_MS);
     }
   }
 }
@@ -117,8 +132,10 @@ function follow(id) {
 
 function unfollow() {
   if (!followed) return;
+  pollGen++;
   clearTimeout(followed.timer);
   clearInterval(followed.clock);
+  stopFrames();
   followed = null;
 }
 
@@ -141,7 +158,8 @@ $('trust').addEventListener('click', (event) => { if (event.target === $('trust'
 
 // ---------- routes ----------
 function route() {
-  notice('');
+  notice(leaving);
+  leaving = '';
   const match = location.hash.match(/^#\/t\/([\w-]+)$/);
   if (match) return follow(match[1]);
   unfollow();

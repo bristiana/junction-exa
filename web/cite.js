@@ -7,7 +7,8 @@ let pinned = null;
 
 export function citePill(task, source) {
   if (!source) return null;
-  const pill = h('button', { type: 'button', class: 'pill', 'aria-label': `Source ${source.n}: ${source.domain}` }, String(source.n));
+  const pill = h('button', { type: 'button', class: 'pill', 'aria-label': `Source ${source.n}: ${source.domain}`, 'aria-describedby': 'cite-pop' },
+    String(source.n));
   const open = () => place(pill, card(task, source));
   pill.addEventListener('mouseenter', open);
   pill.addEventListener('focus', open);
@@ -34,10 +35,11 @@ function card(task, source) {
 
 function place(anchor, children) {
   if (!popover) {
-    popover = h('div', { class: 'popover', role: 'tooltip' });
+    popover = h('div', { class: 'popover', role: 'tooltip', id: 'cite-pop' });
     popover.addEventListener('click', (event) => event.stopPropagation());
     document.body.append(popover);
     document.addEventListener('click', () => { pinned = null; hide(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { pinned = null; hide(); } });
     window.addEventListener('scroll', () => !pinned && hide(), { passive: true });
   }
   popover.replaceChildren(...children.filter(Boolean));
