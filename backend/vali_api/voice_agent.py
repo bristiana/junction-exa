@@ -57,6 +57,10 @@ def spoken(text, limit=SPOKEN_LIMIT):
     """Placeholders become plain words; long text is cut at a sentence end."""
     text = re.sub(r'\{\{(\w+)\}\}', lambda m: 'your ' + m[1].replace('_', ' '), str(text or ''))
     text = re.sub(r'\s*(\[\d+\])+', '', text)  # citation markers like [1][2] are not for reading aloud
+    text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)  # a markdown link is read as its words
+    text = re.sub(r'<[^>]*>', ' ', text)  # stray HTML tags
+    text = re.sub(r'\s*\|\s*', ', ', text)  # table cells read as a list
+    text = re.sub(r'[*#`\[\]{}<>]', '', text)  # nothing else a voice should read out
     text = ' '.join(text.split())
     if len(text) <= limit:
         return text
