@@ -149,3 +149,10 @@ def test_answer_buttons_failure_falls_back_to_numbers(notification):
     api.send_buttons.side_effect = GraphAPIError(400, 100)
     push_task(app, task['id'], render_result)
     assert 'Reply 1 to Open it' in api.send_text.await_args.args[1]
+
+
+def test_a_booking_offers_book_it(notification):
+    from vali_wa.render import result_buttons
+    task = {'id': 't1', 'task': 'Book me a sauna on Friday', 'research': {'output': {'structured': {'actions': [
+        {'type': 'open_link', 'label': 'Open booking calendar', 'url': 'https://kulttuurisauna.fi/'}, {'label': 'Remind me'}]}}}}
+    assert result_buttons(task) == [('choose:t1:1', 'Book it'), ('choose:t1:2', 'Remind me')]

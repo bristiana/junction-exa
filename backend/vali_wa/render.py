@@ -190,8 +190,11 @@ def result_buttons(task, profile=None):
     """Up to three of the answer's actions as WhatsApp reply buttons (titles are capped at 20 characters)."""
     actions = ((((task.get("research") or {}).get("output") or {}).get("structured") or {}).get("actions") or [])[:3]
     buttons = []
+    booking = re.search(r"\b(book|reserve|varaa|boka|rezerv)", str(task.get("task") or ""), re.I)
     for i, action in enumerate(actions):
         title = " ".join(_text(action.get("label") or "Continue", profile).split())
+        if booking and i == 0 and action.get("url"):
+            title = "Book it"  # the first action of a booking runs the booking, not just opens a page
         buttons.append((f"choose:{task['id']}:{i + 1}", title if len(title) <= 20 else title[:19].rstrip() + "…"))
     return buttons
 
