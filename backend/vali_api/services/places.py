@@ -4,6 +4,7 @@ https://api.hel.fi/servicemap/v2/ -- coverage depends on upstream contributors.
 Opening hours may be absent; preserve source connections rather than infer them.
 """
 from .http import request_json
+from .holidays import today_holiday_status
 
 BASE_URL = 'https://api.hel.fi/servicemap/v2'
 
@@ -14,6 +15,7 @@ def search_places(query, city='helsinki', *, transport=None):
                            params={'q': query, 'type': 'unit', 'municipality': city, 'page_size': 5})
     if payload is None or not isinstance(payload.get('results'), list):
         return {'available': False, 'places': [], 'source_url': BASE_URL}
+    holiday_status = today_holiday_status()
     places = []
     for item in payload['results'][:5]:
         if not isinstance(item, dict) or item.get('object_type') != 'unit' or item.get('municipality') != city:
@@ -29,6 +31,6 @@ def search_places(query, city='helsinki', *, transport=None):
         places.append({key: unit.get(key) for key in (
             'id', 'name', 'street_address', 'address_zip', 'municipality', 'location',
             'opening_hours', 'connections', 'www', 'phone')}
-            | {'opening_hours': unit.get('opening_hours') or hours,
+            | {**holiday_status, 'opening_hours': unit.get('opening_hours') or hours,
                'source_url': f'{BASE_URL}/unit/{unit_id}/', 'details_available': details_available})
     return {'available': True, 'places': places, 'source_url': BASE_URL}

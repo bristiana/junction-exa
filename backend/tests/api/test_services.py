@@ -1,5 +1,8 @@
 """Offline fixtures for catalog, authenticated routes, and source-restricted research."""
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from time import sleep
 from urllib.parse import urlsplit
 
 import httpx
@@ -9,7 +12,7 @@ from fastapi.testclient import TestClient
 from vali_api.app import create_app
 from vali_api.config import Config
 from vali_api.exa import ExaClient, TTLCache
-from vali_api.services import CATALOG, FACTS_TTL_SECONDS, GROUPS, live_facts, official_source
+from vali_api.services import CATALOG, FACTS_TTL_SECONDS, FAILURE_TTL_SECONDS, FactsCache, GROUPS, live_facts, official_source
 from vali_api.store import SQLiteStore
 
 
@@ -86,7 +89,7 @@ def test_grouped_catalog_and_detail(api):
 def test_six_hour_expiry(research):
     exa, calls = research
     clock = [0]
-    cache = TTLCache(ttl=FACTS_TTL_SECONDS, clock=lambda: clock[0])
+    cache = FactsCache(clock=lambda: clock[0])
     live_facts(CATALOG[0], exa, cache)
     clock[0] = 21599
     assert live_facts(CATALOG[0], exa, cache)['cached']
@@ -98,23 +101,43 @@ def test_six_hour_expiry(research):
 
 
 @pytest.mark.parametrize('payload', [None, [], {'results': None}])
-def test_malformed_research_not_cached(payload):
+def test_malformed_research_cached_briefly(payload):
+    calls = []
     class Exa:
         def search(self, body):
+            calls.append(body)
             return payload
-    cache = TTLCache()
-    assert not live_facts(CATALOG[0], Exa(), cache)['available']
-    assert len(cache) == 0
+    clock = [0]
+    cache = FactsCache(clock=lambda: clock[0])
+    first = live_facts(CATALOG[0], Exa(), cache)
+    assert not first['available']
+    assert first['cache_ttl_seconds'] == FAILURE_TTL_SECONDS
+    clock[0] = 59
+    assert live_facts(CATALOG[0], Exa(), cache)['cached']
+    assert len(calls) == 1
+    clock[0] = 60
+    assert not live_facts(CATALOG[0], Exa(), cache)['cached']
+    assert len(calls) == 2
 
 
-def test_research_failure_not_cached():
+def test_research_failure_cached_briefly():
     from vali_api.exa import ExaError
+    calls = []
     class Exa:
         def search(self, body):
+            calls.append(body)
             raise ExaError(503, 'unavailable')
-    cache = TTLCache()
-    assert not live_facts(CATALOG[0], Exa(), cache)['available']
-    assert len(cache) == 0
+    clock = [0]
+    cache = FactsCache(clock=lambda: clock[0])
+    first = live_facts(CATALOG[0], Exa(), cache)
+    assert not first['available']
+    assert first['cache_ttl_seconds'] == FAILURE_TTL_SECONDS
+    clock[0] = 59
+    assert live_facts(CATALOG[0], Exa(), cache)['cached']
+    assert len(calls) == 1
+    clock[0] = 60
+    assert not live_facts(CATALOG[0], Exa(), cache)['cached']
+    assert len(calls) == 2
 
 
 def test_public_routes_with_injected_clients(api, monkeypatch):
@@ -134,3 +157,57 @@ def test_query_validation(api, path):
 @pytest.mark.parametrize('url', ['https://[broken', 'https://migri.fi.evil.test', 'http://migri.fi', None])
 def test_reject_invalid_source_urls(url):
     assert not official_source(url, 'migri.fi')
+
+
+@pytest.mark.parametrize('fails', [False, True])
+def test_concurrent_first_requests_share_one_search(fails):
+    from vali_api.exa import ExaError
+    start = Barrier(8)
+    calls = []
+
+    class Exa:
+        def search(self, body):
+            calls.append(body)
+            sleep(0.05)  # Let all other first requests reach the cache while this call runs.
+            if fails:
+                raise ExaError(503, 'unavailable')
+            return {'results': []}
+
+    cache = FactsCache()
+
+    def request(_):
+        start.wait(timeout=3)
+        return live_facts(CATALOG[0], Exa(), cache)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(request, range(8)))
+    assert len(calls) == 1
+    assert sum(result['cached'] for result in results) == 7
+    assert all(result['available'] is not fails for result in results)
+
+
+def test_different_services_search_concurrently():
+    searching = Barrier(2)
+
+    class Exa:
+        def search(self, body):
+            searching.wait(timeout=3)
+            return {'results': []}
+
+    cache = FactsCache()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda entry: live_facts(entry, Exa(), cache), CATALOG[:2]))
+    assert all(result['available'] for result in results)
+
+
+def test_catalog_review_fixes():
+    entries = {entry['id']: entry for entry in CATALOG}
+    assert 'regional-housing' not in entries
+    assert entries['student-housing-finland']['name'] == 'Student housing across Finland'
+    assert entries['emergency']['group'] == 'before_arrival'
+    assert entries['eu-registration']['group'] == 'first_week'
+    assert urlsplit(entries['bank-account']['official_url']).hostname == 'www.finanssivalvonta.fi'
+    assert urlsplit(entries['phone-sim']['official_url']).hostname == 'www.traficom.fi'
+    for service_id in ('bank-account', 'phone-sim'):
+        text = json.dumps(entries[service_id]).lower()
+        assert all(brand not in text for brand in ('nordea', 'elisa'))

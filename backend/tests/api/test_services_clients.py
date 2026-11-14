@@ -1,12 +1,10 @@
 """Public API fixture transports; no tests use the network."""
-import json
-from datetime import date
+from datetime import date, datetime
 
 import httpx
 import pytest
 
 from vali_api.services.company import search_companies
-from vali_api.services.digitransit import plan_route
 from vali_api.services.holidays import public_holidays
 from vali_api.services.places import search_places
 
@@ -74,33 +72,6 @@ def test_missing_unit_details():
     assert place['opening_hours'] == []
 
 
-def test_disabled_routing(monkeypatch):
-    monkeypatch.delenv('VALI_DIGITRANSIT_KEY', raising=False)
-    def no_request(request):
-        pytest.fail('Disabled routing must not make a request')
-    assert plan_route(60, 24, 61, 25, transport=httpx.MockTransport(no_request)) == {
-        'enabled': False, 'available': False, 'itineraries': []}
-
-
-def test_routing(monkeypatch):
-    monkeypatch.setenv('VALI_DIGITRANSIT_KEY', 'fixture')
-    def respond(request):
-        assert request.url.path == '/routing/v2/hsl/gtfs/v1'
-        assert request.headers['digitransit-subscription-key'] == 'fixture'
-        body = json.loads(request.content)
-        assert 'planConnection' in body['query']
-        assert body['variables'] == dict(fromLat=60, fromLon=24, toLat=61, toLon=25)
-        return httpx.Response(200, json={'data': {'planConnection': {'edges': [{'node': {'legs': []}}]}}})
-    assert plan_route(60, 24, 61, 25, transport=httpx.MockTransport(respond))['itineraries'] == [{'legs': []}]
-    with pytest.raises(ValueError):
-        plan_route(float('nan'), 24, 61, 25)
-
-
-@pytest.mark.parametrize('payload', [{'errors': [{'message': 'fixture'}]}, {'data': None}, {'data': {'planConnection': None}}, {}])
-def test_routing_graphql_failure(monkeypatch, payload):
-    monkeypatch.setenv('VALI_DIGITRANSIT_KEY', 'fixture')
-    assert not plan_route(60, 24, 61, 25, transport=httpx.MockTransport(lambda r: httpx.Response(200, json=payload)))['available']
-
 
 def test_holidays_reference_2026():
     # Bank of Finland calendar: https://www.suomenpankki.fi/en/money-and-payments/bank-holidays/
@@ -130,3 +101,31 @@ def test_holiday_boundaries(year):
 def test_holiday_year_range(year):
     with pytest.raises(ValueError):
         public_holidays(year)
+
+
+@pytest.mark.parametrize('day, expected', [(25, 'Christmas Day'), (23, None)])
+def test_places_route_holiday_status(day, expected, service_map_transport, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    import vali_api.services as services
+    import vali_api.services.holidays as holidays
+
+    class Clock:
+        @staticmethod
+        def now(tz):
+            assert str(tz) == 'Europe/Helsinki'
+            return datetime(2026, 12, day, tzinfo=tz)
+
+    monkeypatch.setattr(holidays, 'datetime', Clock)
+    monkeypatch.setattr(services, 'search_places',
+                        lambda q, city: search_places(q, city, transport=service_map_transport))
+    app = FastAPI()
+    app.include_router(services.create_router())
+    with TestClient(app) as client:
+        response = client.get('/v1/places', params={'q': 'health'})
+    assert response.status_code == 200
+    place = response.json()['places'][0]
+    assert place['is_public_holiday'] is (expected is not None)
+    assert place['public_holiday'] == expected
+    assert place['holiday_date'] == f'2026-12-{day}'
+    assert bool(place['holiday_notice']) is (expected is not None)

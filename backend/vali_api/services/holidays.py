@@ -2,7 +2,8 @@
 
 Christmas Eve and Midsummer Eve are included separately as customary closure days.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 
 def easter_sunday(year):
@@ -38,3 +39,13 @@ def public_holidays(year):
     return {'year': year, 'holidays': [{'date': d.isoformat(), 'name': name} for d, name in sorted(days)],
             'customary_closure_days': [{'date': (midsummer - timedelta(days=1)).isoformat(), 'name': 'Midsummer Eve'},
                                       {'date': date(year, 12, 24).isoformat(), 'name': 'Christmas Eve'}]}
+
+
+def today_holiday_status():
+    """Holiday closure guidance for today's date in Finland, not verified hours."""
+    today = datetime.now(ZoneInfo('Europe/Helsinki')).date()
+    calendar = public_holidays(today.year)
+    holiday = next((day['name'] for day in calendar['holidays'] if day['date'] == today.isoformat()), None)
+    return {'is_public_holiday': holiday is not None, 'public_holiday': holiday,
+            'holiday_date': today.isoformat(),
+            'holiday_notice': 'Public holiday: offices are generally closed; check the office opening hours.' if holiday else None}

@@ -1,6 +1,8 @@
 """Student service catalog and source-quoted live facts."""
 import json
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -12,6 +14,23 @@ from .places import search_places
 GROUPS = ('before_arrival', 'first_week', 'first_month', 'ongoing')
 CATALOG = json.loads(Path(__file__).with_name('catalog.json').read_text())
 FACTS_TTL_SECONDS = 6 * 60 * 60
+FAILURE_TTL_SECONDS = 60
+
+
+class FactsCache:
+    """Per-application caches and one lock per catalog service."""
+
+    def __init__(self, clock=monotonic):
+        self.successes = TTLCache(ttl=FACTS_TTL_SECONDS, clock=clock)
+        self.failures = TTLCache(ttl=FAILURE_TTL_SECONDS, clock=clock)
+        self.locks = {entry['id']: Lock() for entry in CATALOG}
+
+    def get(self, key):
+        return self.successes.get(key) or self.failures.get(key)
+
+    def put(self, key, value):
+        cache = self.successes if value['available'] else self.failures
+        cache.put(key, value)
 
 
 def official_source(url, domain):
@@ -26,7 +45,12 @@ def official_source(url, domain):
 
 
 def live_facts(entry, exa, cache):
-    """One search request with inline contents/highlights, cached only on success."""
+    """Serialize misses for a service; unrelated services can search concurrently."""
+    with cache.locks[entry['id']]:
+        return cached_facts(entry, exa, cache)
+
+
+def cached_facts(entry, exa, cache):
     key = 'services:' + entry['id']
     cached = cache.get(key)
     if cached is not None:
@@ -37,10 +61,12 @@ def live_facts(entry, exa, cache):
                                'includeDomains': [domain], 'numResults': 5,
                                'contents': {'highlights': True}})
     except ExaError:
-        return {'available': False, 'facts': [], 'cached': False, 'cache_ttl_seconds': FACTS_TTL_SECONDS}
+        response = None
     results = response.get('results') if isinstance(response, dict) else None
     if not isinstance(results, list):
-        return {'available': False, 'facts': [], 'cached': False, 'cache_ttl_seconds': FACTS_TTL_SECONDS}
+        value = {'available': False, 'facts': [], 'cached': False, 'cache_ttl_seconds': FAILURE_TTL_SECONDS}
+        cache.put(key, value)
+        return value
     facts = []
     for result in results:
         if not isinstance(result, dict) or not official_source(result.get('url'), domain):
@@ -57,9 +83,9 @@ def live_facts(entry, exa, cache):
 
 
 def create_router():
-    """Each application gets its own bounded six-hour cache; reuse Exa's cache type."""
+    """Each application gets bounded fact caches and per-service locks."""
     router = APIRouter()
-    cache = TTLCache(ttl=FACTS_TTL_SECONDS)
+    cache = FactsCache()
 
     @router.get('/v1/services')
     def services():
