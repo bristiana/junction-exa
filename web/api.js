@@ -35,9 +35,14 @@ async function send(method, path, body, auth = true) {
   return data;
 }
 
-async function signIn() {
-  token = (await send('POST', '/v1/users', undefined, false)).token;
-  save(TOKEN_KEY, token);
+// Calls that start together share one sign-in, so a first visit creates one account, not one per request.
+let signingIn = null;
+function signIn() {
+  signingIn ||= send('POST', '/v1/users', undefined, false).then(({ token: fresh }) => {
+    token = fresh;
+    save(TOKEN_KEY, token);
+  }).finally(() => { signingIn = null; });
+  return signingIn;
 }
 
 // Every call is signed in; a token the server forgot (401) is replaced once with a fresh anonymous account.
