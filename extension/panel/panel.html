@@ -51,8 +51,7 @@
       </div>
       <small id="backendStatus" class="muted"></small>
     </label>
-    <div id="serverPresets" class="presets server-presets"></div>
-    <div class="field" hidden><!-- WhatsApp is parked until Meta verifies the business -->
+        <div class="field" hidden><!-- WhatsApp is parked until Meta verifies the business -->
       <span>WhatsApp</span>
       <div class="row">
         <button id="pairBtn" class="v-btn v-btn--quiet" type="button">Link WhatsApp</button>
@@ -75,12 +74,16 @@
     <h3>Your details</h3>
     <p class="muted small">Used to fill forms and drafts. Your personal details stay in this browser.</p>
     <div id="profileFields" class="profile"></div>
+    <details class="developer">
+      <summary>Developer</summary>
+      <div id="serverPresets" class="presets server-presets"></div>
+    </details>
     <div class="row end"><button id="saveSettings" class="v-btn">Save</button></div>
   </section>
 
   <main id="main">
     <form id="composer" class="composer v-card">
-      <textarea id="task" class="v-textarea" aria-label="What should I take care of?" rows="2" placeholder="What should I take care of?"></textarea>
+      <textarea id="task" class="v-textarea" aria-label="What should I take care of?" rows="1" placeholder="What should I take care of?"></textarea>
       <div id="context" class="context" hidden>
         <label class="check"><input type="checkbox" id="usePage" checked /> <span id="contextLabel">Use this page</span></label>
       </div>
