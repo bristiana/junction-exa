@@ -8,9 +8,9 @@ from vali_agent.live import dismiss_cookie_banner
 @pytest.mark.parametrize('label', ['Send', 'Pay', 'Confirm', 'Book', 'Varaa', 'Boka', 'Tilaa', 'Maksa', 'Skicka'])
 def test_cookie_wrapper_cannot_exempt_final_control(label):
     element = Mock()
-    element.evaluate.return_value = (f'<button class="cookie-consent">{label}</button>', label)
+    element.evaluate.side_effect = ['', (f'<button class="cookie-consent">{label}</button>', label)]
     with pytest.raises(ValueError, match='request_approval'):
-        Browser._guard_click(element)
+        Browser.__new__(Browser)._guard_click(element)
     assert not is_navigation('a', '/booking', False, label)
 
 
