@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 from vali_api.config import vali_env
 from .browser import Browser
-from .guard import is_final_submit, is_navigation
+from .guard import is_final_submit, is_navigation, without_default_submit
 from .hooks import AgentHooks
 from .jev import Jev, final_submit_probability, find_element
 from .live import Screencast, dismiss_cookie_banner, mark_private
@@ -105,6 +105,16 @@ def _cost(usage):
     return round(sum(usage.get(k, 0) * prices[k] for k in _USAGE_KEYS) / 1_000_000, 4)
 
 
+def _handoff(blockers, url, reason=''):
+    """The result the apps show as a "Needs you" hand-off (extension/lib/execution.js blockerOf)."""
+    if 'unavailable' not in blockers:
+        return 'needs ' + '/'.join(blockers) + ': finish by hand at ' + url
+    # Keep what the page said about the outage ("down for maintenance until Sat 16:00"), in the model's words.
+    detail = re.sub(r'^\s*needs [a-z/ ]+:\s*', '', reason or '', flags=re.I)
+    detail = re.split(r'[;,.]?\s*finish by hand', detail, flags=re.I)[0].strip(' .;,') or 'the site is down right now'
+    return f'needs unavailable: {detail[:300]}; finish by hand later at {url}'
+
+
 def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                       hooks: AgentHooks, llm: LLM | None = None, max_steps: int = 30,
                       headless: bool = True, exa: ExaTools | None = None, jev: Jev | None = None,
@@ -135,6 +145,8 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         'fail("suspicious page: <one line>"). '
         'Stop at login, captcha or payment blockers: call fail("needs <login, captcha or payment>: '
         'finish by hand at <url>") naming the one blocker you hit and its URL. '
+        'If the site is down (maintenance, a server error, "service unavailable", "huoltokatko"), call '
+        'fail("needs unavailable: <what the page says, e.g. down for maintenance until …>; finish by hand later at <url>"). '
         + ('The profile only holds the user\'s own details. When a field needs a fact that is not in the profile, the goal '
            'or this page (an office or venue address, a postcode, a fee or amount, an opening time or deadline, which '
            'option or category applies), look it up with exa_search before filling it, then exa_read the best result if '
@@ -240,7 +252,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         fresh = mask(browser.snapshot(), profile)
         blockers = browser.blockers()
         if blockers:
-            fresh += '\nBLOCKER: needs ' + '/'.join(blockers) + ': finish by hand at ' + mask(browser.current_url, profile) + '. Call fail now.'
+            fresh += '\nBLOCKER: ' + _handoff(blockers, mask(browser.current_url, profile), '<what the page says>') + '. Call fail now.'
         output = fresh if fresh != last_snapshot else 'Page unchanged. Existing refs remain valid.'
         last_snapshot = fresh
         return output
@@ -326,7 +338,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                         if blockers == ['payment']:
                             allowed += ('request_approval', 'finish')
                         if blockers and name not in allowed:
-                            status, result, terminal = 'failed', 'needs ' + '/'.join(blockers) + ': finish by hand at ' + browser.current_url, True
+                            status, result, terminal = 'failed', _handoff(blockers, browser.current_url), True
                             raise ValueError(result + '. Call fail now.')
                         if name == 'finish':
                             status, result, terminal = 'done', args['result'], True
@@ -334,7 +346,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                         elif name == 'fail':
                             result, terminal = args['reason'], True
                             if blockers:
-                                result = 'needs ' + '/'.join(blockers) + ': finish by hand at ' + browser.current_url
+                                result = _handoff(blockers, browser.current_url, result)
                             content = mask(result, profile) + '\n' + snapshot()
                         elif name == 'request_approval':
                             summary = mask(args['summary'], profile)
@@ -392,6 +404,8 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                                     step_text = mask(f'Clicked "{label_of(found)}" (found by Jev)', profile)
                                 described = browser.element_text(args['ref'])
                                 info = browser.element_info(args['ref'])
+                                if info['suggestion'] and info['typeless']:
+                                    described = without_default_submit(described)
                                 # Cookie consent is never an irreversible commitment ("Confirm my choices").
                                 final = False if info['consent'] or is_navigation(info['tag'], info['href'], info['inForm'], info['label']) \
                                     else is_final_submit(described, info['label'])

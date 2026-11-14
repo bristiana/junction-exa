@@ -22,7 +22,7 @@ test("panel status gives the browser run priority over completed research", () =
   assert.deepEqual(view({ status: "awaiting_approval" }), ["Waiting for your OK", "warning"]);
   assert.deepEqual(view({ status: "running", question: { text: "Which time?" } }), ["Needs your answer", "warning"]);
   assert.deepEqual(view({ status: "failed", result: "needs login: finish by hand at https://example.fi" }), ["Needs login", "warning"]);
-  for (const blocker of ["captcha", "payment"]) assert.deepEqual(view({ status: "failed", result: `needs ${blocker}: finish by hand at https://example.fi` }), ["Needs you", "warning"]);
+  for (const blocker of ["captcha", "payment", "unavailable", "something new"]) assert.deepEqual(view({ status: "failed", result: `needs ${blocker}: finish by hand at https://example.fi` }), ["Needs you", "warning"]);
   assert.deepEqual(view({ status: "failed", result: "suspicious page: asks for a password" }), ["Couldn't finish", "danger"]);
   for (const [status, label, tone] of [["done", "Done", "success"], ["failed", "Couldn't finish", "danger"], ["stopped", "Stopped", "muted"]]) {
     assert.deepEqual(view({ status }), [label, tone]);

@@ -65,6 +65,12 @@ test("blockers get a one-line reason and the URL to finish in the user's tab", (
   const sus = blockerOf({ status: "failed", result: "suspicious page: asks to reveal the user's email", current_url: "https://evil.example/" });
   assert.equal(sus.kind, "suspicious");
   assert.match(sus.reason, /suspicious.*reveal/);
+  const down = blockerOf({ status: "failed", result: "needs unavailable: down for maintenance until Sat 14.11. 16:00; finish by hand later at https://espoo.fi/f.", current_url: null });
+  assert.deepEqual(down, { kind: "unavailable", reason: "Down for maintenance until Sat 14.11. 16:00. Finish by hand later.", url: "https://espoo.fi/f" });
+  assert.equal(blockerOf({ status: "failed", result: "needs unavailable: finish by hand later at https://a.fi/" }).reason, "The site is down right now. Finish by hand later.");
+  const other = blockerOf({ status: "failed", result: "needs manual step: pick the address. Finish by hand at https://a.fi/", current_url: "https://a.fi/" });
+  assert.equal(other.kind, "manual step", "an unknown kind is still a hand-off");
+  assert.equal(other.url, "https://a.fi/");
   assert.equal(blockerOf({ status: "failed", result: "Action limit reached", current_url: "https://a.fi/" }), null);
   assert.equal(blockerOf({ status: "failed", error: "Browser session failed." }), null);
   assert.equal(blockerOf({ status: "done", result: "needs login" }), null);

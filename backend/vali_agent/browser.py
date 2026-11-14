@@ -101,9 +101,18 @@ class Browser:
             # Booking widgets sometimes continue in a popup window; follow it.
             self._popups = []
             self._context.on('page', lambda page: self._popups.append(page))
+            self._status = {}  # HTTP status of each page document, by URL
+            self._context.on('response', self._note_status)
         except Exception:
             self._runtime.stop()
             raise
+
+    def _note_status(self, response):
+        try:
+            if response.request.resource_type == 'document' and response.frame.parent_frame is None:
+                self._status[response.url] = response.status
+        except Exception:
+            pass  # the frame is already gone
 
     def close(self):
         try:
@@ -207,16 +216,22 @@ class Browser:
             raise ValueError('That element is gone (the page changed); call read_page') from exc
 
     def element_info(self, ref):
-        """Visible label, whether it only opens a menu (toggle) and whether it sits in a cookie/consent banner."""
-        return self._element(ref).evaluate('''el => ({
+        """Visible label, whether it only opens a menu (toggle) or picks an autocomplete choice (suggestion, typeless button), and whether it sits in a cookie/consent banner."""
+        return self._element(ref).evaluate('''el => {
+          // An autocomplete or listbox choice, often a <button> with no type (so type=submit by default) in a form.
+          // The list must hold no fields itself, so a form that merely has an "autocomplete" class is not one.
+          const list = el.closest('[role=listbox],typeahead-container,[class*=typeahead i],[class*=autocomplete i],.pac-container');
+          return {
           label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\\s+/g,' ').trim().slice(0,120),
           tag: el.localName, href: el.getAttribute('href') || '', inForm: !!el.closest('form'),
           // Only a plain menu button counts as a toggle: never a submit button or anything inside a form.
           toggle: (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-haspopup')) && el.type !== 'submit' && !el.closest('form'),
+          suggestion: !!el.closest('[role=option]') || (!!list && !list.querySelector('input:not([type=hidden]),select,textarea')),
+          typeless: el.localName === 'button' && !el.hasAttribute('type'),
           consent: !!el.closest('[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[data-testid*=cookie i],[data-testid*=consent i],[id*=usercentrics i],[id*=onetrust i],#CybotCookiebotDialog,[aria-label*=cookie i],[aria-label*=eväst i]')
             || /cookie|eväste|kakor|consent/i.test((el.closest('dialog,[role=dialog],[aria-modal=true]')?.innerText || '').slice(0, 3000))
             || (el.getRootNode() instanceof ShadowRoot && /usercentrics|cookie|consent/i.test(el.getRootNode().host.id + ' ' + el.getRootNode().host.className))
-        })''', timeout=2500)
+        }; }''', timeout=2500)
 
     def _fallback_click(self, el, exc):
         """Visually hidden radios/checkboxes are clicked through their label; covered or off-screen elements by a DOM click."""
@@ -357,7 +372,9 @@ class Browser:
         for frame in self.page.frames:
             if frame != self.page.main_frame and not frame.frame_element().is_visible():
                 continue
-            found.update(frame.evaluate(r'''() => {
+            # Only the page itself is down when its document fails; an embed's own error text is not checked.
+            status = self._status.get(self.page.url, 200) if frame == self.page.main_frame else None
+            found.update(frame.evaluate(r'''status => {
               const all=[];
               const walk=root=>{ for(const el of root.querySelectorAll('*')) { all.push(el); if(el.shadowRoot) walk(el.shadowRoot); }};
               walk(document);
@@ -387,9 +404,13 @@ class Browser:
                  || els.some(el=>el.matches('input') && /captcha/i.test(attrs(el)))
                  || els.some(el=>!el.matches('iframe') && big(el) && /captcha|turnstile/i.test(attrs(el)) && !/grecaptcha-badge|invisible/i.test(attrs(el)+' '+(el.getAttribute('data-size')||'')))) found.push('captcha');
               if(els.some(el=>el.matches('input') && /cc-number|card.?number|cardnumber/i.test([el.name,el.id,el.autocomplete,el.placeholder].join(' ')) || el.matches('iframe') && big(el) && /stripe|adyen|braintree|checkout|paypal/i.test(el.src))) found.push('payment');
+              // A maintenance or error page instead of the form: a server error, or outage words with no fields to fill.
+              // A form that only announces a coming break keeps its fields; a bot challenge (often a 503) stays a captcha.
+              const outage=/down for maintenance|under maintenance|scheduled maintenance|maintenance break|service (is )?(temporarily )?unavailable|temporarily unavailable|bad gateway|gateway time-?out|internal server error|huoltokatko|huoltotauko|käyttökatko|palvelu ei ole (tällä hetkellä |tilapäisesti )?käytettävissä|palvelu on (tilapäisesti )?poissa käytöstä|tjänsten är (tillfälligt )?(inte tillgänglig|ur drift)|serviceavbrott|driftavbrott|underhållsarbete/i;
+              if(status!==null && !fields.length && !found.includes('captcha') && (status>=500 || outage.test(document.body?.innerText||'') && els.filter(el=>el.matches('a[href],button,[role=button]')).length < 20)) found.push('unavailable');
               return found;
-            }'''))
-        return [kind for kind in ('login','captcha','payment') if kind in found]
+            }''', status))
+        return [kind for kind in ('unavailable','login','captcha','payment') if kind in found]
 
     def screenshot_jpeg(self, quality=60, profile=None):
         if not profile:
