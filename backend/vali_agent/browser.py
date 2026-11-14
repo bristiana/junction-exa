@@ -1,9 +1,9 @@
 """One persistent browser page with snapshot references."""
 import re
 from urllib.parse import urljoin
-from playwright.sync_api import sync_playwright, expect, TimeoutError as BrowserTimeout
+from playwright.sync_api import sync_playwright, expect, Error as PlaywrightError, TimeoutError as BrowserTimeout
 from .privacy import private_values
-from .guard import is_final_submit
+from .guard import is_final_submit, is_native_radio
 from .scope import site, reject_placeholders
 
 _CAPTURE = r'''({start, limit}) => {
@@ -100,6 +100,17 @@ _ACTION_DESCRIPTION = r'''el => {
         (el.localName === 'button' && !implicitChoice ? 'button type=' + el.type : ''),
         el.getAttribute('aria-label') || el.innerText || el.value || ''];
 }'''
+
+
+# A frame or document that vanished under us because the page navigated: re-read, never refuse.
+# Only the error's first line: Playwright call logs mention "navigations" on ordinary failures too.
+_GONE = re.compile(r'frame (has been|was) detached|execution context was destroyed|cannot find context with specified id', re.I)
+
+
+def is_navigation_error(exc):
+    """True when an error means the page or one of its frames changed under us, not that the action was wrong."""
+    first_line = str(exc).strip().split('\n', 1)[0]
+    return isinstance(exc, PlaywrightError) and not isinstance(exc, BrowserTimeout) and bool(_GONE.search(first_line))
 
 
 class Browser:
@@ -223,20 +234,78 @@ class Browser:
                 raise ValueError(f'The page did not load in 20 s: {url}')
         self._settle()
 
-    def snapshot(self):
+    def _frames(self):
+        """The main frame and every visible child frame. A child frame that detaches meanwhile
+        (a navigation, a widget re-render) is skipped instead of failing the whole read."""
+        main = self.page.main_frame
+        frames = [main]
+        for frame in self.page.frames:
+            if frame == main:
+                continue
+            try:
+                if not frame.is_detached() and frame.frame_element().is_visible():
+                    frames.append(frame)
+            except PlaywrightError:
+                continue
+        return frames
+
+    def recover(self):
+        """Re-resolve the live page after a navigation detached the frame we were using."""
+        if self.page.is_closed():
+            open_pages = [p for p in self._context.pages if not p.is_closed()]
+            if open_pages:
+                self.page = open_pages[-1]
+                self.page.set_default_timeout(5000)
         self._refs = {}
+        try:
+            self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+        except PlaywrightError:
+            pass
+        self._settle()
+
+    def _retry(self, read):
+        """Run read(); when the page navigated under it (a detached frame, a destroyed context), re-resolve and re-read."""
+        for attempt in range(3):
+            try:
+                return read()
+            except PlaywrightError as exc:
+                if attempt == 2 or not is_navigation_error(exc):
+                    raise
+                self.recover()
+
+    def _read_frames(self, read):
+        """read(frame) on the main frame and each visible child frame. A child frame that goes away
+        meanwhile is skipped; the main frame going away raises, and _retry reads the new page."""
+        results = []
+        for frame in self._frames():
+            try:
+                results.append((frame, read(frame)))
+            except PlaywrightError as exc:
+                if frame == self.page.main_frame or not is_navigation_error(exc):
+                    raise
+        return results
+
+    def snapshot(self):
+        return self._retry(self._snapshot)
+
+    def _snapshot(self):
+        self._refs = {}
+        refs = {}
+
+        def capture(frame):
+            captured = frame.evaluate(_CAPTURE, {'start':len(refs)+1, 'limit':200-len(refs)})
+            for line in captured['lines']:
+                refs[line.split(']',1)[0][1:]] = frame
+            return captured
+
         lines, texts = [], []
         title = ''
-        for frame in self.page.frames:
-            if frame != self.page.main_frame and not frame.frame_element().is_visible():
-                continue
-            captured = frame.evaluate(_CAPTURE, {'start':len(self._refs)+1, 'limit':200-len(self._refs)})
+        for frame, captured in self._read_frames(capture):
             if frame == self.page.main_frame:
                 title = captured['title']
-            for line in captured['lines']:
-                self._refs[line.split(']',1)[0][1:]] = frame
             lines.extend(captured['lines'])
             texts.append(captured['text'])
+        self._refs = refs
         return 'URL: '+self.page.url+'\nTitle: '+title+'\n'+'\n'.join(lines)+'\nText: '+' '.join(texts)[:2500]
 
     def has(self, ref):
@@ -256,8 +325,31 @@ class Browser:
         """Visible label and whether the element only opens a menu."""
         return self._element(ref).evaluate(r'''el => ({
           label: (el.getAttribute('aria-label') || el.innerText || el.value || el.title || '').replace(/\s+/g,' ').trim().slice(0,120),
-          toggle: (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-haspopup')) && el.type !== 'submit' && !el.closest('form')
+          toggle: (el.hasAttribute('aria-expanded') || el.hasAttribute('aria-haspopup')) && el.type !== 'submit' && !el.closest('form'),
+          choice: el.localName === 'input' && el.type === 'radio'
         })''', timeout=2500)
+
+    def missing_required(self):
+        """Labels of visible required fields that are still empty (or unticked), on the page and its frames."""
+        found = []
+        for _, labels in self._read_frames(lambda frame: frame.evaluate(r'''() => {
+          const visible = el => { const r=el.getBoundingClientRect(), s=getComputedStyle(el);
+            return r.width>0 && r.height>0 && s.visibility!=='hidden' && s.display!=='none'; };
+          const name = el => ((el.labels?.[0]?.innerText) || el.getAttribute('aria-label') || el.placeholder || el.name || el.id || '')
+            .replace(/\s+/g,' ').replace(/\s*\*\s*$/,'').trim().slice(0,60);
+          const groups = new Set(), out = [];
+          for (const el of document.querySelectorAll('input,select,textarea')) {
+            if (!(el.required || el.getAttribute('aria-required') === 'true') || el.disabled || !visible(el)) continue;
+            if (['hidden','submit','button','image','reset'].includes(el.type)) continue;
+            if (el.type === 'radio') {
+              if (groups.has(el.name)) continue; groups.add(el.name);
+              if (!document.querySelector(`input[type=radio][name="${CSS.escape(el.name)}"]:checked`)) out.push(name(el));
+            } else if (el.type === 'checkbox' ? !el.checked : !String(el.value || '').trim()) out.push(name(el));
+          }
+          return out;
+        }''')):
+            found.extend(label for label in labels if label not in found)
+        return found
 
     def _fallback_click(self, el, exc):
         """Visually hidden radios/checkboxes are clicked through their label; covered or off-screen elements by a DOM click."""
@@ -276,6 +368,10 @@ class Browser:
         if href:
             self._check_url(urljoin(self.page.url, href))
         description, label = el.evaluate(_ACTION_DESCRIPTION)
+        # Picking a native radio only selects an option ("As a guest I want to buy tickets"); it never submits.
+        # Checkboxes stay guarded: ticking "I confirm the booking" can be the commitment itself.
+        if is_native_radio(description):
+            return False
         final = is_final_submit(description, label)
         if final and not approved:
             raise ValueError('Call request_approval first')
@@ -424,13 +520,15 @@ class Browser:
         self._settle()
 
     def blockers(self):
+        return self._retry(self._blockers)
+
+    def _blockers(self):
         found = set()
-        for frame in self.page.frames:
-            if frame != self.page.main_frame and not frame.frame_element().is_visible():
-                continue
+
+        def check(frame):
             # Only the page itself is down when its document fails; an embed's own error text is not checked.
             status = self._status.get(self.page.url, 200) if frame == self.page.main_frame else None
-            found.update(frame.evaluate(r'''status => {
+            return frame.evaluate(r'''status => {
               const all=[];
               const walk=root=>{ for(const el of root.querySelectorAll('*')) { all.push(el); if(el.shadowRoot) walk(el.shadowRoot); }};
               walk(document);
@@ -446,9 +544,13 @@ class Browser:
               // Only a control whose own text offers it counts; page or footer text alone never does.
               const guestWords=/as a guest|guest checkout|checkout as guest|continue as (a )?guest|without (logging in|signing in|an account|registering)|vieraana|ilman (kirjautumista|rekisteröitymistä|tiliä)|som gäst|utan (att logga in|konto)/i;
               const ownText=el=>(el.labels?.[0]?.innerText || el.innerText || el.value || '').trim();
-              const guest=els.some(el=>el.matches('button,a[href],[role=button],[role=radio],input[type=radio],input[type=button],input[type=submit]')
-                 && ownText(el).length<=250 && guestWords.test(ownText(el)));
-              if(els.some(el=>el.matches('input[type=password]')) && !guest
+              // Styled radios often hide the input and show only its <label>; the label is then the control.
+              const choice='button,a[href],[role=button],[role=radio],input[type=radio],input[type=button],input[type=submit]';
+              const guest=els.some(el=>el.matches(choice+',label') && ownText(el).length<=250 && guestWords.test(ownText(el)))
+                 || all.some(el=>el.matches('input[type=radio],[role=radio]') && /(^|[^a-z])(guest|vieras|gäst)([^a-z]|$)/i.test([el.value,el.id].join(' '))
+                    && (visible(el) || [...(el.labels||[])].some(visible)));
+              // Only a usable password field makes a wall: not a disabled or hidden one left in a collapsed panel.
+              if(els.some(el=>el.matches('input[type=password]:not([disabled])')) && !guest
                  || /(^|\.)tunnistus\.suomi\.fi$/i.test(location.hostname)
                  || els.some(el=>el.matches('iframe') && /tunnistus\.suomi\.fi/i.test(el.src||''))
                  || (!fields.length && strongAuth.test(text) && els.filter(el=>el.matches('a[href],button,[role=button]')).length < 8)) found.push('login');
@@ -465,7 +567,10 @@ class Browser:
               const outage=/down for maintenance|under maintenance|scheduled maintenance|maintenance break|service (is )?(temporarily )?unavailable|temporarily unavailable|bad gateway|gateway time-?out|internal server error|huoltokatko|huoltotauko|käyttökatko|palvelu ei ole (tällä hetkellä |tilapäisesti )?käytettävissä|palvelu on (tilapäisesti )?poissa käytöstä|tjänsten är (tillfälligt )?(inte tillgänglig|ur drift)|serviceavbrott|driftavbrott|underhållsarbete/i;
               if(status!==null && !fields.length && !found.includes('captcha') && (status>=500 || outage.test(document.body?.innerText||'') && els.filter(el=>el.matches('a[href],button,[role=button]')).length < 20)) found.push('unavailable');
               return found;
-            }''', status))
+            }''', status)
+
+        for _, kinds in self._read_frames(check):
+            found.update(kinds)
         return [kind for kind in ('unavailable','login','captcha','payment') if kind in found]
 
     def screenshot_jpeg(self, quality=60, profile=None):

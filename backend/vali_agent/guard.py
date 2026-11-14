@@ -31,3 +31,21 @@ def is_final_submit(element_description: str, label: str | None = None) -> bool:
     if _NONFINAL.search((label or ' '.join(labels.words)).strip()):
         return False
     return submit
+
+
+class _FirstTag(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tag = None
+        self.attrs = {}
+
+    def handle_starttag(self, tag, attrs):
+        if self.tag is None:
+            self.tag, self.attrs = tag, {key: (value or '') for key, value in attrs}
+
+
+def is_native_radio(element_description: str) -> bool:
+    """True when the element's own outerHTML (its first tag) is a real <input type="radio">."""
+    parser = _FirstTag()
+    parser.feed(element_description)
+    return parser.tag == 'input' and parser.attrs.get('type', '').strip().lower() == 'radio'
