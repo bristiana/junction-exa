@@ -229,7 +229,7 @@ def test_audio_and_photo(task):
 def test_help_unsupported_and_split_flow(task):
     assert flow_scenario(task, msg("apua"))[0] == render_help()
     assert "Please send" in flow_scenario(task, IncomingMessage(NUMBER, "in_test"))[0][0]
-    task["research"]["output"]["structured"]["key_facts"][0]["value"] = "a" * 9000
+    task["research"]["output"]["structured"]["missing_info"] = ["a" * 9000]
     bodies, _, _ = flow_scenario(task, msg("status"))
     assert len(bodies) >= 3 and all(len(body) <= 4096 for body in bodies)
 

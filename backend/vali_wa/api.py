@@ -78,7 +78,13 @@ class GraphAPIClient:
         return await self._send({"messaging_product": "whatsapp", "to": to,
                                  "type": "image", "image": image})
 
-    async def send_buttons(self, to, body, buttons):
+    async def send_document(self, to, link, filename, caption=None):
+        document = {"link": link, "filename": filename[:240] or "document.pdf"}
+        if caption:
+            document["caption"] = caption[:1024]
+        return await self._send({"messaging_product": "whatsapp", "to": to, "type": "document", "document": document})
+
+    async def send_buttons(self, to, body, buttons, image=None):
         if not 1 <= len(buttons) <= 3:
             raise ValueError("Provide 1–3 buttons")
         if len({id_ for id_, _ in buttons}) != len(buttons):
@@ -87,11 +93,12 @@ class GraphAPIClient:
                 not id_ or len(id_) > 256 or not title or len(title) > 20
                 for id_, title in buttons):
             raise ValueError("Invalid interactive message length")
-        return await self._send({"messaging_product": "whatsapp", "to": to,
-            "type": "interactive", "interactive": {"type": "button",
-            "body": {"text": body}, "action": {"buttons": [
-                {"type": "reply", "reply": {"id": id_, "title": title}}
-                for id_, title in buttons]}}})
+        interactive = {"type": "button", "body": {"text": body}, "action": {"buttons": [
+            {"type": "reply", "reply": {"id": id_, "title": title}} for id_, title in buttons]}}
+        if image:
+            interactive["header"] = {"type": "image", "image": {"link": image}}
+        return await self._send({"messaging_product": "whatsapp", "to": to, "type": "interactive",
+                                 "interactive": interactive})
 
     async def send_reaction(self, to, message_id, emoji):
         return await self._send({"messaging_product": "whatsapp", "recipient_type": "individual", "to": to,

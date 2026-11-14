@@ -5,7 +5,7 @@ import logging
 
 from vali_wa.api import GraphAPIClient, GraphAPIError
 from vali_wa.render import (continue_buttons, render_execution_update, render_nothing_new, render_result,
-                            render_watch_update, result_buttons, split_messages)
+                            render_watch_update, result_buttons, result_media, split_messages)
 
 from .monitors import watch_criteria
 
@@ -40,8 +40,13 @@ class ChannelAPI:
     async def send_image(self, to, link=None, caption=None, *, media_id=None):
         return await self._call('send_image', to, link, caption, media_id=media_id)
 
-    async def send_buttons(self, to, body, buttons):
+    async def send_buttons(self, to, body, buttons, image=None):
+        if image:
+            return await self._call('send_buttons', to, body, buttons, image=image)
         return await self._call('send_buttons', to, body, buttons)
+
+    async def send_document(self, to, link, filename, caption=None):
+        return await self._call('send_document', to, link, filename, caption)
 
     async def mark_read(self, message_id):
         # A failed receipt must never discard an errand.
@@ -130,8 +135,21 @@ def push_task(application, task_id, renderer):
                     last = parts.pop() if len(parts[-1]) <= 1024 else 'What next?'
                     for body in parts:
                         await api.send_text(number, body)
+                    image, pdfs = result_media(task)
                     try:
-                        await api.send_buttons(number, last, buttons)
+                        if image:
+                            try:  # the page's own picture, found by Exa, heads the answer
+                                await api.send_buttons(number, last, buttons, image=image)
+                            except Exception as exc:
+                                log_failure('result image failed', exc, task_id=task_id)
+                                await api.send_buttons(number, last, buttons)
+                        else:
+                            await api.send_buttons(number, last, buttons)
+                        for url, name in pdfs:  # official PDFs among the sources, as documents to keep
+                            try:
+                                await api.send_document(number, url, name)
+                            except Exception as exc:
+                                log_failure('result pdf failed', exc, task_id=task_id)
                         return
                     except Exception as exc:
                         log_failure('result buttons failed', exc, task_id=task_id)
