@@ -222,7 +222,7 @@ def situation_of(state, task):
 def find_research(state, task, text, known_details=()):
     """One Exa search+answer call; the quote check follows in the poller, off the request."""
     query = build_query(text, task['page'], known_details=known_details, situation=situation_of(state, task))
-    response = state.exa.search(dict(query=query, type='auto', numResults=5,
+    response = state.exa.search(dict(query=query, type='auto', numResults=5, moderation=True,
                                      contents={'highlights': True}, outputSchema=FIND_SCHEMA, systemPrompt=SYSTEM_PROMPT + ANSWER_FIRST + FIND_RULES))
     found = dict(output=map_find_output(response), cost=(response.get('costDollars') or {}).get('total') or 0,
                  activity=activity.from_search(task, text, response))

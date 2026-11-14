@@ -83,3 +83,15 @@ def test_log_has_mode_and_no_query(caplog):
         client.search({'query': 'secret thing'})
     text = caplog.text
     assert 'cache=miss' in text and 'cache=hit' in text and 'mode=search' in text and 'secret' not in text
+
+
+def test_quote_check_reads_todays_page():
+    import json as _json
+    import httpx as _httpx
+    from vali_api.exa import ExaClient
+    sent = []
+    def respond(request):
+        sent.append(_json.loads(request.content))
+        return _httpx.Response(200, json={'results': []})
+    ExaClient('fake-key', transport=_httpx.MockTransport(respond)).contents(['https://kela.fi/a'])
+    assert sent[0]['maxAgeHours'] == 24 and sent[0]['livecrawlTimeout'] == 10000

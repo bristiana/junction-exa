@@ -4,7 +4,7 @@ Audited 15 November 2026 against the current public [documentation index](https:
 
 **Counting rule:** one row per named mode, filter, output feature, or grouped workflow below. These are capability rows, not an endpoint count or a percentage of Exa's engineering surface. Working legacy modes count; retired, deprecated-only, or unconfirmed features are listed separately and excluded. Plan-gated and beta features count as documented available, with their restrictions stated. Integrations and data domains are grouped explicitly rather than pretending each is a new endpoint.
 
-**Coverage: 28 used / 95 documented available capability rows; 67 unused.** The nine lifecycle-warning rows are excluded. At the product-family level, Vali calls Search, Contents, Agent and standalone Monitors.
+**Coverage: 30 used / 95 documented available capability rows; 65 unused.** The nine lifecycle-warning rows are excluded. At the product-family level, Vali calls Search, Contents, Agent and standalone Monitors.
 
 **“Yes” means a reachable call or response consumer exists in Vali's source, not that a production call succeeded today.** No paid Exa requests or deployment checks were made. “No” means no call/consumer found in the audited production code; generic request wrappers alone do not count. Paths and line numbers refer to the checkout at audit time. “—” means no implementation evidence. Student benefits on unused rows are potential uses, not shipped claims.
 
@@ -36,7 +36,7 @@ Audited 15 November 2026 against the current public [documentation index](https:
 | [Search: synthesis streaming][best] | Streams synthesized output over SSE when using a schema. | no | — | Could show an answer sooner. |
 | [Search: `additionalQueries`][deep] | Supplies query variations for deep search. | no | — | Could cover Finnish and English wording together. |
 | [Search: `objective`][best] | Explains the larger task behind an individual search. | no | — | Could make a fee lookup more relevant to the actual application. |
-| [Search: `moderation`][search] | Filters unsafe search material. | no | — | Could reduce unsuitable results. |
+| [Search: `moderation`][search] | Filters unsafe search material. | yes | `backend/vali_api/app.py:225`; `backend/vali_api/companion.py:91`; `backend/vali_agent/web.py:68` | Keeps unsuitable results out of a student's answers. |
 | [Usage attribution: `userIdentifier`][best] | Associates API usage with an opaque user identifier. | no | — | Could support fair per-student usage limits. |
 | [Search diagnostics: warnings/notices][best] | Explains ignored options and retrieval limitations. | no | — | Could make incomplete research easier to explain. |
 | [Contents: `/contents`, including URL batches][contents] | Reads known URLs as machine-readable page content. | yes | `backend/vali_api/exa.py:134`; `backend/vali_api/citations.py:157`; `backend/vali_agent/web.py:94` | Reopens cited pages to check claims. |
@@ -47,9 +47,9 @@ Audited 15 November 2026 against the current public [documentation index](https:
 | [Highlights: dynamic allocation and verbosity beta][highlights] | Shares an excerpt budget across results; requires the documented beta header. | no | — | Could fit more evidence into a small answer. |
 | [Contents: summary][contents] | Summarizes a page, optionally guided by `summary.query`. | no | — | Could shorten long instructions. |
 | [Contents: structured summary][contents] | `summary.schema` extracts JSON fields from a page. | no | — | Could extract required documents into a checklist. |
-| [Contents: freshness and crawl timeout][contents] | `maxAgeHours` controls cache age; `livecrawlTimeout` limits fetching time. | yes | `backend/vali_agent/web.py:91` (six-hour default at line 12) | Refreshes evidence used while completing forms. |
+| [Contents: freshness and crawl timeout][contents] | `maxAgeHours` controls cache age; `livecrawlTimeout` limits fetching time. | yes | `backend/vali_agent/web.py:91`; quote check `backend/vali_api/exa.py:136` (24 h, live fetch within 10 s) (six-hour default at line 12) | Refreshes evidence used while completing forms. |
 | [Contents: subpages][contents] | `subpages` / `subpageTarget` follow related site pages. | no | — | Could read eligibility and application instructions together. |
-| [Contents: `extras.links`][contentref] | Extracts outgoing page links. | no | — | Could find the actual application page. |
+| [Contents: `extras.links`][contentref] | Extracts outgoing page links. | yes | `backend/vali_agent/web.py:90` | The cloud browser sees where the application or booking really starts. |
 | [Contents: `extras.imageLinks`][contentref] | Extracts image URLs. | no | — | Could retrieve a useful campus diagram. |
 | [Contents: rich links/images and code blocks][contentref] | Adds anchor text, image descriptions, or extracted code. | no | — | Could provide clearer link labels or study examples. |
 | [Contents: representative `image` / `favicon`][contents] | Returns page artwork and domain icons where available. | no | — | Could make source cards easier to recognize. |
@@ -149,10 +149,10 @@ Data coverage also spans code/docs, finance, publications, legal/public records,
 ## Quick wins we are not using yet
 
 1. **Explain the search objective.** Add an `objective` string to the body in `backend/vali_agent/web.py:68`, describing that the lookup supports a Finnish student completing the current form. Smallest change: one body key; keep personal details out of it. Compare source relevance on the existing browser fixtures before enabling it.
-2. **Moderate student-facing search results.** Add `'moderation': True` to the search bodies in `backend/vali_api/app.py:204`, `backend/vali_api/companion.py:91`, and `backend/vali_agent/web.py:68`. Smallest change: one key per call; check that official service results remain available.
+2. **Moderate student-facing search results.** Done. Add `'moderation': True` to the search bodies in `backend/vali_api/app.py:204`, `backend/vali_api/companion.py:91`, and `backend/vali_agent/web.py:68`. Smallest change: one key per call; check that official service results remain available.
 3. **Use dates for explicitly time-bound searches.** Add `startPublishedDate` to a targeted news/announcement search body at `backend/vali_api/app.py:204` when the errand provides a time boundary. Smallest API change: one ISO-date key; do not apply globally, because valid official instructions may have old dates and company/people categories reject date filters.
-4. **Make quote-check freshness explicit.** Add a positive `maxAgeHours` and `livecrawlTimeout` to the Contents body in `backend/vali_api/exa.py:135`. Smallest change: two keys; the ten-minute local cache remains, and a failed fresh fetch may still return cached content. This cannot justify “always live.”
-5. **Extract the real application links.** Add `'extras': {'links': 5}` to `backend/vali_agent/web.py:90`, then append the returned `extras.links` to the text passed back at line 103. Smallest useful change: request field plus a small response-formatting block; treat links as untrusted page data. This could reduce guesses about where the application starts.
+4. **Make quote-check freshness explicit.** Done. Add a positive `maxAgeHours` and `livecrawlTimeout` to the Contents body in `backend/vali_api/exa.py:135`. Smallest change: two keys; the ten-minute local cache remains, and a failed fresh fetch may still return cached content. This cannot justify “always live.”
+5. **Extract the real application links.** Done. Add `'extras': {'links': 5}` to `backend/vali_agent/web.py:90`, then append the returned `extras.links` to the text passed back at line 103. Smallest useful change: request field plus a small response-formatting block; treat links as untrusted page data. This could reduce guesses about where the application starts.
 
 Do not blindly replace `fast` with `lite` in the companion: that call uses `outputSchema` and `systemPrompt`, which Lite rejects. Migrating it requires changing synthesis, not just the mode string. [Lite restrictions][sq]
 
