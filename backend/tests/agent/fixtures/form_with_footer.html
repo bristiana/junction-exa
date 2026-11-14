@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Form with footer</title><body>
+<header><a href="/en">English</a> <a href="/fi">Suomi</a></header>
+<nav id="menu">MENU</nav>
+<form><label>Message <textarea name="m"></textarea></label><button type="button">Send</button></form>
+<footer>FOOTER</footer>
+<script>
+for (let i = 0; i < 20; i++) { const a = document.createElement('a'); a.href = '/menu/' + i; a.textContent = 'Menu link ' + i; document.querySelector('#menu').append(a, ' '); }
+for (let i = 0; i < 30; i++) { const a = document.createElement('a'); a.href = '/footer/' + i; a.textContent = 'Footer link ' + i; document.querySelector('footer').append(a, ' '); }
+</script></body></html>

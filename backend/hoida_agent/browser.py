@@ -23,8 +23,12 @@ _CAPTURE = r'''({start, limit}) => {
  for(const el of all.filter(el=>el.matches('[role="option"]') && visible(el))) {
    const group=optionGroup(el); optionCounts.set(group,(optionCounts.get(group)||0)+1);
  }
+ // On a page with a form, footer links and long menus are noise that costs tokens on every step.
+ const hasFields=all.some(el=>el.matches('input:not([type=hidden]):not([type=search]),select,textarea') && visible(el));
+ const longNav=new Set(all.filter(el=>el.matches('nav,[role=navigation]') && el.querySelectorAll('a[href]').length>12));
  const elements=all.filter(el=>{
    if(!el.matches(selector) || !visible(el)) return false;
+   if(hasFields && el.matches('a[href]') && (el.closest('footer,[role=contentinfo]') || [...longNav].some(n=>n.contains(el)))) return false;
    if(!el.matches(selector.replace(',[tabindex]','')) && el.tabIndex<0) return false;
    const r=el.getBoundingClientRect();
    if((r.bottom < -3*innerHeight || r.top > 4*innerHeight) &&
@@ -139,9 +143,12 @@ class Browser:
         return 'URL: '+self.page.url+'\nTitle: '+title+'\n'+'\n'.join(lines)+'\nText: '+' '.join(texts)[:2500]
 
     def element_text(self, ref):
-        return self._element(ref).evaluate('''el => el.outerHTML + ' ' +
-          (el.localName==='button' ? 'button type='+el.type : '') + ' ' +
-          (el.innerText||'') + ' ' + (el.getAttribute('aria-label')||'')''')
+        try:
+            return self._element(ref).evaluate('''el => el.outerHTML + ' ' +
+              (el.localName==='button' ? 'button type='+el.type : '') + ' ' +
+              (el.innerText||'') + ' ' + (el.getAttribute('aria-label')||'')''', timeout=2500)
+        except BrowserTimeout as exc:
+            raise ValueError('That element is gone (the page changed); call read_page') from exc
 
     def element_info(self, ref):
         """Visible label and whether the element sits inside a cookie/consent banner."""
@@ -151,7 +158,7 @@ class Browser:
           consent: !!el.closest('[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[data-testid*=cookie i],[data-testid*=consent i],[id*=usercentrics i],[id*=onetrust i],#CybotCookiebotDialog,[aria-label*=cookie i],[aria-label*=eväst i]')
             || /cookie|eväste|kakor|consent/i.test((el.closest('dialog,[role=dialog],[aria-modal=true]')?.innerText || '').slice(0, 3000))
             || (el.getRootNode() instanceof ShadowRoot && /usercentrics|cookie|consent/i.test(el.getRootNode().host.id + ' ' + el.getRootNode().host.className))
-        })''')
+        })''', timeout=2500)
 
     def _fallback_click(self, el, exc):
         """Visually hidden radios/checkboxes are clicked through their label; covered or off-screen elements by a DOM click."""

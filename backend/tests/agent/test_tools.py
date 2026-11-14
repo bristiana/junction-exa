@@ -247,3 +247,14 @@ def test_hidden_radios_late_enabled_next_and_inert_elements(local_site):
             browser.click(nxt)
     finally:
         browser.close()
+
+
+def test_form_pages_skip_footer_links_and_long_menus(local_site):
+    browser = Browser()
+    try:
+        browser.goto(local_site + '/form_with_footer.html')
+        lines = browser.snapshot().split('\nText: ')[0]
+        assert 'textarea' in lines and '"Send"' in lines and '"English"' in lines
+        assert 'Footer link' not in lines and 'Menu link' not in lines
+    finally:
+        browser.close()
