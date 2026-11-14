@@ -271,7 +271,8 @@
         "goal": "Reserve a shared sauna at Löylykontti Sörnäinen for 8 people on Saturday 21 November in the evening (any free start time from 18:00), 2 hours. Details: {{first_name}}, {{last_name}}, {{email}}, {{phone}}. Choose online banking. Request approval before the final pay button.",
         "reply": "Take the earliest free evening slot.",
         "accept": [
-          "approval"
+          "approval",
+          "handoff"
         ]
       },
       "pass_note": "sandbox picks a slot, fills details and stops before 'Accept terms and pay'"
