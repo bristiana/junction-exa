@@ -1,4 +1,4 @@
-"""Bounded, append-only tool loop for Hoida's browser hand."""
+"""Bounded, append-only tool loop for Vali's browser hand."""
 import base64
 import re
 from dataclasses import dataclass
@@ -113,7 +113,7 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
     nudges = 0
     last_snapshot = ''
     system = mask(
-        f"You are Hoida's browser hand. Goal: {goal}\n"
+        f"You are Vali's browser hand. Goal: {goal}\n"
         f"At most {max_steps} actions. Never invent personal data. Use these placeholders: "
         + ', '.join('{{'+key+'}}' for key in profile)
         + '. Never submit without request_approval; approval permits one final click. '
