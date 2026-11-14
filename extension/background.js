@@ -1,7 +1,7 @@
-// Hoida service worker: starts errands, keeps polling them in the background, notifies when one is ready,
+// Vali service worker: starts errands, keeps polling them in the background, notifies when one is ready,
 // and fills forms in the user's tab once they approve. Only this file writes the task list; the panel reads it.
-// Two modes: with no "Hoida server" set it talks to Exa directly (direct mode); with one, errands go through the
-// Hoida API (lib/backend.js) and tasks started on WhatsApp show up here too.
+// Two modes: with no "Vali server" set it talks to Exa directly (direct mode); with one, errands go through the
+// Vali API (lib/backend.js) and tasks started on WhatsApp show up here too.
 
 import { createRun, getRun, getRunEvents, cancelRun, TERMINAL } from "./lib/exa.js";
 import { buildRunRequest } from "./lib/task.js";
@@ -37,8 +37,8 @@ async function findTask(id) {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "hoida-selection", title: "Hoida: take care of this", contexts: ["selection"] });
-    chrome.contextMenus.create({ id: "hoida-page", title: "Hoida: help with this page", contexts: ["page", "link"] });
+    chrome.contextMenus.create({ id: "hoida-selection", title: "Vali: take care of this", contexts: ["selection"] });
+    chrome.contextMenus.create({ id: "hoida-page", title: "Vali: help with this page", contexts: ["page", "link"] });
   });
   schedulePoll();
 });
@@ -163,7 +163,7 @@ async function pollBackend() {
     try {
       await merge([await backend.getTask(t.remoteId)]);
     } catch (e) {
-      if (e.status === 404) await withTasks((ts) => { const x = ts.find((y) => y.id === t.id); if (x) { x.status = "failed"; x.error = "The task was not found on the Hoida server."; } });
+      if (e.status === 404) await withTasks((ts) => { const x = ts.find((y) => y.id === t.id); if (x) { x.status = "failed"; x.error = "The task was not found on the Vali server."; } });
     }
   }
   for (const t of finished) notify(t);
@@ -220,7 +220,7 @@ function notify(t) {
   chrome.notifications.create(t.id, {
     type: "basic",
     iconUrl: "icons/icon-128.png",
-    title: "Hoida: " + (task.length > 50 ? task.slice(0, 50) + "…" : task),
+    title: "Vali: " + (task.length > 50 ? task.slice(0, 50) + "…" : task),
     message: String(answer).slice(0, 180),
     priority: 1,
   });
@@ -267,7 +267,7 @@ function sameDoc(a, b) {
 // ---------- server-only actions on one task (cancel, do it, approve, stop) ----------
 async function onServerTask(taskId, fn) {
   const t = await findTask(taskId);
-  if (!t?.backend) throw new Error("This needs a Hoida server (settings).");
+  if (!t?.backend) throw new Error("This needs a Vali server (settings).");
   const remote = await fn(t);
   const rec = await withTasks((tasks) => {
     const i = tasks.findIndex((x) => x.id === t.id);
@@ -286,7 +286,7 @@ function openFromPresence(msg, sender, reply) {
   // Called synchronously from the click on the badge, so Chrome can count it as a user gesture.
   let opening;
   try { opening = chrome.sidePanel.open({ tabId }); } catch (e) { opening = Promise.reject(e); }
-  // The panel picks this up now, or the next time it opens (Alt+H) if Chrome refused to open it.
+  // The panel picks this up now, or the next time it opens (Alt+V) if Chrome refused to open it.
   chrome.storage.session.set({
     prefill: {
       at: Date.now(),

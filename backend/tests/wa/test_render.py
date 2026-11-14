@@ -57,7 +57,7 @@ def test_limits_and_placeholders(task):
     assert "[8]" in rendered and "[9]" not in rendered
     assert fill_placeholders("{{NAME}} {{unknown}}", {"name": "Test Person"}) == "Test Person ‹unknown›"
     assert fill_placeholders("{{name}}", {"name": " "}) == "‹name›"
-    assert render_ack(task) == ["Hoida is on it — claim and apply."]
+    assert render_ack(task) == ["Vali is on it — claim and apply."]
 
 
 def test_execution(task):
@@ -70,6 +70,6 @@ def test_execution(task):
     task["execution"] = {"status": "done", "result": "Claim submitted"}
     assert render_execution_update(task) == ["Claim submitted"]
     task["execution"] = {"status": "failed", "error": "Login required", "final_url": "https://airline.example/claim"}
-    assert render_execution_update(task) == ["Hoida could not finish: Login required\nfinish here: https://airline.example/claim"]
+    assert render_execution_update(task) == ["Vali could not finish: Login required\nfinish here: https://airline.example/claim"]
     task["execution"] = {"status": "stopped"}
-    assert render_execution_update(task) == ["Stopped. Hoida will not submit this errand."]
+    assert render_execution_update(task) == ["Stopped. Vali will not submit this errand."]

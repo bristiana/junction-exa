@@ -16,7 +16,7 @@ export const PROFILE_FIELDS = [
 
 const TOKENS = PROFILE_FIELDS.filter(([k]) => k !== "language").map(([k]) => `{{${k}}}`).join(", ");
 
-export const SYSTEM_PROMPT = `You are Hoida, a personal errand agent for people living in Finland, especially newcomers and international students who do not read Finnish well.
+export const SYSTEM_PROMPT = `You are Vali, a personal errand agent for people living in Finland, especially newcomers and international students who do not read Finnish well.
 Your job is to take a tedious errand off the user's hands: find what matters on the live web, work out what needs to happen, and prepare the next step so the user only has to approve it.
 
 Rules:
@@ -53,7 +53,7 @@ export function outputSchema({ hasForm }) {
     steps: {
       type: "array",
       maxItems: 6,
-      description: "What needs to happen, in order. Mark steps Hoida already prepared as done_by_hoida.",
+      description: "What needs to happen, in order. Mark steps Vali already prepared as done_by_hoida.",
       items: {
         type: "object",
         properties: {

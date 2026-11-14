@@ -1,4 +1,4 @@
-// Hoida side panel: compose an errand, watch it run, review the result and approve the prepared steps.
+// Vali side panel: compose an errand, watch it run, review the result and approve the prepared steps.
 // Everything the agent returns is rendered with textContent, never as HTML.
 
 import { PROFILE_FIELDS } from "../lib/task.js";
@@ -92,14 +92,14 @@ $("saveSettings").addEventListener("click", async () => {
     else if (normalizeBaseUrl(url) !== state.backendUrl) await connectServer(url);
   } catch (e) {
     $("backendStatus").textContent = e.message;
-    toast("Saved, but the Hoida server did not connect");
+    toast("Saved, but the Vali server did not connect");
     return;
   }
   $("settings").hidden = true;
   toast("Saved");
 });
 
-// ---------- Hoida server and WhatsApp ----------
+// ---------- Vali server and WhatsApp ----------
 async function useDirectMode() {
   await chrome.storage.local.remove("backendUrl"); // the token stays, so saving the same URL again keeps the WhatsApp link
   state.backendUrl = "";
@@ -125,8 +125,8 @@ async function refreshServerStatus() {
   const st = $("backendStatus");
   $("pairBtn").disabled = !state.backendUrl;
   if (!state.backendUrl) {
-    st.textContent = "Not set: Hoida talks to Exa directly.";
-    $("waStatus").textContent = "Needs a Hoida server.";
+    st.textContent = "Not set: Vali talks to Exa directly.";
+    $("waStatus").textContent = "Needs a Vali server.";
     return;
   }
   st.textContent = "Checking…";
@@ -161,7 +161,7 @@ $("pairBtn").addEventListener("click", async () => {
   try {
     const { code, expires_at } = await pair();
     const until = Date.parse(expires_at || "");
-    const kids = ["Send ", h("code", { text: `link ${code}` }), " to Hoida on WhatsApp."];
+    const kids = ["Send ", h("code", { text: `link ${code}` }), " to Vali on WhatsApp."];
     if (Number.isFinite(until)) kids.push(h("span", { class: "muted", text: ` The code expires at ${new Date(until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` }));
     info.replaceChildren(...kids);
     watchLink(Number.isFinite(until) ? until : Date.now() + 10 * 60 * 1000);
@@ -219,7 +219,7 @@ $("composer").addEventListener("submit", async (e) => {
   const err = $("composerError");
   err.hidden = true;
   if (!task) { $("task").focus(); return; }
-  if (!state.exaKey && !state.backendUrl) { err.textContent = "Add your Exa API key or a Hoida server in settings first."; err.hidden = false; $("settings").hidden = false; renderSettings(); return; }
+  if (!state.exaKey && !state.backendUrl) { err.textContent = "Add your Exa API key or a Vali server in settings first."; err.hidden = false; $("settings").hidden = false; renderSettings(); return; }
   $("send").disabled = true;
   try {
     const usePage = !$("context").hidden && $("usePage").checked;
@@ -230,7 +230,7 @@ $("composer").addEventListener("submit", async (e) => {
     chrome.storage.session.remove("prefill");
     refreshActiveTab();
   } catch (e2) {
-    if (state.backendUrl) err.textContent = e2.status === 401 ? "The Hoida server did not accept this browser. Press Connect in settings." : e2.message;
+    if (state.backendUrl) err.textContent = e2.status === 401 ? "The Vali server did not accept this browser. Press Connect in settings." : e2.message;
     else err.textContent = e2.status === 401 ? "Exa rejected the API key. Check it in settings." : e2.status === 402 ? "The Exa key is out of credits." : e2.message;
     err.hidden = false;
   } finally {
@@ -333,7 +333,7 @@ function renderFormFill(t, fills) {
 function renderMissing(t, questions) {
   const inputs = questions.map((q) => h("input", { type: "text", "aria-label": q }));
   return h("div", { class: "missing" },
-    h("h4", { text: "Hoida needs" }),
+    h("h4", { text: "Vali needs" }),
     ...questions.map((q, i) => h("label", {}, q, inputs[i])),
     h("div", { class: "btns row end", style: "margin-top:8px" }, h("button", {
       class: "btn small",
@@ -460,7 +460,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // Poll faster than the background alarm while the panel is open and something is running.
-// With a Hoida server, also look for new errands from WhatsApp every ~16 s.
+// With a Vali server, also look for new errands from WhatsApp every ~16 s.
 const BUSY_EXEC = new Set(["starting", "running", "awaiting_approval", "submitting"]);
 let ticks = 0;
 setInterval(() => {

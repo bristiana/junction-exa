@@ -1,8 +1,8 @@
-// Mock Hoida API for trying the extension without the real backend: canned answers, in memory, no API keys.
+// Mock Vali API for trying the extension without the real backend: canned answers, in memory, no API keys.
 //
 //   npm run mock            # http://127.0.0.1:8787 (PORT=9000 npm run mock for another port)
 //
-// In the extension: settings → Hoida server → http://127.0.0.1:8787 → Connect. Each new user starts with one task
+// In the extension: settings → Vali server → http://127.0.0.1:8787 → Connect. Each new user starts with one task
 // that "came from WhatsApp". To fake the phone side:
 //   curl -X POST http://127.0.0.1:8787/mock/whatsapp -H 'Content-Type: application/json' -d '{"text":"link 123456"}'
 //   curl -X POST http://127.0.0.1:8787/mock/whatsapp -H 'Content-Type: application/json' -d '{"text":"Find a public sauna in Helsinki"}'
@@ -246,5 +246,5 @@ export function createMockServer({ researchMs = 6000, execMs = 4000, log = false
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT) || 8787;
-  createMockServer({ log: true }).listen(port, "127.0.0.1", () => console.log(`Mock Hoida API on http://127.0.0.1:${port}`));
+  createMockServer({ log: true }).listen(port, "127.0.0.1", () => console.log(`Mock Vali API on http://127.0.0.1:${port}`));
 }

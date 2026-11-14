@@ -109,7 +109,7 @@ def render_ack(task, profile=None):
     modes = {"find": "find and compare", "check": "check and explain", "claim": "claim and apply",
              "book": "book", "watch": "watch", "write": "write"}
     mode = modes.get(task.get("mode"), "errand")
-    return [f"Hoida is on it — {mode}."]
+    return [f"Vali is on it — {mode}."]
 
 
 def render_result(task, profile=None):
@@ -118,7 +118,7 @@ def render_result(task, profile=None):
     numbered = number_sources(output.get("grounding"))
     sources, fields = numbered["sources"][:8], numbered["byField"]
     visible = {source["n"] for source in sources}
-    answer = _text(structured.get("answer") or output.get("text") or "Hoida is still researching this errand.", profile)
+    answer = _text(structured.get("answer") or output.get("text") or "Vali is still researching this errand.", profile)
     sections = [f"*{answer}*" + _suffix(fields, "answer", visible)]
     facts = [f"• {_text(fact.get('label'), profile)}: {_text(fact.get('value'), profile)}"
              + _suffix(fields, f"key_facts[{i}]", visible)
@@ -153,12 +153,12 @@ def render_execution_update(task, profile=None):
     elif status == "done":
         message = _text(execution.get("result") or "Done.", profile)
     elif status == "failed":
-        message = "Hoida could not finish: " + _text(execution.get("error") or "the page could not be completed", profile)
+        message = "Vali could not finish: " + _text(execution.get("error") or "the page could not be completed", profile)
         url = execution.get("final_url") or execution.get("current_url") or execution.get("start_url")
         if url:
             message += f"\nfinish here: {url}"
     elif status == "stopped":
-        message = "Stopped. Hoida will not submit this errand."
+        message = "Stopped. Vali will not submit this errand."
     elif status == "submitting":
         message = "Submitting your approved errand."
     else:
@@ -169,16 +169,16 @@ def render_execution_update(task, profile=None):
 
 
 def render_help():
-    return ["*Hoida* takes care of your errands.\nTo pair, open the Hoida extension, get your 6-digit code, and send *link 123456* (use your own code).\nSend an errand in text, a voice note, or a photo of a letter. Reply with an action number, *yes* to approve, *stop* to stop, or *status* for an update."]
+    return ["*Vali* takes care of your errands.\nTo pair, open the Vali extension, get your 6-digit code, and send *link 123456* (use your own code).\nSend an errand in text, a voice note, or a photo of a letter. Reply with an action number, *yes* to approve, *stop* to stop, or *status* for an update."]
 
 
 def render_linked():
-    return ["Linked! Your Hoida extension and WhatsApp now share one task list. Send me an errand."]
+    return ["Linked! Your Vali extension and WhatsApp now share one task list. Send me an errand."]
 
 
 def render_link_failed():
-    return ["That pairing code is invalid or expired. Get a new 6-digit code from the Hoida extension and send *link 123456* (use your own code)."]
+    return ["That pairing code is invalid or expired. Get a new 6-digit code from the Vali extension and send *link 123456* (use your own code)."]
 
 
 def render_error(message):
-    return split_messages("Hoida: " + _text(message))
+    return split_messages("Vali: " + _text(message))

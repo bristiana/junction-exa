@@ -27,7 +27,7 @@ def upload_screenshot(jpeg_bytes: bytes, task_id: str, n: int) -> str | None:
     if not os.environ.get("CLOUDINARY_URL"):
         return None
     if not _slots.acquire(blocking=False):
-        logger.warning("Hoida screenshot upload unavailable (busy)")
+        logger.warning("Vali screenshot upload unavailable (busy)")
         return None
     results: queue.Queue[str | None] = queue.Queue(maxsize=1)
 
@@ -57,15 +57,15 @@ def upload_screenshot(jpeg_bytes: bytes, task_id: str, n: int) -> str | None:
         threading.Thread(target=upload, daemon=True, name="hoida-upload").start()
     except Exception:
         _slots.release()
-        logger.warning("Hoida screenshot upload failed")
+        logger.warning("Vali screenshot upload failed")
         return None
     try:
         url = results.get(timeout=max(0.0, deadline - time.monotonic()))
     except queue.Empty:
-        logger.warning("Hoida screenshot upload timed out")
+        logger.warning("Vali screenshot upload timed out")
         return None
     if url is None:
-        logger.warning("Hoida screenshot upload failed")
+        logger.warning("Vali screenshot upload failed")
     return url
 
 

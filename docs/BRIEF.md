@@ -1,8 +1,8 @@
-# Hoida: brief
+# Vali: brief
 
-**One line:** hand off an errand. Hoida digs through the live web with Exa, works out what has to happen, prepares it, and when you approve, does it for you in a cloud browser.
+**One line:** hand off an errand. Vali digs through the live web with Exa, works out what has to happen, prepares it, and when you approve, does it for you in a cloud browser.
 
-**Name:** *hoida* is Finnish for "take care of it" (from *hoitaa*, to handle; *hoida se* = "you handle it"). It is short, says what the product does, and is local to the people it serves first.
+**Name:** Vali, a friendly butler. It sounds like "valet": you hand over the keys and get it back done. Short, easy to say in any language, and works as a character on WhatsApp and in the browser.
 
 **Challenge:** Exa, The Internet Butler (main). Tech challenges: Modal, Codex, Aiven, Cloudinary, ElevenLabs.
 
@@ -16,11 +16,11 @@ Newcomers and international students in Finland. Their errands are the tedious k
 - the answer is spread over several pages and changes (amounts, deadlines, opening hours, prices);
 - the last step is a long form, an email in the right tone, or a booking widget.
 
-A model alone cannot do this: it does not know this year's Kela amounts, today's sauna slots or the airline's claim form. Exa can find it, and Hoida turns it into the next step.
+A model alone cannot do this: it does not know this year's Kela amounts, today's sauna slots or the airline's claim form. Exa can find it, and Vali turns it into the next step.
 
-## 2. What Hoida does
+## 2. What Vali does
 
-Every errand goes through the same loop: **find → work out → prepare → (approve) → do → keep watching**. Hoida picks the mode from the errand.
+Every errand goes through the same loop: **find → work out → prepare → (approve) → do → keep watching**. Vali picks the mode from the errand.
 
 | Mode | Example errands | Exa | What the user gets |
 |---|---|---|---|
@@ -31,28 +31,28 @@ Every errand goes through the same loop: **find → work out → prepare → (ap
 | **Watch** | "Tell me when a 2-room flat in Espoo under €900 shows up", "when Kela's student allowance changes" | Monitors (scheduled search, webhook) | A message on WhatsApp / a notification when something new appears, with the source |
 | **Write** | Email to the landlord, complaint to an airline, message to a university office | Agent (who to write to, what rule to cite) | Ready draft with the right address and cited rule; opens in Gmail or the mail app |
 
-Hoida **never sends, pays, books or submits on its own**. Drafts are drafts, forms stop before submit, bookings stop before confirm. One tap approves.
+Vali **never sends, pays, books or submits on its own**. Drafts are drafts, forms stop before submit, bookings stop before confirm. One tap approves.
 
 ## 3. Channels and shared context
 
 **Chrome extension** (side panel)
-- Click the icon or press Alt+H, type the errand, or right-click any text or page: "Hoida: take care of this".
+- Click the icon or press Alt+V, type the errand, or right-click any text or page: "Vali: take care of this".
 - It sends the page context (URL, title, selected text, redacted page text, form fields) with the errand.
 - It can fill the form on the page you are on, in your own browser, with your own login.
-- On pages with a form (claims, applications, bookings), Hoida peeks in from the edge and offers to help.
+- On pages with a form (claims, applications, bookings), Vali peeks in from the edge and offers to help.
 
 **WhatsApp**
 - Text or voice note ("my flight from Helsinki to Berlin landed 4 hours late"). Voice notes are transcribed with ElevenLabs.
 - Replies with the short answer, the key facts and numbered source links, and the prepared actions as numbered choices ("1 = file the claim, 2 = email draft").
 - Approvals on the phone: screenshot of the filled form, reply "yes" to submit or "stop".
 
-**One task list.** The extension shows a 6-digit pairing code; the user sends `link 123456` to Hoida on WhatsApp. From then on an errand started on the phone shows up in the browser and the other way round: start from the lease page on the laptop, approve from the phone on the bus.
+**One task list.** The extension shows a 6-digit pairing code; the user sends `link 123456` to Vali on WhatsApp. From then on an errand started on the phone shows up in the browser and the other way round: start from the lease page on the laptop, approve from the phone on the bus.
 
 ## 4. How it works
 
 ```
 extension ─┐                               ┌─ Exa: /search, /contents, /agent/runs, /monitors, Connect
-           ├─ Hoida API (FastAPI on Modal) ─┤
+           ├─ Vali API (FastAPI on Modal) ─┤
 WhatsApp ──┘   Postgres on Aiven            └─ sandbox: Modal container per run, Playwright Chromium + Claude
                screenshots on Cloudinary       voice notes: ElevenLabs speech-to-text
 ```
@@ -62,7 +62,7 @@ WhatsApp ──┘   Postgres on Aiven            └─ sandbox: Modal containe
 3. **Prepare.** Actions are built from the structured output: email drafts (Gmail / mail app), calendar entries, links, phone scripts, form values.
 4. **Do it (sandbox).** For claims, applications and bookings the API starts a Modal function with headless Chromium. Claude drives it with a small tool set (open, read, click, type, select, scroll, look, request approval, finish). Each step posts a screenshot. Personal data never reaches the model: it types `{{name}}`, the sandbox substitutes the real value, and page snapshots are masked back before the model sees them.
 5. **Approve.** Clicking anything that looks like a final submit is blocked until the user approves. Logins (bank ID), CAPTCHAs and payment pages stop the run and hand the user the exact page to finish by hand.
-6. **Watch.** Exa Monitors run the search on a schedule and call our webhook only when something is new; Hoida forwards it to WhatsApp and the extension.
+6. **Watch.** Exa Monitors run the search on a schedule and call our webhook only when something is new; Vali forwards it to WhatsApp and the extension.
 
 ## 5. Trust and privacy
 
@@ -73,7 +73,7 @@ WhatsApp ──┘   Postgres on Aiven            └─ sandbox: Modal containe
 
 ## 6. How this scores (Exa's criteria, 20% each)
 
-| Criterion | How Hoida answers it |
+| Criterion | How Vali answers it |
 |---|---|
 | Use of Exa | Four Exa surfaces in one product (Search, Contents, Agent, Monitors) plus Connect partners; every answer depends on live pages (this year's amounts, today's slots, the current form). |
 | Usefulness to real people | A named group (newcomers and students in Finland) with errands they actually have; demo on real Finnish sites. |
@@ -85,7 +85,7 @@ Workshop note from Exa: they judge **actionability** first ("does it send the em
 
 ## 7. Tech challenges (only where the use is real)
 
-| Partner | Real use in Hoida |
+| Partner | Real use in Vali |
 |---|---|
 | Modal | The sandbox (one container per run with Chromium) and the API itself. The heavy lifting. |
 | Codex | Built with Codex workers alongside Claude Code; the README documents how. |
@@ -99,7 +99,7 @@ Left out on purpose: Context.dev and Oxylabs (they compete with Exa, our main ch
 
 1. **Find (live, judges' choice):** "Find a public sauna in Helsinki for 8 people this Saturday evening that I can book online." Options with prices and slots, sources, calendar entry.
 2. **Check:** select a clause on a Finnish lease page, "Is this legal?" Verdict with the law section cited, draft reply to the landlord.
-3. **Claim, cross-channel:** WhatsApp voice note about a 4-hour delay. Hoida answers the amount with the EU rule cited and asks for the booking reference. "1" starts the sandbox: it opens the airline's claim form and fills it; the screenshot arrives on WhatsApp; the run stops before submit (we do not file a fake claim live).
+3. **Claim, cross-channel:** WhatsApp voice note about a 4-hour delay. Vali answers the amount with the EU rule cited and asks for the booking reference. "1" starts the sandbox: it opens the airline's claim form and fills it; the screenshot arrives on WhatsApp; the run stops before submit (we do not file a fake claim live).
 4. **Watch:** "Tell me when a 2-room flat in Espoo under €900 is listed." Monitor created, shown in the list.
 
 The 2-minute video follows the same order.
@@ -129,10 +129,10 @@ The 2-minute video follows the same order.
 
 | Idea | Why it matters | Cost |
 |---|---|---|
-| **Photo of a Finnish letter on WhatsApp** (Kela, Vero, DVV, landlord): Hoida reads it, explains it in plain English with the official source, puts the deadline in the calendar and drafts the reply | The most common newcomer pain; strong "real people" story; works on live input the judges bring | Claude vision for reading + Exa Agent; P1 |
+| **Photo of a Finnish letter on WhatsApp** (Kela, Vero, DVV, landlord): Vali reads it, explains it in plain English with the official source, puts the deadline in the calendar and drafts the reply | The most common newcomer pain; strong "real people" story; works on live input the judges bring | Claude vision for reading + Exa Agent; P1 |
 | **Live view of the cloud browser** in the side panel and as screenshots on WhatsApp | Makes "it does it for you" visible; the demo moment | CDP screencast in the sandbox; in the sandbox brief |
 | **Errand receipt**: after an errand, one page with what was found, what was sent or filled, when, every source and the screenshots; shareable link | Scores on clarity of sources and trust; proof for the user if the claim is disputed | Rendered from the Task JSON; P1 |
-| **Deadline keeper**: every deadline Hoida finds goes on a timeline; Exa Monitors watch the rule behind it (e.g. Kela amounts, rent rules) and nudge when it changes | Turns one-off answers into ongoing help; uses Monitors meaningfully | P2 |
+| **Deadline keeper**: every deadline Vali finds goes on a timeline; Exa Monitors watch the rule behind it (e.g. Kela amounts, rent rules) and nudge when it changes | Turns one-off answers into ongoing help; uses Monitors meaningfully | P2 |
 | **Exa Connect partners**: Jinko (live flight and hotel prices) for travel disruption, Affiliate.com (product prices) for "find" errands | More Exa surface used, answers no model could know | One field in the agent run; P2 |
 
 ## 12. Risks

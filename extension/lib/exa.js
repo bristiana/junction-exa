@@ -13,7 +13,7 @@ export class ExaError extends Error {
 }
 
 async function call(key, path, { method = "GET", body, signal } = {}) {
-  if (!key) throw new ExaError(401, { message: "Add your Exa API key in Hoida's settings." });
+  if (!key) throw new ExaError(401, { message: "Add your Exa API key in Vali's settings." });
   const res = await fetch(BASE + path, {
     method,
     signal,

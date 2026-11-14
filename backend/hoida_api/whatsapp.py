@@ -7,9 +7,9 @@ def handle_whatsapp_message(store, from_number, text_or_none, media_id_or_none):
     match = re.fullmatch(r'link\s+(\d{6})', (text_or_none or '').strip(), flags=re.I)
     if match:
         if store.link_number(match.group(1), from_number):
-            return 'Hoida linked. Your tasks are now shared.'
+            return 'Vali linked. Your tasks are now shared.'
         return 'That pairing code is invalid or expired. Request a new code.'
-    return 'Send link followed by the six-digit code shown in Hoida.'
+    return 'Send link followed by the six-digit code shown in Vali.'
 
 
 def send_whatsapp_message(config, to, body, transport=None):

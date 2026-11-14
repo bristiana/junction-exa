@@ -1,4 +1,4 @@
-// Client for the Hoida API (docs/ARCHITECTURE.md). Used when a "Hoida server" URL is set in settings;
+// Client for the Vali API (docs/ARCHITECTURE.md). Used when a "Vali server" URL is set in settings;
 // without one the extension talks to Exa directly (lib/exa.js).
 // The base URL and the bearer token live in chrome.storage.local (backendUrl, backendToken). The token is never logged.
 // createClient() and the mapping helpers are pure, so they run in Node tests too.
@@ -16,7 +16,7 @@ export class BackendError extends Error {
       body?.error?.message ||
       (typeof body?.error === "string" && body.error) ||
       body?.message ||
-      `The Hoida server answered HTTP ${status}.`;
+      `The Vali server answered HTTP ${status}.`;
     super(String(msg));
     this.status = status;
     this.backend = true;
@@ -38,7 +38,7 @@ const clean = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) =
 
 export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.fetch } = {}) {
   async function call(path, { method = "GET", body, auth = true } = {}) {
-    if (!baseUrl) throw new BackendError(0, "Set the Hoida server in settings.");
+    if (!baseUrl) throw new BackendError(0, "Set the Vali server in settings.");
     const headers = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (auth) {
@@ -49,7 +49,7 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
     try {
       res = await fetchImpl(baseUrl + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
     } catch (_) {
-      throw new BackendError(0, "Can't reach the Hoida server.");
+      throw new BackendError(0, "Can't reach the Vali server.");
     }
     const text = await res.text();
     let json = null;
@@ -122,7 +122,7 @@ export const shotUrl = async (task, n) => (await configured()).shotUrl(task, n);
 // A token is reused when the same URL is saved again, so a WhatsApp link survives switching back and forth.
 export async function connect(url) {
   const baseUrl = normalizeBaseUrl(url);
-  if (!baseUrl) throw new BackendError(0, "Enter the Hoida server URL.");
+  if (!baseUrl) throw new BackendError(0, "Enter the Vali server URL.");
   const s = await chrome.storage.local.get(["backendToken", "backendTokenUrl"]);
   let token = s.backendTokenUrl === baseUrl ? s.backendToken || "" : "";
   const fresh = async () => {

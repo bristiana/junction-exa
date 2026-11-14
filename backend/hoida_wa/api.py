@@ -7,7 +7,7 @@ class GraphAPIError(Exception):
     def __init__(self, status_code: int, code: int | None = None):
         self.status_code = status_code
         self.code = code
-        super().__init__(f"Hoida messaging request failed (HTTP {status_code})")
+        super().__init__(f"Vali messaging request failed (HTTP {status_code})")
 
 
 class GraphAPITransportError(GraphAPIError):

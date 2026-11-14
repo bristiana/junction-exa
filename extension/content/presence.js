@@ -1,5 +1,5 @@
-// Hoida presence: on pages with a real form (a claim, an application, a booking, a registration, a complaint),
-// a small Hoida badge slides in once at the bottom-right and offers to fill it in. "Yes" opens the side panel with
+// Vali presence: on pages with a real form (a claim, an application, a booking, a registration, a complaint),
+// a small Vali badge slides in once at the bottom-right and offers to fill it in. "Yes" opens the side panel with
 // "Help me fill in this form" ready; "Not now" silences the site for 7 days.
 // Rules: only after ~8 s on the page, never while the user types or scrolls, at most once per page and 3 times per
 // site per day, never on search, mail, chat, payment or banking sites, off when settings.presence === false.
@@ -179,7 +179,7 @@
     const wrap = document.createElement("div");
     wrap.className = "wrap";
     wrap.setAttribute("role", "dialog");
-    wrap.setAttribute("aria-label", "Hoida");
+    wrap.setAttribute("aria-label", "Vali");
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     const line = document.createElement("p");
@@ -231,7 +231,7 @@
   }
   function fallback() {
     if (!ui.line) return;
-    ui.line.textContent = "Open Hoida with Alt+H";
+    ui.line.textContent = "Open Vali with Alt+V";
     ui.btns.hidden = true;
     clearTimeout(ui.timer);
     ui.timer = setTimeout(hide, 8000);

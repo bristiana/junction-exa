@@ -1,4 +1,4 @@
-"""Standalone Hoida WhatsApp channel; all network and task dependencies are injected."""
+"""Standalone Vali WhatsApp channel; all network and task dependencies are injected."""
 
 from .api import GraphAPIClient, GraphAPIError
 from .flow import WhatsAppFlow
