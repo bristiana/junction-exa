@@ -33,7 +33,7 @@ def test_capture_stops_before_personal_substitution(monkeypatch, fill_fails):
         def goto(self, url): pass
         def snapshot(self): return '[e1] input[email] "Email"'
         def blockers(self): return []
-        def personal_field(self, ref): pass
+        def personal_field(self, ref, approved=False): pass
         def screenshot_jpeg(self, **kwargs):
             events.append('screenshot')
             assert 'fill' not in events

@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 import pytest
 from vali_agent.browser import Browser
-from vali_agent.guard import is_final_submit, is_navigation
+from vali_agent.guard import is_final_submit
 from vali_agent.live import dismiss_cookie_banner
 
 
@@ -11,12 +11,11 @@ def test_cookie_wrapper_cannot_exempt_final_control(label):
     element.evaluate.side_effect = ['', (f'<button class="cookie-consent">{label}</button>', label)]
     with pytest.raises(ValueError, match='request_approval'):
         Browser.__new__(Browser)._guard_click(element)
-    assert not is_navigation('a', '/booking', False, label)
 
 
 @pytest.mark.parametrize('label', ['Next', 'Continue', 'Jatka', 'Seuraava', 'Select slot'])
-def test_submit_type_is_not_overridden_by_nonfinal_label(label):
-    assert is_final_submit('<button type="submit">', label)
+def test_wizard_next_and_continue_are_not_final(label):
+    assert not is_final_submit('<button type="submit">', label)
 
 
 @pytest.mark.parametrize('label', ['Reject all and Pay', 'Only necessary Confirm', 'Vain välttämättömät Vahvista'])
@@ -67,7 +66,9 @@ def test_keyboard_cannot_activate_an_unrecognized_final_control(key):
 
 @pytest.mark.parametrize('label', ['Accept necessary', 'Reject all', 'Only necessary',
                                    'Accept only essential cookies', 'Vain välttämättömät',
-                                   'Continue with only necessary cookies'])
+                                   'Continue with only necessary cookies', 'Reject all cookies',
+                                   'Hyväksy vain välttämättömät', 'Vain välttämättömät evästeet',
+                                   'Hylkää kaikki evästeet'])
 def test_nonfinal_minimal_consent_labels_are_dismissed(label):
     frame = Mock()
     frame.evaluate.return_value = [{'label': label, 'description': '<button type="button">' + label + '</button>',

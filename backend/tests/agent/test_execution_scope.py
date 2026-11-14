@@ -19,29 +19,34 @@ def test_registrable_site(url, expected):
     assert site(url) == expected
 
 
-def test_navigation_only_allows_start_site_or_page_redirect():
+def test_navigation_allows_booking_provider_without_trusting_personal_fields():
     browser = Browser.__new__(Browser)
-    browser._sites = {site('https://start.example.co.uk')}
-    assert browser._check_url('https://app.example.co.uk') == 'example.co.uk'
-    with pytest.raises(ValueError, match='outside'):
-        browser._check_url('https://attacker.co.uk')
-    # _settle records a destination reached by the page itself.
+    browser._start_site = 'example.co.uk'
+    browser._private_profile = {'email': 'secret@example.com'}
+    assert browser._check_url('https://booking.example.org') == 'example.org'
     browser.page = Mock(url='https://redirect.example.org', is_closed=lambda: False)
     browser._popups = []
     browser._wait_quiet = lambda: None
     browser._settle()
-    assert browser._check_url('https://redirect.example.org') == 'example.org'
+    assert browser._start_site == 'example.co.uk'
+    browser._refs = {'e1': SimpleNamespace(url=browser.page.url)}
+    browser._element = lambda ref: Mock(evaluate=lambda script: True)
+    with pytest.raises(ValueError, match='request_approval'):
+        browser.personal_field('e1')
+    browser.personal_field('e1', approved=True)
+    with pytest.raises(ValueError, match='request_approval'):
+        browser.personal_field('e1')
+    with pytest.raises(ValueError, match='only allowed'):
+        browser._check_url('https://booking.example.org/?email=secret@example.com')
 
 
-def test_cross_site_link_is_rejected_before_click():
+def test_cross_site_link_without_personal_values_is_allowed():
     browser = Browser.__new__(Browser)
-    browser._sites = {'example.com'}
+    browser._private_profile = {}
     browser.page = SimpleNamespace(url='https://example.com')
     element = Mock()
-    element.evaluate.return_value = 'https://evil.example.org'
-    with pytest.raises(ValueError, match='outside'):
-        browser._guard_click(element, approved=True)
-    element.click.assert_not_called()
+    element.evaluate.side_effect = ['https://provider.example.org', ('<a href="https://provider.example.org/order">Continue</a>', 'Continue')]
+    assert not browser._guard_click(element)
 
 
 def test_only_keys_named_by_goal_are_substituted():
@@ -62,7 +67,7 @@ def test_personal_values_cannot_be_used_in_urls_or_research(text):
 @pytest.mark.parametrize('safe', [False, True])
 def test_personal_field_requires_field_validation(safe):
     browser = Browser.__new__(Browser)
-    browser._sites = {'example.com'}
+    browser._start_site = 'example.com'
     browser._refs = {'e1': SimpleNamespace(url='https://example.com')}
     element = Mock()
     element.evaluate.return_value = safe
@@ -76,7 +81,7 @@ def test_personal_field_requires_field_validation(safe):
 
 def test_personal_fields_in_external_frames_are_rejected():
     browser = Browser.__new__(Browser)
-    browser._sites = {'example.com'}
+    browser._start_site = 'example.com'
     browser._refs = {'e1': SimpleNamespace(url='https://evil.org')}
     with pytest.raises(ValueError, match='outside'):
         browser.personal_field('e1')
