@@ -115,3 +115,27 @@ def test_sources_carry_published_and_stale():
     result = output('You must submit the notification of move within one week after moving.')
     cite(result, FakeExa())
     assert result['sources'][0]['published'] == '2025-01-02' and result['sources'][0]['stale'] is True  # > 18 months before today
+
+
+def test_unconfirmed_claims_are_softened_in_claims_and_answer():
+    def llm(system, user, schema):
+        return {'claims': [
+            {'i': 0, 'verdict': 'yes', 'soft': '', 'support': [{'page': 1, 'quote': 'Mail forwarding costs 10 euros per month.'}]},
+            {'i': 1, 'verdict': 'no', 'soft': 'Not confirmed by the sources: the clinic accepts new patients.', 'support': []},
+            {'i': 2, 'verdict': 'partly', 'soft': 'You can submit it online.',
+             'support': [{'page': 0, 'quote': 'You can submit it online.'}]}]}
+    result = output('Forwarding costs 10 € a month. The clinic accepts new patients. Submit it online at night.')
+    cite(result, FakeExa(), llm)
+    claims = result['claims']
+    assert claims[0] == {'text': 'Forwarding costs 10 € a month.', 'sources': [1], 'supported': True}
+    assert claims[1]['text'].startswith('Not confirmed by the sources') and claims[1]['original'] == 'The clinic accepts new patients.'
+    assert claims[2] == {'text': 'You can submit it online.', 'sources': [2], 'supported': False,
+                         'original': 'Submit it online at night.'}
+    assert result['structured']['answer'] == ('Forwarding costs 10 € a month. Not confirmed by the sources: the clinic '
+                                              'accepts new patients. You can submit it online.')
+
+
+def test_without_a_judgement_nothing_is_softened():
+    result = output('The clinic accepts new patients.')
+    cite(result, FakeExa())
+    assert result['structured']['answer'] == 'The clinic accepts new patients.' and 'original' not in result['claims'][0]
