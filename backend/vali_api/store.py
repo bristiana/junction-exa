@@ -10,6 +10,8 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
+from .lang import detect
+
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -177,7 +179,7 @@ class Store:
         for key in ('page', 'research', 'execution'):
             raw = row.pop(key + '_json')
             row[key] = json.loads(raw) if raw is not None else None
-        row['channel'] = row['source']
+        row['channel'], row['lang'] = row['source'], detect(row['task']) or 'en'
         return row
 
     def create_task(self, uid, task, page, mode, research, source='extension'):

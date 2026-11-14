@@ -93,10 +93,6 @@ def test_one_account_allows_ten_task_burst_after_recent_activity(task_budget):
 @pytest.mark.parametrize('errand', [
     pytest.param(errand, id=errand['id']) for errand in ERRANDS if 'language' in errand
 ])
-@pytest.mark.xfail(
-    strict=True,
-    reason='stress40: request defaults to English without explicitly deriving answer language from errand',
-)
 def test_non_english_errand_requests_its_own_language_without_profile(errand):
     request = build_run_request(errand['text'])
     assert errand['text'] in request['query']
