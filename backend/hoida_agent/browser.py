@@ -90,6 +90,9 @@ class Browser:
                 user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
             self.page = self._context.new_page()
             self.page.set_default_timeout(5000)
+            # Booking widgets sometimes continue in a popup window; follow it.
+            self._popups = []
+            self._context.on('page', lambda page: self._popups.append(page))
         except Exception:
             self._runtime.stop()
             raise
@@ -110,6 +113,22 @@ class Browser:
         except BrowserTimeout:
             pass
         self.page.wait_for_timeout(100)
+        # A popup opened by the last action arrives as an event during the waits above.
+        popups = [p for p in self._popups if not p.is_closed() and p is not self.page]
+        self._popups.clear()
+        if popups:
+            self.page = popups[-1]
+            self.page.set_default_timeout(5000)
+            self._refs = {}
+            try:
+                self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+                self.page.wait_for_load_state('networkidle', timeout=1200)
+            except BrowserTimeout:
+                pass
+        elif self.page.is_closed():
+            open_pages = [p for p in self._context.pages if not p.is_closed()]
+            if open_pages:
+                self.page, self._refs = open_pages[-1], {}
 
     def _element(self, ref):
         if not isinstance(ref, str) or not re.fullmatch(r'e[1-9]\d*', ref):

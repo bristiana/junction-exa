@@ -48,6 +48,7 @@ class Screencast:
         self._wake, self._closed = threading.Event(), False
         self._writer = threading.Thread(target=self._write_loop, daemon=True)
         self._writer.start()
+        self.page = page
         self.cdp = page.context.new_cdp_session(page)
         self.cdp.on('Page.screencastFrame', self._frame)
         self.cdp.send('Page.startScreencast', {'format': 'jpeg', 'quality': quality, 'maxWidth': max_width,

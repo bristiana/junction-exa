@@ -82,6 +82,8 @@ def _validate(value, schema):
             _validate(item, schema['items'])
 
 
+# Reading the page, looking things up and asking do not change the page; they do not count as actions.
+_FREE = {'read_page', 'look', 'exa_search', 'exa_read', 'ask_user', 'request_approval', 'finish', 'fail'}
 _USAGE_KEYS = ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')
 # USD per million tokens (claude-opus-5-5 list price; cache writes at 1.25x input). Override with HOIDA_PRICES=in,out,read,write.
 _PRICES = dict(zip(_USAGE_KEYS, (4.0, 20.0, 0.20, 5.0)))
@@ -98,7 +100,7 @@ def _cost(usage):
 def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                       hooks: AgentHooks, llm: LLM | None = None, max_steps: int = 30,
                       headless: bool = True, exa: ExaTools | None = None, jev: Jev | None = None,
-                      cookies: list[dict] | None = None) -> AgentResult:
+                      cookies: list[dict] | None = None, max_model_calls: int = 30) -> AgentResult:
     browser = None
     screencast = None
     exa = exa if exa is not None else ExaTools()
@@ -106,7 +108,8 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
     usage = {key: 0 for key in _USAGE_KEYS} | {'model_calls': 0}
     tools = [t for t in TOOLS if (t['name'] not in ('exa_search', 'exa_read') or exa.enabled)
              and (t['name'] != 'ask_user' or hooks.ask_user is not None)]
-    steps = 0
+    steps = 0    # every tool call, reported
+    actions = 0  # page actions only; capped by max_steps
     status, result = 'failed', 'Action limit reached'
     final_url = start_url
     approved = False
@@ -134,7 +137,17 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         return AgentResult(status, mask(result, profile), final_url, steps, dict(usage) | {'exa_cost_usd': round(exa.cost_usd, 4),
                            'jev_calls': jev.calls}, sources, [{'label': k, 'value': v} for k, v in filled_log.items()])
 
+    def follow_page():
+        nonlocal screencast
+        if screencast is not None and screencast.page is not browser.page:
+            screencast.close()
+            try:
+                screencast = Screencast(browser.page, hooks.on_frame)
+            except Exception:
+                screencast = None
+
     def shot():
+        follow_page()
         mark_private(browser.page, profile)
         jpeg = browser.screenshot_jpeg()
         if screencast:
@@ -229,12 +242,10 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
         messages = [{'role': 'user', 'content': [{'type': 'text', 'text': snapshot()}] + first if first else snapshot()}]
         model = llm if llm is not None else ClaudeLLM()
         terminal = False
-        # Also bound model-only pause turns so they cannot run forever.
-        for _ in range(max_steps * 3 + 3):
+        # Model calls (including pause turns) are capped separately from page actions.
+        for _ in range(max_model_calls):
             if hooks.should_stop():
                 status, result = 'stopped', 'Stopped by the user'
-                break
-            if steps >= max_steps:
                 break
             response = model.next(system, tools, messages)
             track(response)
@@ -271,20 +282,25 @@ def run_browser_agent(goal: str, start_url: str, profile: dict[str, str],
                 elif hooks.should_stop():
                     status, result, terminal = 'stopped', 'Stopped by the user', True
                     error, content = True, result
-                elif steps >= max_steps:
+                elif actions >= max_steps and block.name not in _FREE:
                     terminal = True
                     error, content = True, 'Action limit reached'
                 else:
                     steps += 1
                     try:
                         name, args = block.name, block.input
+                        if name not in _FREE:
+                            actions += 1
                         spec = next((t for t in tools if t['name'] == name), None)
                         if spec is None:
                             raise ValueError('Unknown tool')
                         _validate(args, spec['input_schema'])
                         step_text = describe(name, args)  # before the action: refs point at the page the model saw
                         blockers = browser.blockers()
-                        if blockers and name not in ('fail', 'read_page', 'look', 'exa_search', 'exa_read', 'ask_user'):
+                        allowed = ('fail', 'read_page', 'look', 'exa_search', 'exa_read', 'ask_user')
+                        if blockers == ['payment']:
+                            allowed += ('request_approval', 'finish')
+                        if blockers and name not in allowed:
                             status, result, terminal = 'failed', 'needs ' + '/'.join(blockers) + ': finish by hand at ' + browser.current_url, True
                             raise ValueError(result + '. Call fail now.')
                         if name == 'finish':

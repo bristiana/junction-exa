@@ -44,7 +44,8 @@ def test_stop_reasons(local_site, reason, expected):
 
 
 def test_step_limit(local_site):
-    model = Responses([response('tool_use', [tool('a','read_page',{}),tool('b','read_page',{})])])
+    # Page actions count toward max_steps; reading the page does not.
+    model = Responses([response('tool_use', [tool('a','scroll',{'direction':'down'}),tool('b','scroll',{'direction':'down'})])])
     result = run_browser_agent('Read page',local_site+'/claim.html',{},AgentHooks(lambda *args:None,lambda *args:True,lambda:False),model,max_steps=1)
     assert result.status == 'failed' and result.steps == 1
 
