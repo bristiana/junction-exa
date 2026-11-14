@@ -44,34 +44,6 @@
   font-family: 'Familjen Grotesk', system-ui, -apple-system, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #12131c;
-    --ink: #e8e9f3;
-    --muted: #9a9db6;
-    --line: #2a2d3e;
-    --line-2: #34384c;
-    --line-3: #474c66;
-    --fill: #262546;
-    --fill-2: #1c1e2b;
-    --fill-hover: #312f58;
-    --card: #191b27;
-    --card-hover: #1e202e;
-    --accent: #a89cf5;
-    --good: #8fcfb0;  --good-soft: #17291f;
-    --warn: #e6bf7a;  --warn-soft: #2e2512;  --warn-line: #5c4a22;  --warn-glow: #241d10;
-    --bad: #ee9aa9;   --bad-soft: #351a21;
-    --primary: #e8e9f3;
-    --primary-hover: #ffffff;
-    --on-primary: #12131c;
-    --ring: #a89cf5;
-    --ring-soft: #262546;
-    --shadow: none;
-    --shadow-2: 0 8px 24px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .3);
-  }
-}
-
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1.5; min-height: 100vh; }
 a { color: inherit; }
