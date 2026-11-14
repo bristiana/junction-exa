@@ -28,7 +28,7 @@ Run `backend/.venv/bin/python scripts/demo_seed.py --token-file <file>` once, 10
 4. Use an account that has not spent much today (cap $2 per day, 30 new errands per 10 minutes). The demo errands cost about $0.60 together. If rehearsals used it up, create a fresh account.
 5. At T-5 min, start claim-eu261, claim-pothole-form, book-allas-tickets and book-sauna from the quick box (Alt+Space). Let them finish. They are the finished cards in the list.
 6. Backups: a screen recording of one full run to the approval card, and yesterday's completed errands in the list.
-7. WhatsApp is parked. Do not open it.
+7. WhatsApp is the main channel: see docs/SUBMISSION.md for the demo script.
 
 ## The script
 
