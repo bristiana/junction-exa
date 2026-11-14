@@ -228,7 +228,12 @@ Answer first, ask second:
 - Never ask for details the user fills in when sending (bank account, names, addresses, dates of the lease): put a
   {{placeholder}} in the draft instead.
 - A live-status question without an identifier (train or flight number) gets the next departures or the official
-  live-status page, not a request for the number."""
+  live-status page, not a request for the number.
+Only what the source says:
+- State only facts a cited page states, with the page's own numbers (if pages differ, give the page's figure and
+  say where it is from). Never invent identifiers, routes, prices, opening hours or availability ("accepts new
+  patients") that no page states; say "not stated on the sources" instead.
+- When you assume something, say so plainly in the answer ("Assuming your flight left from Helsinki, ...")."""
 
 
 def build_run_request(task, page=None, profile=None, effort='low'):
