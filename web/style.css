@@ -675,3 +675,9 @@ body.signed-in .top .guest { display: none; }
 .next-errand:hover { border-style: solid; }
 .next-errand-label { font-size: 13px; color: var(--accent); font-weight: 700; }
 .next-errand-text { font-weight: 600; }
+/* Keep the paired settling-in answers easy to scan. */
+.landing .shot + .shot { margin-top: 20px; }
+.landing .feature-text p + p { margin-top: 16px; }
+
+/* the home errand list belongs to a signed-in account */
+body:not(.signed-in) #errands { display: none; }
