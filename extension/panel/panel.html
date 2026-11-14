@@ -62,6 +62,18 @@
       </div>
       <p id="pairInfo" class="pair" hidden></p>
     </div>
+    <h3>Link with Vali on your Mac</h3>
+    <p class="muted small">Linking uses the same account on both devices. This browser will show that account’s errands.</p>
+    <button id="showMacCode" class="v-btn v-btn--quiet" type="button">Show this browser’s code</button>
+    <p id="macCode" class="pair" hidden></p>
+    <label class="field">
+      <span>Code from the Mac app</span>
+      <div class="row">
+        <input id="macCodeInput" class="v-input" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="6-digit code" />
+        <button id="linkMac" class="v-btn v-btn--quiet" type="button">Link</button>
+      </div>
+    </label>
+    <p id="macLinkStatus" class="muted small" role="status"></p>
     <h3>Your details</h3>
     <p class="muted small">Used to fill forms and drafts. Your personal details stay in this browser.</p>
     <div id="profileFields" class="profile"></div>
@@ -74,7 +86,8 @@
       <div id="context" class="context" hidden>
         <label class="check"><input type="checkbox" id="usePage" checked /> <span id="contextLabel">Use this page</span></label>
       </div>
-      <div class="row end"><button id="send" class="v-btn" type="submit">Send</button></div>
+      <div class="row end"><button id="talk" class="v-btn v-btn--quiet" type="button" aria-controls="talkHint" aria-expanded="false">Talk</button><button id="send" class="v-btn" type="submit">Send</button></div>
+      <p id="talkHint" class="muted small" role="status" hidden>Talk to Vali from the Mac app. Open Vali on your Mac and choose Talk. Link in Settings to share errands.</p>
       <p id="composerError" class="error" hidden></p>
     </form>
 

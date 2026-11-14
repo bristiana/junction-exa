@@ -9,6 +9,7 @@ import { capturePage, fillPage } from "./lib/page-scripts.js";
 import { fillPlaceholders } from "./lib/actions.js";
 import { redactText } from "./lib/redact.js";
 import * as backend from "./lib/backend.js";
+import { isLinkSender, linkCodeInput } from "./lib/device-link.js";
 
 const MAX_TASKS = 30;
 const MAX_HIDDEN = 200;
@@ -16,7 +17,7 @@ const MAX_HIDDEN = 200;
 // ---------- storage (serialized so two polls never overwrite each other) ----------
 let chain = Promise.resolve();
 function withTasks(fn) {
-  chain = chain.then(async () => {
+  chain = chain.catch(() => {}).then(async () => {
     const { tasks = [] } = await chrome.storage.local.get("tasks");
     const out = await fn(tasks);
     await chrome.storage.local.set({ tasks: tasks.slice(0, MAX_TASKS) });
@@ -149,10 +150,14 @@ function progressFromEvents(events = []) {
 // Server mode: one list call brings updates for this browser's errands and new ones from WhatsApp.
 async function pollBackend() {
   await backend.ensureConnected();
-  const { tasks: remote = [] } = (await backend.listTasks()) || {};
+  const config = await backend.loadConfig();
+  const client = backend.createClient(config);
+  const { tasks: remote = [] } = (await client.listTasks()) || {};
   const { hiddenTasks = [] } = await chrome.storage.local.get("hiddenTasks");
   const finished = [];
-  const merge = (list) => withTasks((tasks) => {
+  const merge = (list) => withTasks(async (tasks) => {
+    const current = await backend.loadConfig();
+    if (current.token !== config.token || current.baseUrl !== config.baseUrl) return;
     const res = backend.mergeRemoteTasks(tasks, list, { hidden: hiddenTasks });
     tasks.splice(0, tasks.length, ...res.tasks);
     finished.push(...res.finished);
@@ -163,7 +168,7 @@ async function pollBackend() {
   const { tasks = [] } = await chrome.storage.local.get("tasks");
   for (const t of tasks.filter((x) => x.backend && backend.isActive(x) && !listed.has(x.remoteId))) {
     try {
-      await merge([await backend.getTask(t.remoteId)]);
+      await merge([await client.getTask(t.remoteId)]);
     } catch (e) {
       if (e.status === 404) await withTasks((ts) => { const x = ts.find((y) => y.id === t.id); if (x) { x.status = "failed"; x.error = "The task was not found on the Vali server."; } });
     }
@@ -312,6 +317,20 @@ function openFromPresence(msg, sender, reply) {
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg?.type === "presence-open") return openFromPresence(msg, sender, reply);
   const handlers = {
+    linkAccount: async () => {
+      if (!isLinkSender(sender, chrome.runtime.id)) throw new Error("Link your account from the extension panel.");
+      const config = await backend.loadConfig();
+      const { token } = await backend.createClient(config).redeemLink(linkCodeInput(msg.code));
+      if (!token || typeof token !== "string") throw new Error("The server did not return an account. Try a new code.");
+      const current = await backend.loadConfig();
+      if (current.baseUrl !== config.baseUrl || current.token !== config.token) throw new Error("The account changed. Get a new code and try again.");
+      await withTasks(async (tasks) => {
+        tasks.splice(0, tasks.length, ...tasks.filter((t) => !t.backend));
+        await chrome.storage.local.set({ tasks, backendToken: token, backendTokenUrl: config.baseUrl, backendUserId: "", hiddenTasks: [] });
+      });
+      await pollBackend();
+      return true;
+    },
     start: () => startTask(msg),
     poll: () => pollAll().then(() => true),
     fill: () => fillForm(msg.taskId),
