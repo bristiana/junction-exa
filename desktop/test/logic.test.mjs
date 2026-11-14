@@ -102,3 +102,26 @@ test('captions show the user briefly, then Vali, and a hint before anyone spoke'
   // The user's newest words stay until Vali says something after them.
   assert.equal(talkCaption({ agent: 'Hei!', agentAt: 500, ...user, now: 9000 }).who, 'you');
 });
+
+import { exaLine, badgeOf } from '../logic.mjs';
+import { bubbleLine } from '../valet.mjs';
+const running = extra => ({ status: 'running', ...extra });
+test('exaLine says what Exa is doing, from the task fields only', () => {
+  assert.equal(exaLine(running({ progress: [{ kind: 'search', text: 'Kela housing benefit' }] })), 'Searching with Exa: Kela housing benefit');
+  assert.equal(exaLine(running({ progress: [{ kind: 'search', text: 'a' }, { kind: 'source', text: 'https://www.kela.fi/asumistuki?id=1' }] })), 'Reading kela.fi');
+  const exa = [{ kind: 'search', query: 'sauna Helsinki' }, { kind: 'read', url: 'https://www.hel.fi/a/b?token=x' }];
+  assert.equal(exaLine(running({ execution: { status: 'running', exa } })), 'Reading hel.fi');
+  assert.equal(exaLine(running({ execution: { status: 'running', exa: [{ kind: 'read', question: 'the opening hours?' }] } })), 'Looking up the opening hours with Exa');
+  assert.equal(exaLine(running({ execution: { status: 'running', exa: [{ kind: 'click', query: 'x' }] } })), '');
+  assert.equal(exaLine(running({ execution: { status: 'running', exa: [{ kind: 'search', query: 'x'.repeat(200) }] } })).length, 60);
+  assert.equal(exaLine(running()), '');
+  assert.equal(exaLine(null), '');
+});
+test('the bubble shows Exa work, but needing you wins', () => {
+  const work = running({ progress: [{ kind: 'search', text: 'Kela housing benefit' }] });
+  const ask = { status: 'completed', execution: { status: 'running', question: { text: 'When?' }, exa: [{ kind: 'search', query: 'secret' }] } };
+  assert.equal(bubbleLine({ pose: 'working', badge: badgeOf([work]) }), 'Searching with Exa: Kela housing benefit');
+  assert.equal(bubbleLine({ pose: 'working', badge: badgeOf([ask, work]) }), 'I have a question about an errand.');
+  assert.equal(badgeOf([ask]).exa, undefined);
+  assert.equal(bubbleLine({ pose: 'success', badge: badgeOf([work]) }), 'All done. Have a look.');
+});
