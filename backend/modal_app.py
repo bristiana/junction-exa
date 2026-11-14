@@ -8,6 +8,7 @@ image = (
     .pip_install_from_requirements(str(Path(__file__).with_name('requirements.txt')))
     .run_commands('playwright install --with-deps chromium')
     .add_local_python_source('vali_api', 'vali_agent', 'vali_media', 'vali_wa')
+    .add_local_dir(str(Path(__file__).resolve().parent.parent / 'web'), '/root/web')
 )
 secret = modal.Secret.from_name('vali')
 

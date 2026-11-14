@@ -671,7 +671,19 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         create=lambda text, user: create_task_for_user(TaskBody(task=text), user, 'voice'),
         stop=lambda tid, user: stop_for_user(tid, user),
         message=lambda tid, text, user: message_for_user(tid, MessageBody(text=text), user, 'voice'))
+    mount_web(application)
     return application
+
+
+def mount_web(application):
+    """Serve web/ at / after every API route, so the page never shadows /v1 or /webhooks."""
+    from pathlib import Path
+    from fastapi.staticfiles import StaticFiles
+    here = Path(__file__).resolve().parent
+    for web in (here.parent / 'web', here.parent.parent / 'web'):  # the Modal image, then a repo checkout
+        if web.is_dir():
+            application.mount('/', StaticFiles(directory=web, html=True), name='web')
+            return
 
 
 app = create_app()
