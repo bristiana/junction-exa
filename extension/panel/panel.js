@@ -66,12 +66,15 @@ function send(msg) {
 const SAYS = {
   idle: "I’m ready to help.",
   listening: "I’m listening.",
-  thinking: "I’m looking into it.",
+  searching: "I’m searching the web.",
   working: "I’m working on your errand.",
   needs_approval: "I’m waiting for your OK.",
   success: "I’ve finished an errand.",
   error: "I need your help to go on.",
 };
+// Research (find / check / claim) searches the web with Exa: Vali peers through his magnifier. The browser run keeps serving.
+const PANEL_POSE = { thinking: "searching" };
+const shown = (pose) => PANEL_POSE[pose] || pose;
 const mascot = (() => {
   const box = $("mascot");
   try {
@@ -93,7 +96,7 @@ function updateMascot() {
     clearTimeout(flashTimer);
     flashTimer = setTimeout(updateMascot, FLASH_MS[f] + 50);
   }
-  const pose = headerMascot(state.tasks, { focused: document.hasFocus() && document.activeElement === $("task"), flash });
+  const pose = shown(headerMascot(state.tasks, { focused: document.hasFocus() && document.activeElement === $("task"), flash }));
   mascot.setState(pose);
   const says = SAYS[pose] || "";
   if ($("mascotSays").textContent !== says) $("mascotSays").textContent = says;
@@ -717,7 +720,7 @@ function renderCard(t) {
   const card = $("cardTpl").content.firstElementChild.cloneNode(true);
   const [label, tone] = errandStatus(t);
   card.dataset.tone = tone;
-  card.querySelector(".still").src = `../mascot/${taskMascot(t)}.svg`;
+  card.querySelector(".still").src = `../mascot/${shown(taskMascot(t))}.svg`;
   card.querySelector(".status").textContent = label;
   card.querySelector(".task-text").textContent = t.parentId ? "↳ " + t.task.split("\n\nMy answers:")[0] : t.task;
   card.querySelector(".card-head").addEventListener("click", () => selectTask(t));

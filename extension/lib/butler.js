@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  const STATES = ['idle', 'listening', 'thinking', 'working', 'serving', 'typing', 'teaching', 'checking', 'needs_approval', 'success', 'error'];
+  const STATES = ['idle', 'listening', 'thinking', 'searching', 'working', 'serving', 'typing', 'teaching', 'checking', 'needs_approval', 'success', 'error'];
 
   /* ---------- Palettes ----------
      b* body, c* crest, iri* iridescent rim, accent2 = hat feather / confetti. */
@@ -165,7 +165,10 @@
     </g></g>
     <g data-p="glass" opacity="0">
       <path d="M0 0 L7 -9" stroke="${COAT0}" stroke-width="4.5" stroke-linecap="round"/>
+      <path data-p="grip" d="M-6 8 L0 0" stroke="${COAT0}" stroke-width="4.5" stroke-linecap="round" opacity="0"/>
       <circle cx="12" cy="-16" r="9" fill="#e3f1fb" fill-opacity=".85" stroke="${url('gold')}" stroke-width="3.5"/>
+      <!-- SEARCH: his monocle eye, magnified through the lens -->
+      <g data-p="bigEye" opacity="0"><ellipse rx="7" ry="7.8" fill="${INK}"/><circle cx="-2.4" cy="-3" r="2.8" fill="#fff"/><circle cx="2.6" cy="3" r="1.1" fill="#fff"/></g>
       <path d="M7 -18.5 A6 6 0 0 1 12 -22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
     </g>
 
@@ -269,7 +272,7 @@
     hatLift: 0, hatRot: -8, hatX: 0, tieRot: 0,
     rhx: 50, rhy: 142, lhx: 150, lhy: 144, gloveRR: 0, gloveLR: 0, napkinHide: 0,
     attChin: 0, attEar: 0, attHat: 0,
-    trayC: 0, trayK: 0, glass: 0, glassRot: 0,
+    trayC: 0, trayK: 0, glass: 0, glassRot: 0, glassZoom: 1, peer: 0,
     sweat: 0, spark: 0, think: 0, monoDrop: 0,
     lap: 0, scr: 0, pad: 0, baton: 0,              // work / teach props (0..1)
     shimmer: -1, sweatY: 0, tapY: 0, hatSpin: 0, confT: -1,   // unsmoothed ↓
@@ -319,6 +322,20 @@
       T.glass = 1; T.glassRot = 10 * Math.sin(tau * 1.7);
       T.lhx = 156 + 8 * Math.cos(tau * 1.7); T.lhy = 112 + 6 * Math.sin(tau * 3.4);
       T.think = 1;
+    },
+    searching(T, tau, L) {
+      // Holds the magnifier up to his monocle eye and sweeps it slowly, scanning the page.
+      const sw = Math.sin(tau * 2 * PI / 2.6), bob = Math.sin(tau * 2 * PI / 1.3);
+      T.fx = 3 * sw + L.x; T.fy = -1 + .8 * bob; T.headTilt = 0;
+      T.lean += 3 + 1.5 * sw; T.crr += 2 * sw;
+      T.glass = 1; T.glassZoom = 1.8; T.peer = 1;             // held close, so it reads big
+      T.glassRot = -92 + 5 * sw;
+      // held by the end of a longer grip, so the handle shows; lens centre is 30 units up it, over the eye
+      const a = (T.glassRot - 53.13) * DEG, d = 30 * T.glassZoom;
+      T.lhx = 116 + T.fx - d * Math.cos(a); T.lhy = 104 + T.fy - d * Math.sin(a);
+      T.eyeOpen = .55;                                        // the other eye narrows
+      T.browR = -12; T.browRY = -6; T.browL = 10; T.browLY = 1;
+      T.mouthO = .8;
     },
     working(T, tau, L) {
       POSES.serving(T, tau, L);
@@ -416,7 +433,7 @@
 
     }
   };
-  const STATIC_TAU = { idle: 0, listening: 2.6, thinking: 0, working: 0, serving: 0, typing: 0.6, teaching: 2 * TEACH_STEP + 1.1,
+  const STATIC_TAU = { idle: 0, listening: 2.6, thinking: 0, searching: 0, working: 0, serving: 0, typing: 0.6, teaching: 2 * TEACH_STEP + 1.1,
                        checking: 2.9, needs_approval: 0, success: 1.26, error: 2.04 };
 
   function rot([x, y], [cx, cy], deg) {
@@ -562,13 +579,18 @@
       set('napkin', 'transform', `translate(${f(P.lhx)} ${f(P.lhy + 5)})`);
       set('napkin', 'opacity', f(clamp(1 - 1.5 * Math.max(P.pad, P.baton, P.glass, P.lap, P.napkinHide), 0, 1)));
 
-      const prop = (n, v, x, y, r = 0) => {
+      const prop = (n, v, x, y, r = 0, z = 1) => {
         set(n, 'opacity', f(clamp(v * 1.4 - .2, 0, 1)));
-        set(n, 'transform', `translate(${f(x)} ${f(y)}) rotate(${f(r)}) scale(${f(0.6 + 0.4 * v)})`);
+        set(n, 'transform', `translate(${f(x)} ${f(y)}) rotate(${f(r)}) scale(${f((0.6 + 0.4 * v) * z)})`);
       };
       prop('trayC', P.trayC, rx, ry - 9);
       prop('trayK', P.trayK, rx, ry - 9);
-      prop('glass', P.glass, P.lhx, P.lhy, P.glassRot);
+      // searching: held by the end of the long grip, so the glass sits 6,-8 (local) up from the glove
+      const gz = (.6 + .4 * P.glass) * P.glassZoom * P.peer, ga = P.glassRot * DEG;
+      prop('glass', P.glass, P.lhx + gz * (6 * Math.cos(ga) + 8 * Math.sin(ga)), P.lhy + gz * (6 * Math.sin(ga) - 8 * Math.cos(ga)), P.glassRot, P.glassZoom);
+      const peer = f(clamp(P.peer * 2 - 1, 0, 1));
+      set('grip', 'opacity', peer); set('bigEye', 'opacity', peer);
+      set('bigEye', 'transform', `translate(12 -16) rotate(${f(-P.glassRot)}) scale(1 ${f(Math.max(.1, 1 - blink))})`);
       set('shimmer', 'x', f(P.shimmer < 0 ? -60 : -30 + P.shimmer * 60));
 
       /* --- work: laptop --- */
@@ -650,7 +672,7 @@
 
       // boop hearts
       for (let i = 0; i < 3; i++) {
-        const hp = pk - i * 0.08;
+        const hp = (t - pokeStart) / 1.2 - i * 0.08;   // unclamped, so the later hearts finish too
         if (rm || hp <= 0 || hp >= 1) { set('heart' + i, 'opacity', '0'); continue; }
         const x = 100 + (i - 1) * 26 + Math.sin(hp * 7 + i) * 4, y = 64 + P.floatY - hp * 56;
         set('heart' + i, 'opacity', f(1 - smooth(.55, 1, hp)));

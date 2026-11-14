@@ -58,6 +58,22 @@ test("a short flash when something finishes, never on first load", () => {
   assert.equal(finishFlash(before, [{ id: "a", status: "running" }]), null);
 });
 
+test("the panel shows research as searching and the browser run as serving", () => {
+  const src = readFileSync(new URL("../extension/panel/panel.js", import.meta.url), "utf8");
+  const map = vm.runInNewContext(`(${src.match(/const PANEL_POSE = (\{[^}]*\});/)[1]})`);
+  const shown = (t) => { const p = taskMascot(t); return map[p] || p; };
+  for (const s of ["queued", "pending", "running"]) assert.equal(shown(research(s)), "searching", s);
+  for (const s of ["starting", "running", "submitting"]) assert.equal(shown(exec(s)), "working", s);
+  assert.equal(shown(research("completed", "info_only")), "success");
+  const ctx = vm.createContext({ window: {} });
+  vm.runInContext(readFileSync(new URL("../extension/lib/butler.js", import.meta.url), "utf8"), ctx);
+  for (const p of Object.values(map)) {
+    assert.ok(ctx.window.Butler.STATES.includes(p), p);
+    assert.ok(existsSync(new URL(`../extension/mascot/${p}.svg`, import.meta.url)), p);
+  }
+  assert.match(readFileSync(new URL("../extension/lib/butler.js", import.meta.url), "utf8"), /working\(T, tau, L\) \{\s*POSES\.serving/);
+});
+
 test("every pose exists in the mascot library and every card pose has a still", () => {
   const ctx = vm.createContext({ window: {} });
   vm.runInContext(readFileSync(new URL("../extension/lib/butler.js", import.meta.url), "utf8"), ctx);
