@@ -40,6 +40,7 @@ REVIEW_DOMAINS = ('trustpilot.com', 'revieweuro.com', 'suomi24.fi', 'vauva.fi', 
                   'google.com', 'yelp.com', 'tripadvisor.com', 'suomenparas.com', 'exa.ai')
 LEGAL_SUFFIXES = {'oy', 'oyj', 'ab', 'ltd', 'ky', 'tmi', 'ry', 'ay', 'inc', 'llc', 'gmbh', 'as'}
 BUSINESS_ID = re.compile(r'\b\d{7}-\d\b')
+ID_SENTENCE = re.compile(r'^(?=.*(?<![\w.])\d{7}-\d\b)(?=(?:\S+\s+){1,}\S)')  # the ID as a word, in words
 FOUNDED = re.compile(
     r'(?:founded|established|registered|incorporated|since|perustettu|rekister\w*|vuodesta|aloittanut|'
     r'grundad|registrerad)\D{0,40}?\b((?:19|20)\d{2})\b', re.I)
@@ -130,12 +131,14 @@ def brand_matches(host, tokens):
     return any(len(t) >= 3 and t in label for t in tokens)
 
 
-def find_quote(page, pattern, tokens=None):
+def find_quote(page, pattern, tokens=None, named=False):
+    """The first sentence of the page that matches; with tokens, the name must be in it or in the page title
+    (named=True: in the sentence itself)."""
     for sentence in split_sentences(page['text'], strip_markers=False):
         sentence = squash(sentence).lstrip('#*>|- ')
         if len(sentence) > QUOTE_CHARS or not pattern.search(sentence):
             continue
-        if tokens and not mentions(sentence, tokens) and not mentions(page['title'], tokens):
+        if tokens and not mentions(sentence, tokens) and (named or not mentions(page['title'], tokens)):
             continue
         if verbatim(sentence, page['text']):
             return sentence
@@ -155,12 +158,13 @@ def registry_findings(pages, tokens):
     for page in pages:
         if not on(page, REGISTRY_DOMAINS) or not mentions(page['text'] + ' ' + page['title'], tokens):
             continue
-        quote = find_quote(page, BUSINESS_ID)
-        in_url = BUSINESS_ID.search(page['url'])  # some directories print the ID only in the entry's address
-        if not quote and in_url:
-            quote = find_quote(page, re.compile('.'), tokens)
+        quote = find_quote(page, ID_SENTENCE)
+        # some directories print the ID only in the entry's address or inside a code: quote the name instead
+        elsewhere = BUSINESS_ID.search(page['url']) or BUSINESS_ID.search(page['text'])
+        if not quote and elsewhere:
+            quote = find_quote(page, re.compile(r'\w'), tokens, named=True)
         if quote:
-            business_id = (BUSINESS_ID.search(quote) or in_url).group(0)
+            business_id = (BUSINESS_ID.search(quote) or elsewhere).group(0)
             return [finding('registered', f'Listed in a Finnish company register ({page["domain"]}) with Business ID {business_id}.',
                             page, quote)]
     return []
