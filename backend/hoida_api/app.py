@@ -1,4 +1,4 @@
-"""Hoida HTTP API and injectable research/browser workers."""
+"""Vali HTTP API and injectable research/browser workers."""
 import hashlib
 import hmac
 import json
@@ -178,7 +178,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if jev is None and application.state.jev:
             application.state.jev.close()
 
-    application = FastAPI(title='Hoida', lifespan=lifespan)
+    application = FastAPI(title='Vali', lifespan=lifespan)
     application.state.config = config
     application.state.store = store
     application.state.exa = exa or ExaClient(config.exa_api_key)

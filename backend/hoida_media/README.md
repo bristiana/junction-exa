@@ -1,4 +1,4 @@
-# Hoida media helpers
+# Vali media helpers
 
 Import `upload_screenshot`, `thumbnail_url`, `transcribe`, `speak` and
 `read_letter` from `hoida_media`. These synchronous helpers have no application,
@@ -29,12 +29,12 @@ Public ElevenLabs reference pages were read during implementation:
   `POST /v1/speech-to-text`, `xi-api-key`, multipart `file`, required `model_id`,
   optional `language_code` and the synchronous JSON `text` field. Its example
   uses `scribe_v2`; the API has **no server default** for this required field.
-  Hoida selects that documented model as a configurable conservative default.
+  Vali selects that documented model as a configurable conservative default.
   Encoded audio is sent unmodified; format support is documented generically.
 - https://elevenlabs.io/docs/api-reference/text-to-speech/convert confirms
   `POST /v1/text-to-speech/{voice_id}`, `xi-api-key`, JSON `text` and `model_id`,
   default model `eleven_multilingual_v2`, and binary audio output with default
-  `mp3_44100_128` (also explicitly selected by Hoida).
+  `mp3_44100_128` (also explicitly selected by Vali).
 
 No account/model entitlement, actual Ogg/Opus decoding, provider latency or live
 response was tested. All tests use synthetic data and mocked network calls.

@@ -1,6 +1,6 @@
-# Hoida: errand test set
+# Vali: errand test set
 
-20 errands newcomers and international students in Finland actually have, spread over Hoida's modes. For each: what the user types or says, the facts a correct answer must contain (with the source where each was verified), and the prepared next step.
+20 errands newcomers and international students in Finland actually have, spread over Vali's modes. For each: what the user types or says, the facts a correct answer must contain (with the source where each was verified), and the prepared next step.
 
 - Every fact was checked on **2026-11-14** on the cited page unless marked otherwise. Prices, slots and listings are what was on the page that day; they change.
 - **UNVERIFIED** = could not be confirmed on an authoritative page; a correct answer should not state it as fact.

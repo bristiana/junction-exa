@@ -28,9 +28,9 @@ def _post(path: str, key: str, transport: httpx.BaseTransport | None, **kwargs) 
             response.raise_for_status()
             return response
     except httpx.HTTPStatusError as exc:
-        raise VoiceError("Hoida voice request rejected", exc.response.status_code) from None
+        raise VoiceError("Vali voice request rejected", exc.response.status_code) from None
     except httpx.RequestError:
-        raise VoiceError("Hoida voice connection failed") from None
+        raise VoiceError("Vali voice connection failed") from None
 
 
 def transcribe(
@@ -57,7 +57,7 @@ def transcribe(
             raise ValueError
         return text
     except (ValueError, KeyError, TypeError):
-        raise VoiceError("Hoida voice response has no transcript", response.status_code) from None
+        raise VoiceError("Vali voice response has no transcript", response.status_code) from None
 
 
 def speak(

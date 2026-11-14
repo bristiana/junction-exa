@@ -1,6 +1,6 @@
-# Hoida architecture
+# Vali architecture
 
-Hoida takes an errand off your hands. You hand it off from the Chrome extension or from WhatsApp; both share one task list.
+Vali takes an errand off your hands. You hand it off from the Chrome extension or from WhatsApp; both share one task list.
 
 1. **Research** (Exa Agent): finds what matters on the live web, returns a structured answer with field-level citations and prepared actions.
 2. **Do it** (Modal sandbox): a headless Chromium in its own Modal container, driven by Claude, opens the real site and fills the form or booking. It stops before the final submit.
@@ -8,7 +8,7 @@ Hoida takes an errand off your hands. You hand it off from the Chrome extension 
 
 ```
 Chrome extension ─┐                         ┌─ Exa Agent API (research)
-                  ├─ Hoida API (Modal, FastAPI) ─┤
+                  ├─ Vali API (Modal, FastAPI) ─┤
 WhatsApp (Meta) ──┘     │  Postgres (Aiven)     └─ browser sandbox (Modal function, Playwright + Claude)
                         │  screenshots (Cloudinary)    voice notes (ElevenLabs speech-to-text)
 ```
@@ -40,7 +40,7 @@ WhatsApp (Meta) ──┘     │  Postgres (Aiven)     └─ browser sandbox (
 ## Identity and shared context
 
 No accounts. The extension calls `POST /v1/users` once and keeps `{user_id, token}`. Every other call sends `Authorization: Bearer <token>`.
-WhatsApp is linked by a pairing code: the extension calls `POST /v1/pair`, shows a 6-digit code, the user sends `link 123456` to the Hoida WhatsApp number. From then on that number acts as that user: tasks started on either side appear on both.
+WhatsApp is linked by a pairing code: the extension calls `POST /v1/pair`, shows a 6-digit code, the user sends `link 123456` to the Vali WhatsApp number. From then on that number acts as that user: tasks started on either side appear on both.
 
 Personal details (name, email, address, ...) live in the extension. The LLMs only ever see placeholders like `{{name}}`; real values are substituted inside the sandbox at typing time and masked back to placeholders in every page snapshot the LLM sees. A user may opt in to `PUT /v1/profile` so tasks started from WhatsApp can fill forms too; that copy is stored in Postgres and only read by the sandbox.
 

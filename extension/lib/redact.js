@@ -1,4 +1,4 @@
-// Hoida: strip personal data from page text before it leaves the browser.
+// Vali: strip personal data from page text before it leaves the browser.
 //
 // redactText(s) replaces, with typed markers like [email]:
 //   emails; phone numbers (Finnish +358, 04x / 050 mobiles, landlines like 09 123 4567, international +NN);

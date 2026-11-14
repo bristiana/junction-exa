@@ -1,4 +1,4 @@
-# Hoida: demo sites for the sandbox
+# Vali: demo sites for the sandbox
 
 Real sites for the two live sandbox demos (a booking and a claim/feedback form), checked 2026-11-14 (Sat, about 01:00-04:00 EET) in a fresh, logged-out headless Chromium (`agent-browser`). Nothing was booked, paid, submitted or confirmed. Where something had to be typed, only fake data was used (Test Person, test@example.com, +358401234567).
 

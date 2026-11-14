@@ -1,4 +1,4 @@
-"""Standalone media helpers for Hoida; no application or infrastructure imports."""
+"""Standalone media helpers for Vali; no application or infrastructure imports."""
 
 from .letters import LetterError, read_letter
 from .screenshots import thumbnail_url, upload_screenshot
