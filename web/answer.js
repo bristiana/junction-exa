@@ -1,6 +1,6 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, factsOf, runStatus, findStats, missingInfo, primaryAction, publishedStamp, readStamp, sourcesOf, stepsOf } from './model.js';
+import { claimsOf, draftsOf, factsOf, runStatus, findStats, missingInfo, primaryAction, publishedStamp, readStamp, sourcesOf, stepsOf } from './model.js';
 import { renderExecution } from './execution.js';
 import { citePill } from './cite.js';
 import { loadProfile, missingDetails } from './profile.js';
@@ -20,6 +20,7 @@ export function renderAnswer(task, handlers) {
         first ? h('h1', { class: 'headline' }, claimText(first, pill)) : null,
         rest.length ? h('p', { class: 'claims' }, rest.map((claim) => [claimText(claim, pill), ' '])) : null,
         followUp(missingInfo(task), handlers.onFollowUp),
+        drafts(draftsOf(task)),
         facts(factsOf(task, sources)),
         steps(stepsOf(task)),
         actions(task, handlers),
@@ -57,6 +58,23 @@ function followUp(questions, onFollowUp) {
     h('ul', { class: 'question-list' }, questions.map((q) => h('li', {}, q))),
     h('form', { class: 'reply', onsubmit: (event) => { event.preventDefault(); send(); } },
       input, h('button', { type: 'submit', class: 'btn' }, 'Refine')));
+}
+
+// The drafted email or message itself, ready to copy; placeholders such as {{name}} stay for the user to fill.
+function drafts(items) {
+  if (!items.length) return null;
+  return h('section', { class: 'drafts' }, items.map((draft) => {
+    const text = [draft.subject ? `Subject: ${draft.subject}` : '', draft.body].filter(Boolean).join('\n\n');
+    const copy = h('button', { type: 'button', class: 'btn soft' }, 'Copy');
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(text); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select and copy'; }
+    });
+    return h('div', { class: 'draft card' },
+      h('p', { class: 'fact-label' }, draft.label || (draft.type === 'email' ? 'Email draft' : 'Message')),
+      draft.to ? h('p', { class: 'muted' }, `To: ${draft.to}`) : null,
+      h('pre', { class: 'draft-text' }, text),
+      copy);
+  }));
 }
 
 function facts(items) {

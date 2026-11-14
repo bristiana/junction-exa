@@ -149,7 +149,9 @@ def test_a_watch_answers_today_first_and_echoes_its_criteria(api):
     task = client.post('/v1/tasks', json={'task': 'watch for new flats under 900 eur in Espoo'}).json()
     assert task['mode'] == 'watch'
     structured = task['research']['output']['structured']
-    assert structured['answer'] == 'Sauna A.'  # today's answer from the search, not just "Watch active"
+    # what is watched comes first, then today's answer from the search
+    assert structured['answer'] == ('I saved a watch for new flats under 900 eur in Espoo. Watch saved locally. Set '
+                                    'VALI_PUBLIC_URL to a public HTTPS URL to enable live updates.\nSauna A.')
     assert structured['key_facts'][-1] == {'label': 'Watching for', 'value': 'new flats under 900 eur in Espoo'}
     assert structured['steps'][-1]['title'] == 'Watch active' and task['research']['watch_id']
     assert [c[2]['query'] for c in calls if c[1] == '/search'][0].startswith('Errand: new flats under 900 eur in Espoo')

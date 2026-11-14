@@ -8,6 +8,7 @@ import re
 import time
 from urllib.parse import quote, urlsplit
 
+from .citations import split_sentences
 from .exa import ExaError
 from .store import now
 
@@ -22,9 +23,22 @@ def watch_criteria(task):
     return criteria or task.strip()
 
 
-def with_watch(output, criteria, message):
-    """The current answer first; the watch confirmation and its criteria after it (indices of cited fields kept)."""
+def watch_confirmation(criteria, message, live, cadence='1d'):
+    """What is watched, how often and where it looks: said before any research result."""
+    if not live:
+        return f'I saved a watch for {criteria}. {message}'
+    often = {'1d': 'once a day', '1h': 'once an hour', '1w': 'once a week'}.get(cadence, 'regularly')
+    return (f'I will watch for {criteria}. I will search the web for it {often} with Exa and tell you when new '
+            'results appear.')
+
+
+def with_watch(output, criteria, message, live=False):
+    """The watch confirmation first, then today's answer; criteria and status after the cited fields (indices kept)."""
     structured = output['structured']
+    lead = watch_confirmation(criteria, message, live)
+    structured['answer'] = lead + ('\n' + structured['answer'] if structured.get('answer') else '')
+    output['text'] = lead + ('\n' + output['text'] if output.get('text') else '')
+    output['own'] = split_sentences(lead)  # Vali's own words: the quote check leaves them as written
     structured['key_facts'].append({'label': 'Watching for', 'value': criteria})
     structured['steps'].append({'title': 'Watch active', 'detail': message})
     return output

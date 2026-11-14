@@ -120,6 +120,9 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .pop-stamp { margin: 8px 0 0; color: #c8bfe8; }
 .pop-stamp.stale { color: #ffd38a; }
 .pop-link { display: inline-block; margin-top: 10px; color: #cbbcff; font-weight: 600; }
+.drafts { display: grid; gap: 12px; margin: 16px 0; }
+.draft { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.draft-text { margin: 0; width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; background: var(--fill-2); border-radius: 10px; padding: 12px; }
 .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .fact { padding: 14px 16px; display: flex; flex-direction: column; }
 .fact-label { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
