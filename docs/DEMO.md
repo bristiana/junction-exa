@@ -1,6 +1,6 @@
 # Vali: demo
 
-The story: Ana, a non-EU student, lands in Helsinki on Friday for Junction. She has no Finnish ID, no HSL app and no idea where anything is. She messages Vali on WhatsApp and Vali handles the rest.
+The story: Bogdan, a master's student from Romania, lands in Helsinki on Friday for Junction. He has no Finnish ID, no HSL app and no idea where anything is. He messages Vali on WhatsApp and Vali handles the rest.
 
 Judging (20% each): use of Exa, usefulness, clarity of sources, originality, works on live queries. Tech challenges: Modal, Aiven, ElevenLabs, Codex.
 
@@ -8,11 +8,12 @@ Judging (20% each): use of Exa, usefulness, clarity of sources, originality, wor
 
 Every scenario runs on production with the demo account. Times are measured on production.
 
-| # | Ana sends (WhatsApp unless noted) | What Vali does | Ends at | Time |
+| # | Bogdan sends (WhatsApp unless noted) | What Vali does | Ends at | Time |
 |---|---|---|---|---|
 | 1 | `I land at Helsinki Airport on Friday for the Junction hackathon at Dipoli in Otaniemi. How do I get there and which HSL ticket do I buy?` | Exa search, reads HSL pages | Train and metro or light rail 15, ABC ticket, HSL link | about 20 s |
 | 2 | `How can I open a bank account without a Finnish personal ID?` | Exa Agent research, every sentence checked on the page | Basic account first, documents to bring, Danske, Nordea, DVV links | about 35 s |
-| 3 | `Pharmacy open on Sunday near Otaniemi` | Exa search | Otaniemi pharmacy closed Sunday, Aino Apteekki in Tapiola 12-18 | about 15 s |
+| 3 | `I am a Romanian student moving to Espoo. What do I have to register as an EU citizen, and where?` | Exa Agent research on Migri and DVV | Register the EU right of residence at Migri, then the address at DVV, with links | about 40 s |
+| 3b | `Pharmacy open on Sunday near Otaniemi` | Exa search | Otaniemi pharmacy closed Sunday, Aino Apteekki in Tapiola 12-18 | about 15 s |
 | 4 | `Book me a public sauna for Sunday at 17:30 after the hackathon` then tap **Book it** | Cloud browser on Modal fills the real Kulttuurisauna form, asks once for name and email | Picture of the filled form with Approve and Stop | about 60 s |
 | 5 | Tap **Stop**, then **Continue** | A fresh Modal container replays the steps and picks up where it stopped | Back at Approve, nothing was sent | about 45 s |
 | 6 | `Watch for new HOAS student apartments in Espoo under 700 euros a month` | Exa Monitor, daily | Watch on the dashboard, first matches with links | about 25 s |
@@ -25,13 +26,13 @@ Real booking (scenario 4, only in the recording): Sunday 15 Nov 17:30 at Kulttuu
 
 | Time | Shot | Say |
 |---|---|---|
-| 0:00-0:10 | WhatsApp, phone format: Ana's first message (1) | "Ana just landed for Junction. No Finnish ID, no HSL app." |
+| 0:00-0:10 | WhatsApp, phone format: Bogdan's first message (1) | "Bogdan just landed from Romania for Junction. No Finnish ID, no HSL app." |
 | 0:10-0:25 | Vali reacts 👀, answers in one sentence with the HSL link | "Vali reads the live web with Exa and answers with the exact source." |
 | 0:25-0:40 | Bank question (2): answer with Danske, Nordea, DVV | "Every sentence is checked against a quote on the page." |
-| 0:40-1:05 | Sauna (4): Book it, the question, the filled-form picture, Approve | "A cloud browser on Modal fills the real form. Nothing is sent until she taps Approve." |
+| 0:40-1:05 | Sauna (4): Book it, the question, the filled-form picture, Approve | "A cloud browser on Modal fills the real form. Nothing is sent until he taps Approve." |
 | 1:05-1:15 | Confirmation email from Kulttuurisauna | "A real booking." |
 | 1:15-1:25 | Stop, then Continue (5) | "Stopped? Continue picks up where it left off." |
-| 1:25-1:45 | Dashboard via the demo link: the sentence of numbers, click the sauna errand, the story and the state | "Everything from WhatsApp lands here: what she asked, what Vali found, what it did, where it stands." |
+| 1:25-1:45 | Dashboard via the demo link: the sentence of numbers, click the sauna errand, the story and the state | "Everything from WhatsApp lands here: what he asked, what Vali found, what it did, where it stands." |
 | 1:45-1:55 | Chrome corner Vali on the Junction form (8) | "And Vali sits in the corner of every page." |
 | 1:55-2:00 | Logo, "Vali, your valet in Finland" | |
 
