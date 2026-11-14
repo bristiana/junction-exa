@@ -86,7 +86,8 @@ def test_search_and_isolation(api):
     research = task['research']
     assert task['mode'] == 'find' and research['status'] == 'completed'
     assert research['output']['structured']['actions'][0]['type'] == 'open_link'
-    assert research['output']['grounding'][0]['field'] == 'actions[0]'
+    assert [g['field'] for g in research['output']['grounding']] == ['key_facts[0]', 'actions[0]']
+    assert research['output']['structured']['steps'] == [{'title': 'Next step', 'detail': 'Open it'}]
     assert research['cost'] == 0.01 and not polls
     assert calls[0][2]['contents'] == {'highlights': True}
     assert client.get('/v1/tasks').json()['tasks'][0]['id'] == task['id']
@@ -467,7 +468,7 @@ def test_whatsapp_inline_search_budget_and_watch(wa):
     deliver('find café')
     task = client.get('/v1/tasks').json()['tasks'][0]
     assert task['mode'] == 'find' and task['source'] == 'whatsapp'
-    assert not polls and calls[-1][1] == '/search'
+    assert not polls and [c[1] for c in calls[-2:]] == ['/search', '/contents']
     assert any('An option.' in body for _, body, _ in graph.sent)
     deliver('watch for flats', mid='watch')
     assert len(client.get('/v1/watches').json()['watches']) == 1
