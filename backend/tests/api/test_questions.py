@@ -25,10 +25,10 @@ def test_missing_details(task, mode, gaps):
     assert missing(task, mode) == gaps
 
 
-def test_question_shape_and_profile_city():
+def test_question_shape():
     assert early_question('book a sauna tomorrow', 'book') == {
         'text': 'Which city?', 'options': ['Helsinki', 'Espoo', 'Tampere', 'Turku'], 'answer': None}
-    assert early_question('book a sauna tomorrow', 'book', {'city': 'Oulu'}) is None
+    assert early_question('book a sauna in Oulu tomorrow', 'book') is None
     assert with_answer(' book a sauna ', {'text': 'When?'}, ' Today ') == 'book a sauna\n\nThe user answered "When?": Today'
 
 

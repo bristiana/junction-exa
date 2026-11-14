@@ -20,18 +20,18 @@ EVENTS = [
 
 
 def test_events_become_a_timed_deduplicated_masked_trail():
-    trail = activity.from_events(TASK, EVENTS, {'name': 'Aino Virtanen', 'city': 'Helsinki'})
+    trail = activity.from_events(TASK, EVENTS)
     assert trail == [
         {'t': 0.0, 'kind': 'think', 'text': 'Planning a check errand'},
         {'t': 2.2, 'kind': 'search', 'text': 'DVV move notice'},
         {'t': 3.0, 'kind': 'read', 'text': 'dvv.fi', 'url': 'https://www.dvv.fi/en/move'},
-        {'t': 5.0, 'kind': 'search', 'text': '{{name}} {{email}} {{phone}}'},
+        {'t': 5.0, 'kind': 'search', 'text': 'Aino Virtanen {{email}} {{phone}}'},
         {'t': 20.0, 'kind': 'think', 'text': 'Research finished, writing up the answer'}]
 
 
 def test_scrub_masks_profile_values_and_personal_shapes():
     text = 'Call 040 123 4567, IBAN FI21 1234 5600 0007 85, hetu 131052-308T, in Helsinki on 12.11.2026'
-    assert activity.scrub(text, {'city': 'Helsinki'}) == 'Call {{phone}}, IBAN {{account}}, hetu {{id_code}}, in Helsinki on 12.11.2026'
+    assert activity.scrub(text) == 'Call {{phone}}, IBAN {{account}}, hetu {{id_code}}, in Helsinki on 12.11.2026'
 
 
 def test_search_trail_lists_the_query_and_each_page():

@@ -139,3 +139,31 @@ def test_without_a_judgement_nothing_is_softened():
     result = output('The clinic accepts new patients.')
     cite(result, FakeExa())
     assert result['structured']['answer'] == 'The clinic accepts new patients.' and 'original' not in result['claims'][0]
+
+
+def test_softening_keeps_assumptions_bullets_and_short_sentences():
+    answer = 'Yes. Assuming you rent privately, the deposit is due back.\n- The clinic accepts new patients.\n- Call 09 123.'
+    result = {'text': answer, 'structured': {'answer': answer},
+              'grounding': [{'field': 'structured.answer', 'citations': [{'url': DVV}]}]}
+    def llm(system, user, schema):
+        i = int(user.split('[C', 1)[1].split(']', 1)[0])
+        soft = {1: 'Not confirmed: rent.', 2: 'Not confirmed by the sources: the clinic accepts new patients.'}.get(i, '')
+        return {'claims': [{'i': i, 'verdict': 'no', 'soft': soft, 'support': []}]}
+    cite(result, FakeExa(), llm)
+    assert result['structured']['answer'] == ('Yes. Assuming you rent privately, the deposit is due back.\n'
+                                              '- Not confirmed by the sources: the clinic accepts new patients.\n- Call 09 123.')
+
+
+def test_a_failed_claim_is_retried_then_falls_back_alone():
+    calls = []
+    def llm(system, user, schema):
+        i = int(user.split('[C', 1)[1].split(']', 1)[0])
+        calls.append(i)
+        if i == 1:
+            return None
+        return {'claims': [{'i': i, 'verdict': 'yes', 'soft': '', 'support': [
+            {'page': 0, 'quote': 'You must submit the notification of move no later than one week after moving.'}]}]}
+    result = output('Notify within one week after moving. You must submit the notification of move within one week after moving.')
+    cite(result, FakeExa(), llm)
+    assert sorted(calls) == [0, 1, 1]
+    assert result['claims'][0]['supported'] is True and result['claims'][1]['supported'] is None

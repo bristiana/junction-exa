@@ -147,36 +147,54 @@ def map_lexical(claims, pages):
     return support
 
 
-def map_with_llm(llm, claims, pages):
-    """One fast call per claim, all at once: the wait is the slowest claim, not the sum of them."""
+def judge(llm, claims, pages):
+    """One fast call per claim, all at once (the wait is the slowest claim), each retried once.
+
+    Returns per claim (support, soft, judged); a claim whose calls both fail falls back to word overlap, unjudged."""
     from concurrent.futures import ThreadPoolExecutor
     texts = '\n\n'.join(f'[P{i}] {p["url"]}\n{p["text"]}' for i, p in enumerate(pages))
+
     def ask(i):
-        return llm(MAP_SYSTEM, f'Claims:\n[C{i}] {claims[i]}\n\nPages:\n{texts}', MAP_SCHEMA)
+        for _ in range(2):
+            result = llm(MAP_SYSTEM, f'Claims:\n[C{i}] {claims[i]}\n\nPages:\n{texts}', MAP_SCHEMA)
+            item = next((c for c in (result or {}).get('claims') or [] if c.get('i') == i), None) if isinstance(result, dict) else None
+            if item:
+                full = item.get('verdict') == 'yes'
+                support = [(s['page'], s['quote'] if full else '') for s in item.get('support') or []
+                           if isinstance(s.get('page'), int) and 0 <= s['page'] < len(pages)]
+                return support, '' if full else squash(item.get('soft'))[:400], True
+        return map_lexical([claims[i]], pages)[0], '', False
     with ThreadPoolExecutor(max_workers=min(8, len(claims))) as pool:
-        results = list(pool.map(ask, range(len(claims))))
-    if not all(isinstance(r, dict) for r in results):
-        return None
-    result = {'claims': [item for r in results for item in r.get('claims') or []]}
-    support, softer = [[] for _ in claims], [''] * len(claims)
-    for item in result.get('claims') or []:
-        i = item.get('i')
-        if isinstance(i, int) and 0 <= i < len(claims):
-            full = item.get('verdict') == 'yes'
-            support[i] = [(s['page'], s['quote'] if full else '') for s in item.get('support') or []
-                          if isinstance(s.get('page'), int) and 0 <= s['page'] < len(pages)]
-            softer[i] = '' if full else squash(item.get('soft'))[:400]
-    return support, softer
+        return list(pool.map(ask, range(len(claims))))
+
+
+_ASSUMPTION = re.compile(r'^\s*assum(?:e|es|ing)\b', re.I)
 
 
 def soften(output, softer):
-    """Only what the sources say: an unconfirmed claim is replaced by its softened form, in claims and the answer."""
-    changed = False
+    """Only what the sources say: an unconfirmed claim is replaced by its softened form, in claims and in the answer.
+    A stated assumption ("Assuming you rent in Helsinki, ...") is the honesty B8 asks for and stays as written."""
+    replaced = {}
     for claim, soft in zip(output['claims'], softer):
-        if claim['supported'] is False and soft and soft != claim['text']:
-            claim['original'], claim['text'], changed = claim['text'], soft, True
-    if changed and (output.get('structured') or {}).get('answer'):
-        output['structured']['answer'] = ' '.join(c['text'] for c in output['claims'])
+        if claim['supported'] is False and soft and soft != claim['text'] and not _ASSUMPTION.match(claim['text']):
+            replaced[claim['text']] = soft
+            claim['original'], claim['text'] = claim['text'], soft
+    structured = output.get('structured') or {}
+    if replaced and structured.get('answer'):
+        structured['answer'] = rebuild(structured['answer'], replaced)
+
+
+def rebuild(answer, replaced):
+    """Swap only the changed sentences; untouched lines, line breaks and bullets stay exactly as written."""
+    lines = []
+    for line in answer.splitlines():
+        sentences = split_sentences(line)
+        if not any(s in replaced for s in sentences):
+            lines.append(line)
+            continue
+        bullet = re.match(r'^\s*(?:[-•*]\s*)?', line).group(0)
+        lines.append(bullet + ' '.join(replaced.get(s, s) for s in sentences))
+    return '\n'.join(lines)
 
 
 def number_sources(claims, support, pages, context):
@@ -231,12 +249,10 @@ def cite(output, exa, llm=None, task_text=''):
     if not readable:
         unchecked(output, task_text)
         return cost
-    judged = map_with_llm(llm, claims, readable) if claims and llm else None
-    support = judged[0] if judged else map_lexical(claims, readable)
-    output['claims'], output['sources'] = number_sources(claims, support, readable, context_of(output, task_text))
-    if judged:
-        soften(output, judged[1])
-    else:  # word overlap finds a quote; it cannot judge that the quote backs the claim
-        for claim in output['claims']:
+    verdicts = judge(llm, claims, readable) if claims and llm else [(found, '', False) for found in map_lexical(claims, readable)]
+    output['claims'], output['sources'] = number_sources(claims, [v[0] for v in verdicts], readable, context_of(output, task_text))
+    for claim, (_, _, judged) in zip(output['claims'], verdicts):
+        if not judged:  # word overlap finds a quote; it cannot judge that the quote backs the claim
             claim['supported'] = None
+    soften(output, [soft for _, soft, _ in verdicts])
     return cost

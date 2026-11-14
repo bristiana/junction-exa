@@ -55,7 +55,7 @@ The voice agent needs all three of `ELEVENLABS_API_KEY`, `VALI_ELEVENLABS_AGENT_
 No accounts. The Mac app or the extension calls `POST /v1/users` once and keeps `{user_id, token}`. Authenticated calls send `Authorization: Bearer <token>`. Device linking also lets a second device exchange a one-use code for that same token without creating another user.
 WhatsApp (parked) is linked by a pairing code: the extension calls `POST /v1/pair`, shows a 6-digit code, the user sends `link 123456` to the Vali WhatsApp number. From then on that number acts as that user: tasks started on either side appear on both.
 
-Personal details (name, email, address, ...) live on the device. In the Mac app the profile is encrypted locally with Electron safeStorage and only sent with "Let Vali do it". The LLMs only ever see placeholders like `{{name}}`; real values are substituted inside the sandbox at typing time and masked back to placeholders in every page snapshot the LLM sees. A user may opt in to `PUT /v1/profile` so tasks started from WhatsApp can fill forms too; that copy is stored in Postgres and only read by the sandbox.
+Personal details (name, email, address, ...) live on the device. In the Mac app the profile is encrypted locally with Electron safeStorage and only sent with "Let Vali do it". The LLMs only ever see placeholders like `{{name}}`; real values are substituted inside the sandbox at typing time and masked back to placeholders in every page snapshot the LLM sees. The server never stores a profile: it travels only inside the execute call and is held in memory for that one sandbox run. `PUT /v1/profile` is a no-op kept for old clients, and profiles saved before this change were cleared once.
 
 All `VALI_*` settings also accept the legacy `HOIDA_*` name when the new name is unset. An explicitly empty new value takes precedence. This includes `VALI_EFFORT` and `VALI_PRICES`.
 
@@ -67,7 +67,7 @@ All `VALI_*` settings also accept the legacy `HOIDA_*` name when the new name is
 | `GET /privacy`, `GET /terms` | | HTML pages |
 | `POST /v1/users` | | `{user_id, token}` |
 | `GET /v1/me` | | `{user_id, whatsapp_linked, whatsapp_last4, profile_synced}` |
-| `PUT /v1/profile` | `{profile: {name, email, ...}}` (empty object deletes it) | `{ok}` |
+| `PUT /v1/profile` | `{profile: {...}}` (accepted, never stored) | `{ok}` |
 | `POST /v1/pair` | | `{code, expires_at}` (6 digits, 10 min) |
 | `POST /v1/tasks` | `{task, page?, effort?, previous_task_id?}` | Task |
 | `POST /v1/voice` | Bearer auth; multipart `audio` (webm/ogg/m4a/caf/wav, max 10 MiB), `create?` (`"1"` creates task) | `{text}` or Task plus `text`; 400 empty/no speech, 413 oversized, 415 unsupported, 503 unconfigured |

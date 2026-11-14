@@ -35,7 +35,7 @@ from .router import route
 from .services import create_router as services_router
 from .stats import pick_channel, summarize
 from .store import make_store, now
-from .uploads import UploadLimit, oversized_request
+from .uploads import UploadLimit
 from .voice_agent import add_voice_routes
 from vali_wa.flow import WhatsAppFlow
 from vali_wa.webhook import parse_webhook, verify_signature
@@ -408,8 +408,6 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     async def guards(request, call_next):
         try:
             check_origin(request.headers.get('origin'), config.allowed_origins)
-            if oversized_request(request.url.path, request.headers.get('content-length')):
-                raise HTTPException(413, 'Upload exceeds 10 MB')
             if request.method not in ('GET', 'HEAD', 'OPTIONS'):
                 limiter, ip = application.state.limiter, client_ip(request)
                 limiter.check('ip:' + ip, limiter.ip_limit, limiter.ip_seconds)
@@ -525,18 +523,19 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.post('/v1/link/code')
     def link_code(request: Request, user=Depends(authenticate)):
-        application.state.limiter.check('link-code:' + user['id'], 10, 600)
+        application.state.limiter.check('link-code:' + user['id'], 30, 600)
         token = request.headers['authorization'].partition(' ')[2]
         return application.state.store.create_link_code(user['id'], token)
 
     @application.post('/v1/link')
     def link(body: LinkBody, request: Request):
         limiter, ip = application.state.limiter, client_ip(request)
-        limiter.check('link-redeem:' + ip, 10, 600)
-        check_code_tries(limiter, 'link-fail:' + ip)
+        limiter.check('link-redeem:' + ip, 30, 600)  # 30: judges share one venue address
+        tries = f'link-fail:{ip}:{body.code[:3]}'  # lockout per address and code prefix, so one guesser cannot lock a room
+        check_code_tries(limiter, tries)
         token = application.state.store.redeem_link_code(body.code)
         if not token:
-            limiter.failed('link-fail:' + ip)
+            limiter.failed(tries)
             raise HTTPException(404, 'Link code not found or expired')
         return JSONResponse({'token': token}, headers={'Cache-Control': 'no-store'})
 
@@ -603,7 +602,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     @application.get('/v1/tasks/{tid}')
     def get_task(tid: str, user=Depends(authenticate)):
         task = owned(tid, user)
-        if quote_check_stalled(task):  # its checker died with its container; a poll restarts it
+        # A quote check runs in a thread of the web container; if that container died mid-check (deploy, scale-in),
+        # the task would stay running forever. The next poll of the task starts a new check, which takes over.
+        if quote_check_stalled(task):
             application.state.spawn_quote_check(tid)
         return task
 

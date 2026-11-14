@@ -53,7 +53,10 @@ def check_code_tries(limiter, key):
 
 
 def public_start_url(url, resolve):
-    """http(s) to a public host only: no localhost, private, link-local (cloud metadata) or reserved address."""
+    """http(s) to a public host only: no localhost, private, link-local (cloud metadata) or reserved address.
+
+    This checks the start URL as resolved now; it is not full SSRF protection (later redirects, DNS changes and
+    the pages the browser agent opens are outside this check)."""
     import ipaddress
     from urllib.parse import urlsplit
     parts = urlsplit(url or '')

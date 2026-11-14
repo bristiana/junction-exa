@@ -45,8 +45,13 @@ class Store:
         for table in tables:
             self.sql('CREATE TABLE IF NOT EXISTS ' + table)
         self._add_column('tasks', 'lang TEXT')
-        # One-off and idempotent: profiles were once synced here; they now stay on the device.
-        self.sql("UPDATE users SET profile_json='{}' WHERE profile_json<>'{}'")
+        self._once('profiles-cleared', "UPDATE users SET profile_json='{}' WHERE profile_json<>'{}'")  # they stay on the device
+
+    def _once(self, name, statement):
+        """A one-off data migration, recorded so later starts skip it."""
+        self.sql('CREATE TABLE IF NOT EXISTS migrations(name TEXT PRIMARY KEY, at TEXT NOT NULL)')
+        if self.sql('INSERT INTO migrations VALUES(?,?) ON CONFLICT(name) DO NOTHING RETURNING name', (name, now())):
+            self.sql(statement)
 
     def _add_column(self, table, column):
         """Additive migration for tables created before the column existed."""

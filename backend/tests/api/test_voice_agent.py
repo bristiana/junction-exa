@@ -78,7 +78,7 @@ def test_session_requires_auth_config_and_handles_provider_failure(agent, monkey
 
 def test_session_rate_limited(agent):
     (client, *_), _ = agent
-    for _ in range(10):
+    for _ in range(30):
         assert client.post('/v1/voice/session').status_code == 200
     assert client.post('/v1/voice/session').status_code == 429
 
