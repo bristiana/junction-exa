@@ -45,3 +45,19 @@ def test_continue_is_owner_only(api):
     other = client.post('/v1/users').json()
     client.headers['Authorization'] = 'Bearer ' + other['token']
     assert client.post(f'/v1/tasks/{tid}/continue', json={}).status_code == 404
+
+
+def test_continue_carries_what_the_user_already_said(api):
+    client, application, store, calls, polls, browsers, user = api
+    tid = started(client, store)
+    store.patch_execution(tid, step={'text': 'Asked you: Which name and email should I book under?'})
+    assert client.post(f'/v1/tasks/{tid}/messages', json={'text': 'Mia Virtanen, mia@example.fi'}).status_code == 200
+    assert client.post(f'/v1/tasks/{tid}/stop').status_code == 200
+    assert client.post(f'/v1/tasks/{tid}/continue', json={}).status_code == 200
+    assert json.loads(browsers[-1][1])['resume']['user_said'] == ['Mia Virtanen, mia@example.fi']
+    # A second Continue still remembers it.
+    assert client.post(f'/v1/tasks/{tid}/stop').status_code == 200
+    assert client.post(f'/v1/tasks/{tid}/continue', json={'answer': 'Sunday 22 Nov'}).status_code == 200
+    resume = json.loads(browsers[-1][1])['resume']
+    assert 'Mia Virtanen, mia@example.fi' in resume['user_said'] and resume['answer'] == 'Sunday 22 Nov'
+    assert 'do not ask for them again' in resume['note']
