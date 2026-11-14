@@ -150,7 +150,7 @@ def test_softening_keeps_assumptions_bullets_and_short_sentences():
         soft = {1: 'Not confirmed: rent.', 2: 'Not confirmed by the sources: the clinic accepts new patients.'}.get(i, '')
         return {'claims': [{'i': i, 'verdict': 'no', 'soft': soft, 'support': []}]}
     cite(result, FakeExa(), llm)
-    assert result['structured']['answer'] == ('The sources (dvv.fi) cover this errand. Check the details there before you act.\n'
+    assert result['structured']['answer'] == ('I could not confirm this on the pages I read. Check dvv.fi.\n'
                                               'Yes. Assuming you rent privately, the deposit is due back.\n'
                                               '- Not confirmed by the sources: the clinic accepts new patients.\n- Call 09 123.')
 
