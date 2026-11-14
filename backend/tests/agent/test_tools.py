@@ -80,6 +80,7 @@ def test_exa_tools_sources_usage_and_messages(local_site):
     assert seen[0][1]['type'] == 'auto' and seen[0][1]['contents']['highlights']
     assert seen[1][1]['maxAgeHours'] == 6 and 'livecrawl' not in seen[1][1]
     assert approvals[0][0]['source'].startswith('https://eur-lex')
+    assert result.filled == []  # this run filled nothing on the page
     assert {s['url'] for s in result.sources} == {'https://eur-lex.europa.eu/eli/reg/2004/261', 'https://example.com/claim'}
     assert result.usage['input_tokens'] == 4000 and result.usage['model_calls'] == 4 and result.usage['exa_cost_usd'] == 0.008
     assert usage[-1]['cache_read_input_tokens'] == 3200
@@ -196,3 +197,11 @@ from hoida_agent.guard import is_final_submit
 ])
 def test_wizard_steps_pass_on_submit_buttons_but_final_steps_do_not(label, final):
     assert is_final_submit(f'<button type="submit">{label}</button> button type=submit {label}', label) is final
+
+
+def test_filled_values_kept_for_handoff(local_site):
+    llm = Scripted([('type_text', {'ref': 'e1', 'text': '{{name}}'}), ('select_option', {'ref': 'e4', 'option': 'Refund'}),
+                    ('fail', {'reason': 'needs captcha: finish by hand'})])
+    result = run_browser_agent('x', local_site + '/claim.html', PROFILE, plain_hooks(), llm, exa=ExaTools(api_key=''), jev=Jev(api_key=''))
+    assert result.status == 'failed'
+    assert result.filled == [{'label': 'Full name', 'value': '{{name}}'}, {'label': 'Claim type', 'value': 'Refund'}]

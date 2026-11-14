@@ -11,7 +11,9 @@ _CAPTURE = r'''({start, limit}) => {
    all.push(el); if(el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot); } walk(el);
  }};
  walk(document);
- const label = el => el.labels?.[0]?.innerText || el.getAttribute('aria-label') ||
+ // A <label> that wraps its control would otherwise include the control's own text (all <select> options).
+ const labelText = l => { const c=l.cloneNode(true); c.querySelectorAll('select,textarea,option,input').forEach(n=>n.remove()); return c.textContent.replace(/\s+/g,' ').trim(); };
+ const label = el => (el.labels?.[0] && labelText(el.labels[0])) || el.getAttribute('aria-label') ||
    (el.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>el.getRootNode().getElementById(id)?.textContent||'').join(' ').trim() ||
    el.innerText || el.placeholder || el.closest('fieldset')?.querySelector('legend')?.innerText || el.name || el.id || '';
  all.forEach(el=>el.removeAttribute('data-hoida-ref'));
