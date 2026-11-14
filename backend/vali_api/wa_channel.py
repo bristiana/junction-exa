@@ -3,7 +3,9 @@ import asyncio
 import logging
 
 from vali_wa.api import GraphAPIClient, GraphAPIError
-from vali_wa.render import split_messages
+from vali_wa.render import render_watch_update, split_messages
+
+from .monitors import watch_criteria
 
 logger = logging.getLogger("vali.whatsapp")
 
@@ -103,3 +105,17 @@ def push_task(application, task_id, renderer):
         asyncio.run(send())
     except Exception as exc:
         log_failure("task notification failed", exc, task_id=task_id)
+
+
+async def push_watch_update(application, watch, update):
+    """A new watch finding, sent once to the owner's linked number; never fails the delivery."""
+    try:
+        store = application.state.store
+        number = (store.get_user(watch['user_id']) or {}).get('wa_number')
+        if not number:
+            return
+        task = store.get_task(watch['task_id']) if watch.get('task_id') else None
+        for body in render_watch_update(watch_criteria(watch['query']), update, (task or {}).get('lang') or 'en'):
+            await application.state.whatsapp_api.send_text(number, body)
+    except Exception as exc:
+        log_failure("watch notification failed", exc, task_id=watch.get('task_id'))

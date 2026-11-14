@@ -417,3 +417,99 @@ def test_missing_secret_cleans_up_and_fails(watched, monkeypatch, secret, delete
     else:
         assert watch['exa_monitor_id'] is None
         assert store.sql('SELECT * FROM watch_slots') == []
+
+
+def link_whatsapp(store, identity, number='358401234567'):
+    store.sql('UPDATE users SET wa_number=? WHERE id=?', (number, identity['user_id']))
+    return number
+
+
+def fake_whatsapp(app, error=None):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    app.state.whatsapp_api = SimpleNamespace(send_text=AsyncMock(side_effect=error))
+    return app.state.whatsapp_api.send_text
+
+
+def test_new_update_is_pushed_to_whatsapp_once(watched):
+    client, store, calls, behavior, app, identity = watched
+    number, send_text = link_whatsapp(store, identity), fake_whatsapp(app)
+    create(client)
+    watch = client.get('/v1/watches').json()['watches'][0]
+    results = [{'title': f'Flat {n}', 'url': f'https://example.com/flat{n}'} for n in range(3)]
+    payload = delivery(watch, results=results)
+    payload['data']['output']['content'] = 'A two-room flat is listed for 780 eur. It is near the metro. Viewing on Friday.'
+    assert send(client, watch, payload).status_code == 200
+    assert send(client, watch, payload).status_code == 200  # an Exa retry: same event, no second message
+    send_text.assert_awaited_once_with(number, '*New on your watch:* flats in Helsinki\n'
+        'A two-room flat is listed for 780 eur. It is near the metro.\n'
+        'https://example.com/flat0\nhttps://example.com/flat1')
+    assert send(client, watch, delivery(watch, event='event_2')).status_code == 200
+    assert send_text.await_count == 2
+
+
+def test_update_push_uses_errand_language(watched):
+    client, store, calls, behavior, app, identity = watched
+    link_whatsapp(store, identity)
+    send_text = fake_whatsapp(app)
+    task = create(client)
+    store.sql('UPDATE tasks SET lang=? WHERE id=?', ('fi', task['id']))
+    watch = client.get('/v1/watches').json()['watches'][0]
+    assert send(client, watch, delivery(watch)).status_code == 200
+    assert send_text.await_args.args[1].startswith('*Uutta seurannassasi:* flats in Helsinki\nA flat is available.')
+
+
+def test_no_push_without_linked_number_and_send_failure_still_200(watched, caplog):
+    client, store, calls, behavior, app, identity = watched
+    send_text = fake_whatsapp(app)
+    create(client)
+    watch = client.get('/v1/watches').json()['watches'][0]
+    assert send(client, watch, delivery(watch)).status_code == 200
+    send_text.assert_not_awaited()
+    link_whatsapp(store, identity)
+    send_text = fake_whatsapp(app, error=RuntimeError('graph down'))
+    assert send(client, watch, delivery(watch, event='event_2')).status_code == 200
+    send_text.assert_awaited_once()
+    assert 'watch notification failed' in caplog.text and '358401234567' not in caplog.text
+    assert client.get('/v1/watches').json()['watches'][0]['unseen_count'] == 2
+
+
+def test_check_now_triggers_monitor_owner_only(watched):
+    client, store, calls, behavior, app, identity = watched
+    create(client)
+    watch = client.get('/v1/watches').json()['watches'][0]
+    response = client.post('/v1/watches/' + watch['id'] + '/check')
+    assert response.status_code == 200 and response.json() == {'ok': True, 'triggered': True}
+    assert (calls[-1].method, calls[-1].url.path) == ('POST', '/monitors/' + watch['exa_monitor_id'] + '/trigger')
+    other = client.post('/v1/users').json()
+    assert client.post('/v1/watches/' + watch['id'] + '/check',
+                       headers={'Authorization': 'Bearer ' + other['token']}).status_code == 404
+    assert client.post('/v1/watches/w_missing/check').status_code == 404
+    before = len(calls)
+    behavior['create'] = 503  # a paid run: one attempt, never retried
+    assert client.post('/v1/watches/' + watch['id'] + '/check').status_code == 502
+    assert len(calls) == before + 1
+    store.activate_watch(watch['id'], None, '')
+    response = client.post('/v1/watches/' + watch['id'] + '/check')
+    assert response.status_code == 409 and 'no live Exa monitor' in response.json()['detail']
+    assert len(calls) == before + 1
+
+
+def test_whatsapp_check_now_triggers_newest_live_watch(watched):
+    import asyncio
+    from vali_wa.webhook import IncomingMessage
+    client, store, calls, behavior, app, identity = watched
+    number = link_whatsapp(store, identity)
+    flow = app.state.whatsapp_flow
+
+    def reply(text):
+        return [p['text']['body'] for p in asyncio.run(flow.handle(IncomingMessage(number, 'm_' + text, 'text', text=text)))]
+    assert reply('check now') == ['Vali: You have no live watch to check. Send me something to watch first.']
+    create(client)
+    task = create(client)
+    store.sql('UPDATE tasks SET lang=? WHERE id=?', ('fi', task['id']))
+    newest = client.get('/v1/watches').json()['watches'][0]
+    assert reply('Check now') == ['Tarkistan nyt Exalla. Viestitän tänne, kun se on valmis.']
+    assert calls[-1].url.path == '/monitors/' + newest['exa_monitor_id'] + '/trigger'
+    store.sql('UPDATE tasks SET lang=? WHERE id=?', ('en', task['id']))
+    assert reply('tarkista') == ["Checking now with Exa. I'll message you here when it finishes."]

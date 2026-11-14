@@ -8,7 +8,7 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Command:
-    kind: Literal["link", "approve", "stop", "choose", "status", "help", "new_errand"]
+    kind: Literal["link", "approve", "stop", "choose", "status", "help", "check", "new_errand"]
     code: str | None = None
     n: int | None = None
     text: str | None = None
@@ -36,4 +36,6 @@ def parse_command(text: str) -> Command:
         return Command("status")
     if normalized in {"help", "apua", "hi", "hello", "moi", "hei"}:
         return Command("help")
+    if normalized in {"check now", "check", "tarkista"}:
+        return Command("check", text=original)  # text kept: without a check callback it stays an errand
     return Command("new_errand", text=original)

@@ -9,7 +9,7 @@ and make final approval atomic in their task store.
 import inspect
 
 from .parse import parse_command
-from .render import (render_ack, render_error, render_execution_update, render_help,
+from .render import (render_ack, render_check, render_error, render_execution_update, render_help,
                      render_link_failed, render_link_paused, render_linked, render_result)
 
 
@@ -20,7 +20,8 @@ async def _call(callback, *args, **kwargs):
 
 class WhatsAppFlow:
     def __init__(self, *, api, find_user_by_number, link_number, create_task,
-                 get_active_task, execute, approve, stop, transcribe=None, read_letter=None, message=None):
+                 get_active_task, execute, approve, stop, transcribe=None, read_letter=None, message=None,
+                 check=None):
         self.api = api
         self.find_user_by_number = find_user_by_number
         self.link_number = link_number
@@ -32,6 +33,7 @@ class WhatsAppFlow:
         self.transcribe = transcribe
         self.read_letter = read_letter
         self.message = message
+        self.check = check  # check(user): triggers the newest live watch, returns its language or None
 
     async def handle(self, msg):
         # Read receipts also apply to unknown senders and unsupported media.
@@ -90,6 +92,9 @@ class WhatsAppFlow:
             return render_error("Message passed to your running errand.")
         if command.kind == "help":
             return render_help()
+        if command.kind == "check" and self.check:
+            lang = await _call(self.check, user)
+            return render_check(lang) if lang else render_error("You have no live watch to check. Send me something to watch first.")
         if command.kind in {"choose", "approve", "stop", "status"}:
             if not task:
                 return render_error("No active errand. Send me an errand to get started.")

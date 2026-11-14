@@ -123,6 +123,44 @@ def render_ack(task, profile=None):
     return [ACKS.get((task.get("lang") or "en")[:2], ACKS["en"])]
 
 
+WATCH_UPDATES = {
+    "en": "New on your watch:",
+    "fi": "Uutta seurannassasi:",
+    "sv": "Nytt i din bevakning:",
+    "ro": "Noutăți la urmărirea ta:",
+    "de": "Neu bei deiner Beobachtung:",
+    "es": "Novedades en tu seguimiento:",
+    "fr": "Du nouveau dans ta veille :",
+    "ru": "Новое по твоему отслеживанию:",
+    "uk": "Нове у твоєму відстеженні:",
+}
+
+CHECKS = {
+    "en": "Checking now with Exa. I'll message you here when it finishes.",
+    "fi": "Tarkistan nyt Exalla. Viestitän tänne, kun se on valmis.",
+    "sv": "Kollar nu med Exa. Jag skriver här när det är klart.",
+    "ro": "Verific acum cu Exa. Îți scriu aici când termin.",
+    "de": "Ich prüfe jetzt mit Exa. Ich schreibe dir hier, wenn es fertig ist.",
+    "es": "Lo compruebo ahora con Exa. Te escribo aquí cuando termine.",
+    "fr": "Je vérifie maintenant avec Exa. Je t'écris ici quand c'est fini.",
+    "ru": "Проверяю сейчас через Exa. Напишу сюда, когда закончу.",
+    "uk": "Перевіряю зараз через Exa. Напишу сюди, коли закінчу.",
+}
+
+
+def render_watch_update(criteria, update, lang="en"):
+    # What was watched, the finding in at most two sentences, at most two links.
+    finding = " ".join(re.sub(r"^new:\s*", "", str(update.get("text") or "")).split())
+    finding = " ".join(re.split(r"(?<=[.!?])\s+", finding)[:2])[:400]
+    links = [url for url in (_safe_url(s.get("url")) for s in update.get("sources") or []) if url][:2]
+    header = WATCH_UPDATES.get((lang or "en")[:2], WATCH_UPDATES["en"])
+    return split_messages("\n".join([f"*{header}* {_text(criteria)}", _text(finding), *links]))
+
+
+def render_check(lang="en"):
+    return [CHECKS.get((lang or "en")[:2], CHECKS["en"])]
+
+
 def render_result(task, profile=None):
     if (task.get("research") or {}).get("status") == "failed":
         return render_error("Research failed. " + ((task.get("research") or {}).get("error") or "Please try again."))
