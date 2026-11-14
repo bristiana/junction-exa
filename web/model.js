@@ -206,7 +206,7 @@ export function channelOf(task) {
 export function errandStatus(task) {
   const research = task?.research || {};
   const run = runStatus(task);
-  const question = questionOf(task);
+  const question = research.status === 'completed' ? null : questionOf(task); // a finished research's question is stale
   if (run === 'awaiting_approval') return { word: 'Waiting for your OK', tone: 'you', detail: task.execution.approval?.summary || '' };
   if (['starting', 'running', 'submitting'].includes(run)) return { word: 'Filling the form', tone: 'working', detail: lastStep(task) };
   if (question && !run) return { word: 'Needs your answer', tone: 'you', detail: question.text };
@@ -284,9 +284,10 @@ export function errandStage(task) {
   const run = task?.execution;
   const status = runStatus(task);
   const action = primaryAction(task);
-  const steps = list(run?.steps).map((s) => String(s?.text || '')).filter(Boolean);
+  const raw = list(run?.steps).map((s) => String(s?.text || '')).filter(Boolean);
+  const steps = raw.map(friendlyStep).filter(Boolean);
   const last = steps.at(-1) || '';
-  const asked = String(run?.question?.text || (last.match(/^Asked you: (.+)/) || [])[1] || '');
+  const asked = String(run?.question?.text || ((raw.at(-1) || '').match(/^Asked you: (.+)/) || [])[1] || '');
   const site = domainOf(run?.current_url) || action?.domain || '';
   const stages = action || run ? ['Found', 'Filled', 'Your OK', 'Done'] : ['Found', 'Done'];
   const done = stages.length - 1;
