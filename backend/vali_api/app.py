@@ -24,7 +24,7 @@ from .citations import cite, unchecked
 from .companion import CompanionBody, companion_tip, make_cache
 from .config import Config
 from .exa import ExaClient, ExaError, TTLCache
-from .monitors import provision_watch, delete_monitor, trigger_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
+from .monitors import provision_watch, delete_monitor, run_completed, trigger_monitor, verify_delivery, delivery_update, watch_criteria, with_watch
 from .guard import (CODE_LOCKOUT, CODE_TRIES, PAIR_BUDGET, PAIR_BUDGET_SECONDS, RateLimited, SlidingWindow, authenticate,
                     check_code_tries, check_origin, check_task_budget, client_ip, public_start_url, resolve_host)
 from .research import ANSWER_FIRST, FIND_RULES, FIND_SCHEMA, SYSTEM_PROMPT, build_query, build_run_request, guard_recipients, map_find_output, progress_from_events
@@ -722,6 +722,15 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(404, 'Watch not found')
         return {'ok': True}
 
+    def request_check(watch):
+        # Marked first, so even a fast delivery of this run replies; unmarked if the trigger fails.
+        application.state.store.request_check(watch['id'])
+        try:
+            trigger_monitor(application.state.exa, watch)
+        except ExaError:
+            application.state.store.request_check(watch['id'], requested=False)
+            raise
+
     @application.post('/v1/watches/{wid}/check')
     def check_watch(wid: str, user=Depends(authenticate)):
         watch = application.state.store.get_watch(wid)
@@ -729,7 +738,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             raise HTTPException(404, 'Watch not found')
         if not watch['exa_monitor_id'] or not watch.get('secret'):
             raise HTTPException(409, 'This watch has no live Exa monitor to check.')
-        trigger_monitor(application.state.exa, watch)
+        request_check(watch)
         return {'ok': True, 'triggered': True}
 
     @application.get('/v1/status')
@@ -792,7 +801,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                              'ORDER BY created_at DESC', (user['id'],)):
             watch = store.get_watch(row['id'])
             if watch and watch.get('secret'):
-                trigger_monitor(application.state.exa, watch)
+                request_check(watch)
                 task = store.get_task(watch['task_id']) if watch.get('task_id') else None
                 return (task or {}).get('lang') or 'en'
         return None
@@ -886,12 +895,17 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if not watch or not verify_delivery(raw, request.headers.get('exa-signature', ''), watch.get('secret')):
             raise HTTPException(403, 'Invalid signature')
         try:
-            event_id, update = delivery_update(json.loads(raw), watch)
+            payload = json.loads(raw)
+            event_id, update = delivery_update(payload, watch)
         except (ValueError, TypeError):
             raise HTTPException(400, 'Invalid delivery') from None
         # Only a first-seen event reaches WhatsApp; Exa retries are deduplicated by the store.
-        if update and store.add_watch_update(watch, event_id, update):
-            background_tasks.add_task(push_watch_update, application, watch, update)
+        if update:
+            if store.add_watch_update(watch, event_id, update):
+                store.take_check(watch['id'])
+                background_tasks.add_task(push_watch_update, application, watch, update)
+        elif run_completed(payload) and store.take_check(watch['id']):
+            background_tasks.add_task(push_watch_update, application, watch, None)  # asked for: nothing new
         return {'ok': True}
 
     add_voice_routes(

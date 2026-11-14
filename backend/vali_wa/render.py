@@ -147,6 +147,18 @@ CHECKS = {
     "uk": "Перевіряю зараз через Exa. Напишу сюди, коли закінчу.",
 }
 
+NOTHING_NEW = {
+    "en": "Checked with Exa just now: nothing new since last time. I'll keep watching daily.",
+    "fi": "Tarkistin juuri Exalla: ei mitään uutta viime kerran jälkeen. Seuraan edelleen päivittäin.",
+    "sv": "Kollade med Exa nyss: inget nytt sedan sist. Jag fortsätter bevaka dagligen.",
+    "ro": "Am verificat acum cu Exa: nimic nou de data trecută. Urmăresc în continuare zilnic.",
+    "de": "Gerade mit Exa geprüft: nichts Neues seit dem letzten Mal. Ich beobachte weiter täglich.",
+    "es": "Lo acabo de comprobar con Exa: nada nuevo desde la última vez. Seguiré vigilando cada día.",
+    "fr": "Vérifié avec Exa à l'instant : rien de nouveau depuis la dernière fois. Je continue à surveiller chaque jour.",
+    "ru": "Только что проверил через Exa: ничего нового с прошлого раза. Продолжаю следить ежедневно.",
+    "uk": "Щойно перевірив через Exa: нічого нового з минулого разу. Продовжую стежити щодня.",
+}
+
 
 def render_watch_update(criteria, update, lang="en"):
     # What was watched, the finding in at most two sentences, at most two links.
@@ -159,6 +171,10 @@ def render_watch_update(criteria, update, lang="en"):
 
 def render_check(lang="en"):
     return [CHECKS.get((lang or "en")[:2], CHECKS["en"])]
+
+
+def render_nothing_new(lang="en"):
+    return [NOTHING_NEW.get((lang or "en")[:2], NOTHING_NEW["en"])]
 
 
 def render_result(task, profile=None):
