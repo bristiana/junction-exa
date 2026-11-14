@@ -85,8 +85,9 @@ def test_with_no_confirmed_claim_a_plain_sentence_on_the_sources_opens():
     cite(result, FakeExa(page), judge, 'opintotuki tulorajat')
     assert result['structured']['answer'] == ('Kela explains student financial aid; check your own income limit there.\n'
                                               'Not confirmed by the sources: the aid ends in May.')
-    assert result['claims'][0] == {'text': 'Kela explains student financial aid; check your own income limit there.',
-                                   'sources': [1], 'supported': None}
+    lead = 'Kela explains student financial aid; check your own income limit there.'
+    assert result['lead'] == lead and lead in result['own']  # Vali's own line, not a claim
+    assert [c['text'] for c in result['claims']] == ['Not confirmed by the sources: the aid ends in May.']
     assert any('sentence in Finnish' in u for u in judge.seen if '[C' not in u)  # the errand's language
 
 
@@ -114,7 +115,7 @@ def test_a_softened_fragment_from_an_italic_line_does_not_open_the_answer():
         0: ('partly', '*Jos tulot ylittävät tämän', ''),
         1: ('yes', '', 'Opintoraha on 280 euroa kuukaudessa.')}))
     first = result['structured']['answer']
-    assert first.startswith('Opintoraha on 280 euroa') and not first.startswith('*')
+    assert first == 'Opintoraha on 280 euroa kuukaudessa. Jos tulot ylittävät tämän'  # moved behind, once, no *
     assert result['claims'][0]['supported'] is True
 
 
@@ -197,7 +198,8 @@ def test_own_actions_skip_the_support_check():
     result = output('The landlord must return the deposit. I prepared a short email requesting payment.', KELA)
     judge = verdicts({0: ('yes', '', 'The landlord must return the deposit.'), 1: ('no', 'Not confirmed by the sources: x', '')})
     cite(result, FakeExa(page), judge)
-    assert result['claims'][1] == {'text': 'I prepared a short email requesting payment.', 'sources': [], 'supported': None}
+    assert result['claims'][1] == {'text': 'I prepared a short email requesting payment.', 'sources': [], 'supported': None,
+                                   'own': True}
     assert len(judge.seen) == 1 and 'Not confirmed' not in result['structured']['answer']
 
 
@@ -231,3 +233,69 @@ def test_a_watch_confirmation_leads_and_is_not_judged():
 
 def test_self_is_only_for_the_assistants_own_work():
     assert 'Usually, yes.' in MAP_SYSTEM and 'never "self"' in MAP_SYSTEM
+
+
+# Round 2: the opener only when nothing is backed, and the answer's own order stays
+
+def test_partly_backed_claims_keep_their_order_and_get_no_opener():
+    page = {KELA: 'Löyly sauna costs 29 euros for two hours. Book in advance.'}
+    answer = 'There are several saunas in Helsinki, including Löyly. Most of these saunas take bookings online.'
+    result = output(answer, KELA)
+    judge = verdicts({0: ('partly', 'There are several saunas in Helsinki.', 'Löyly sauna costs 29 euros for two hours.'),
+                      1: ('partly', 'Most of these saunas take bookings.', 'Book in advance.')})
+    cite(result, FakeExa(page), judge)
+    assert result['structured']['answer'] == 'There are several saunas in Helsinki. Most of these saunas take bookings.'
+    assert 'lead' not in result and not any('[C' not in u for u in judge.seen)  # no opener call at all
+
+
+def test_only_the_leading_unbacked_sentence_moves_and_nothing_is_lost():
+    page = {KELA: 'Löyly costs 29 euros for two hours.'}
+    answer = 'The sauna is the best in town. Löyly costs 29 euros for two hours.\n- Bring a towel.'
+    result = output(answer, KELA)
+    cite(result, FakeExa(page), verdicts({
+        0: ('no', 'Not confirmed by the sources: the sauna is the best in town.', ''),
+        1: ('yes', '', 'Löyly costs 29 euros for two hours.'),
+        2: ('no', 'Not confirmed by the sources: bring a towel.', '')}))
+    assert result['structured']['answer'] == ('Löyly costs 29 euros for two hours.\n- Not confirmed by the sources: bring a '
+                                              'towel.\nNot confirmed by the sources: the sauna is the best in town.')
+    assert '29 euros' in result['claims'][0]['text']
+
+
+def test_own_lines_are_not_counted_as_claims_in_the_trail():
+    from vali_api.activity import done
+    output_ = {'claims': [{'text': 'I prepared a draft.', 'sources': [], 'supported': None, 'own': True},
+                          {'text': 'Deposit back in 14 days.', 'sources': [1], 'supported': True}], 'sources': [{}]}
+    assert done({'created_at': '2026-11-14T10:00:00+00:00'}, output_)['text'] == 'Answer ready: 1 of 1 sentences quoted from 1 sources'
+
+
+@pytest.mark.parametrize('text,code', [
+    ('jeg mistet mit sygesikringskort i Finland hvad gør jeg', 'da'),
+    ('hvordan får jeg et personnummer i Finland', 'da'),
+    ('jeg har mistet kortet mitt, hva gjør jeg', 'no'),
+    ('Hur får jag ett personnummer', 'sv'),
+    ('wie kann ich meine Adresse ändern', 'de')])
+def test_danish_and_norwegian_are_not_german_or_swedish(text, code):
+    assert detect(text) == code
+
+
+def test_a_partly_claim_shown_trimmed_keeps_its_quote():
+    page = {KELA: 'Löyly costs 29 euros for two hours.'}
+    result = output('Löyly costs 29 euros for two hours and is the best sauna in town. Assuming Helsinki, it is open today.', KELA)
+    cite(result, FakeExa(page), verdicts({
+        0: ('partly', 'Löyly costs 29 euros for two hours.', 'Löyly costs 29 euros for two hours.'),
+        1: ('partly', 'It is open.', 'Löyly costs 29 euros for two hours.')}))
+    first, assumption = result['claims']
+    assert first['text'] == 'Löyly costs 29 euros for two hours.' and first['supported'] is True
+    assert result['sources'][0]['quote'] == 'Löyly costs 29 euros for two hours.'
+    assert assumption['text'].startswith('Assuming Helsinki') and assumption['supported'] is False  # kept whole, so not backed
+
+
+def test_a_partly_claim_without_a_trimmed_form_stays_unconfirmed():
+    page = {KELA: 'Löyly costs 29 euros for two hours.'}
+    result = output('Löyly costs 29 euros and is the best sauna.', KELA)
+    cite(result, FakeExa(page), verdicts({0: ('partly', '', 'Löyly costs 29 euros for two hours.')}))
+    assert result['claims'][0]['supported'] is False and 'quote' not in result['sources'][0]
+
+
+def test_english_errands_with_finnish_names_stay_english():
+    assert detect('Vero form 5 deadline') == 'en' and detect('vero.fi tax card for part time job') == 'en'

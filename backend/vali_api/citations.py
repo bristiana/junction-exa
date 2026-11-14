@@ -282,10 +282,12 @@ def judge(llm, claims, pages, output=None):
             if item and item.get('verdict') == 'self':
                 return [], '', OWN
             if item:
-                full = item.get('verdict') == 'yes'
-                support = [(s['page'], s['quote'] if full else '') for s in item.get('support') or []
+                full, soft = item.get('verdict') == 'yes', squash(unmark(item.get('soft')))[:400]
+                # "partly": the quotes state the claim with its unconfirmed part removed, which is what is shown
+                backed = full or (item.get('verdict') == 'partly' and bool(soft))
+                support = [(s['page'], s['quote'] if backed else '') for s in item.get('support') or []
                            if isinstance(s.get('page'), int) and 0 <= s['page'] < len(pages)]
-                return support, '' if full else squash(item.get('soft'))[:400], True
+                return support, '' if full else soft, True
         return map_lexical([claims[i]], pages)[0], '', False
     with ThreadPoolExecutor(max_workers=min(8, len(claims))) as pool:
         return list(pool.map(ask, range(len(claims))))
@@ -299,9 +301,13 @@ def soften(output, softer):
     A stated assumption ("Assuming you rent in Helsinki, ...") is the honesty B8 asks for and stays as written."""
     replaced = {}
     for claim, soft in zip(output['claims'], softer):
-        if claim['supported'] is False and soft and soft != claim['text'] and not _ASSUMPTION.match(claim['text']):
-            replaced[claim['text']] = soft
-            claim['original'], claim['text'] = claim['text'], soft
+        if not soft or soft == claim['text']:
+            continue
+        if _ASSUMPTION.match(claim['text']):
+            claim['supported'] = False  # kept as written, so its quotes back only part of it
+            continue
+        replaced[claim['text']] = soft
+        claim['original'], claim['text'] = claim['text'], soft
     structured = output.get('structured') or {}
     if replaced and structured.get('answer'):
         structured['answer'] = rebuild(structured['answer'], replaced)
@@ -343,21 +349,28 @@ def opener(llm, task_text, answer, sources):
     return f'The sources ({names}) cover this errand. Check the details there before you act.'
 
 
+def _unbacked(claim):
+    """No page states any of it: the judge said "no" (a "partly" claim keeps the pages that state part of it)."""
+    return claim['supported'] is False and not claim['sources']
+
+
 def lead_with_support(output, llm=None, task_text=''):
-    """The answer opens with what the sources say: a confirmed claim moves ahead of unconfirmed ones; with none,
-    a plain sentence on what the sources cover comes first. Its first letter is a capital, never a fragment's."""
+    """No sentence that no page backs opens the answer: the leading ones move to its end, the rest keep their order.
+    Only when no page backs any sentence at all does a plain sentence on the sources open it; that sentence is
+    Vali's own (output["lead"] and output["own"]), never a claim, and the answer stays as written after it.
+    The first letter is a capital, never a fragment's."""
     claims, structured = output.get('claims') or [], output.get('structured') or {}
     answer = structured.get('answer') or ''
-    if claims and claims[0]['supported'] is False:
-        first = next((i for i, c in enumerate(claims) if c['supported'] is not False), None)
-        if first is None:
-            lead = {'text': opener(llm, task_text, answer, output.get('sources') or []),
-                    'sources': [s['n'] for s in (output.get('sources') or [])[:3]], 'supported': None}
-            answer = lead['text'] + ('\n' + answer if answer else '')
-        else:
-            lead = claims.pop(first)
-            answer = _to_front(answer, lead['text'])
-        claims.insert(0, lead)
+    judged = [c for c in claims if not c.get('own')]
+    if judged and all(_unbacked(c) for c in judged):
+        if claims and _unbacked(claims[0]):
+            lead = opener(llm, task_text, answer, output.get('sources') or [])
+            output['lead'], output['own'] = lead, (output.get('own') or []) + [lead]
+            answer = lead + ('\n' + answer if answer else '')
+    elif claims and _unbacked(claims[0]):
+        count = next(i for i, c in enumerate(claims) if not _unbacked(c))
+        moved, claims[:] = claims[:count], claims[count:] + claims[:count]
+        answer = _to_end(answer, [c['text'] for c in moved])
     if claims and claims[0]['text'][:1].islower():
         text = claims[0]['text']
         claims[0]['text'] = text[0].upper() + text[1:]
@@ -366,19 +379,24 @@ def lead_with_support(output, llm=None, task_text=''):
         structured['answer'] = answer
 
 
-def _to_front(answer, sentence):
-    lines = []
+def _to_end(answer, moved):
+    """The answer with these sentences taken out of their lines and put after everything else."""
+    lines, taken = [], []
     for line in answer.splitlines():
         sentences = split_sentences(line)
-        if sentence in sentences:
+        if any(s in moved for s in sentences):
             bullet = re.match(r'^\s*(?:[-•*]\s+)?', line).group(0)
-            rest = ' '.join(s for s in sentences if s != sentence)
-            line = bullet + rest if rest else ''
+            taken += [s for s in sentences if s in moved]
+            rest = ' '.join(s for s in sentences if s not in moved)
+            if not rest:
+                continue
+            line = bullet + rest
         lines.append(line)
     rest = '\n'.join(lines).strip()
-    if not rest or re.match(r'^\s*[-•*]\s+', rest):
-        return sentence + ('\n' + rest if rest else '')
-    return sentence + ' ' + rest
+    tail = ' '.join(s for s in moved if s in taken)
+    if not rest:
+        return tail
+    return rest + ('\n' if re.match(r'^\s*[-•*]\s+', rest.splitlines()[-1]) else ' ') + tail
 
 
 def number_sources(claims, support, pages, context):
@@ -449,6 +467,8 @@ def cite(output, exa, llm=None, task_text=''):
     for claim, (_, _, judged) in zip(output['claims'], verdicts):
         if not judged or judged == OWN:  # word overlap cannot judge a quote; Vali's own action needs none
             claim['supported'] = None
+        if judged == OWN:
+            claim['own'] = True
     soften(output, [soft for _, soft, _ in verdicts])
     lead_with_support(output, llm, task_text)
     return cost

@@ -129,7 +129,7 @@ def test_unconfirmed_claims_are_softened_in_claims_and_answer():
     claims = result['claims']
     assert claims[0] == {'text': 'Forwarding costs 10 € a month.', 'sources': [1], 'supported': True}
     assert claims[1]['text'].startswith('Not confirmed by the sources') and claims[1]['original'] == 'The clinic accepts new patients.'
-    assert claims[2] == {'text': 'You can submit it online.', 'sources': [2], 'supported': False,
+    assert claims[2] == {'text': 'You can submit it online.', 'sources': [2], 'supported': True,  # the shown, trimmed claim is quoted
                          'original': 'Submit it online at night.'}
     assert result['structured']['answer'] == ('Forwarding costs 10 € a month. Not confirmed by the sources: the clinic '
                                               'accepts new patients. You can submit it online.')

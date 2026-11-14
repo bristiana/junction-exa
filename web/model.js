@@ -115,7 +115,9 @@ export function claimsOf(task, sources) {
   const known = new Set(sources.map((s) => s.n));
   const given = list(output(task).claims).filter((c) => c?.text);
   if (given.length) {
-    return given.map((c) => ({ text: String(c.text), sources: list(c.sources).filter((n) => known.has(n)), supported: c.supported !== false }));
+    // output.lead: Vali's own opening line when no page backs any claim; it is not a claim itself.
+    const lead = output(task).lead ? [{ text: String(output(task).lead), sources: [], supported: true }] : [];
+    return lead.concat(given.map((c) => ({ text: String(c.text), sources: list(c.sources).filter((n) => known.has(n)), supported: c.supported !== false })));
   }
   const cited = citedIn(task, 'structured.answer', sources);
   return sentences(structured(task).answer).map((text) => ({ text, sources: cited, supported: true }));

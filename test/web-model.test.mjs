@@ -100,3 +100,8 @@ test("a drafted email or message is shown with its text; other actions are not d
     body: "Hello,\n\nPlease return my deposit.\n{{name}}" }]);
   assert.deepEqual(draftsOf({}), []);
 });
+
+test("output.lead opens the claims as Vali's own line; it is not a claim with sources", () => {
+  const task = { research: { output: { lead: "Check kela.fi for your income limit.", claims: [{ text: "Not confirmed: x.", sources: [], supported: false }] } } };
+  assert.deepEqual(claimsOf(task, []).map((c) => [c.text, c.supported]), [["Check kela.fi for your income limit.", true], ["Not confirmed: x.", false]]);
+});

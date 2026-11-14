@@ -84,7 +84,7 @@ def measure(task, seconds):
     output = research.get('output') or {}
     structured = output.get('structured') or {}
     sources = sources_of(output)
-    claims = output.get('claims')
+    claims = [c for c in output.get('claims') or [] if not c.get('own')]  # Vali's own lines are not claims
     return {
         'status': research['status'], 'seconds': round(seconds), 'cost': research.get('cost'),
         'mode': task.get('mode'), 'answer': answer_text(output), 'error': research.get('error'),
