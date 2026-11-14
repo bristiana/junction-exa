@@ -66,7 +66,7 @@ export function createMascot() {
   // Re-aim after layout changes; a slot that only scrolled is followed without walking.
   function update() {
     const next = target();
-    if (walking && next.mode === at.mode) return;
+    if (walking && at && next.mode === at.mode) return;
     if (at && next.mode === at.mode && next.mode !== 'wander' && Math.abs(next.scale - at.scale) < 0.01) return go(next, true);
     if (!at || next.mode !== at.mode) go(next);
   }
