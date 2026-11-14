@@ -20,7 +20,7 @@ export function openDetails(needed = []) {
   }));
   show('details-body',
     h('p', { class: 'muted details-intro' },
-      'Saved only in this browser. Sent only when you press Fill it for me, for that one form, and not stored by Vali. The AI sees placeholders like {{name}}, not these values.'),
+      'Stays on this device. Vali asks before using it.'),
     needed.length ? h('p', { class: 'details-needed' }, `This form needs: ${needed.map((d) => d.label.toLowerCase()).join(', ')}.`) : null,
     h('form', { class: 'details-form', onsubmit: (event) => {
       event.preventDefault();
