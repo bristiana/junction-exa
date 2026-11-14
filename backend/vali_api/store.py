@@ -43,18 +43,38 @@ class Store:
         for table in tables:
             self.sql('CREATE TABLE IF NOT EXISTS ' + table)
 
+    in_transaction = 0
+
     def sql(self, query, params=(), one=False):
         with self.lock:
-            cursor = self.connection.execute(query.replace('?', '%s') if self.postgres else query, params)
+            query = query.replace('?', '%s') if self.postgres else query
+            self._ensure_connected()
+            try:
+                cursor = self.connection.execute(query, params)
+            except Exception as exc:
+                if not self._reconnect_after(exc):
+                    raise
+                cursor = self.connection.execute(query, params)
             rows = cursor.fetchall() if cursor.description else []
             return (dict(rows[0]) if rows else None) if one else [dict(r) for r in rows]
+
+    def _ensure_connected(self):
+        pass
+
+    def _reconnect_after(self, exc):
+        return False
 
     @contextmanager
     def transaction(self):
         with self.lock:
             if self.postgres:
-                with self.connection.transaction():
-                    yield
+                self._ensure_connected()
+                self.in_transaction += 1
+                try:
+                    with self.connection.transaction():
+                        yield
+                finally:
+                    self.in_transaction -= 1
             else:
                 self.connection.execute('BEGIN IMMEDIATE')
                 try:
@@ -201,7 +221,7 @@ class Store:
         # A row lock protects approval decisions from concurrent sandbox steps.
         with self.lock:
             if self.postgres:
-                with self.connection.transaction():
+                with self.transaction():
                     row = self.sql('SELECT execution_json FROM tasks WHERE id=? FOR UPDATE', (tid,), one=True)
                     return self._patch_execution(tid, row, patch, step, shot, message)
             row = self.sql('SELECT execution_json FROM tasks WHERE id=?', (tid,), one=True)
@@ -354,13 +374,45 @@ class SQLiteStore(Store):
         super().__init__(conn)
 
 
+# Modal's egress can silently drop an idle DB socket; without these a query sent into it
+# waits for kernel retransmits (~15 min) while holding the store lock.
+PG_SOCKET_OPTIONS = dict(connect_timeout=10, keepalives=1, keepalives_idle=30, keepalives_interval=10,
+                         keepalives_count=3, tcp_user_timeout=15000)
+
+
 class PostgresStore(Store):
     postgres = True
 
-    def __init__(self, database_url):
+    def __init__(self, database_url, connect=None):
+        self.database_url = database_url
+        self._connect_fn = connect
+        super().__init__(self._connect())
+
+    def _connect(self):
+        if self._connect_fn:
+            return self._connect_fn()
         import psycopg
         from psycopg.rows import dict_row
-        super().__init__(psycopg.connect(database_url, autocommit=True, row_factory=dict_row))
+        return psycopg.connect(self.database_url, autocommit=True, row_factory=dict_row, **PG_SOCKET_OPTIONS)
+
+    def _reopen(self):
+        try:
+            self.connection.close()
+        except Exception:
+            pass
+        self.connection = self._connect()
+
+    def _ensure_connected(self):
+        if self.connection.closed and not self.in_transaction:
+            self._reopen()
+
+    def _reconnect_after(self, exc):
+        import psycopg
+        # Retry once only when the socket itself died outside a transaction.
+        if isinstance(exc, psycopg.OperationalError) and self.connection.closed and not self.in_transaction:
+            self._reopen()
+            return True
+        return False
 
 
 def make_store(config):
