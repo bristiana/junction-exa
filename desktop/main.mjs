@@ -15,7 +15,9 @@ const DEFAULT_URL = 'https://bogdan-c-2206--vali-web.us-east.modal.run';
 const smoke = process.argv.includes('--smoke');
 // --talk-check starts one real voice conversation with Chromium's fake microphone (a tone), on a throwaway account.
 const talkCheck = process.argv.includes('--talk-check');
-if (talkCheck && !process.env.VALI_USER_DATA) { console.error('--talk-check needs VALI_USER_DATA (a throwaway folder).'); process.exit(1); }
+// --live-app walks the demo flow in this app against the live server (scripts/live-app.mjs), on a throwaway account.
+const liveApp = process.argv.includes('--live-app');
+if ((talkCheck || liveApp) && !process.env.VALI_USER_DATA) { console.error('This check needs VALI_USER_DATA (a throwaway folder).'); process.exit(1); }
 if (talkCheck) for (const s of ['use-fake-device-for-media-stream', 'use-fake-ui-for-media-stream']) app.commandLine.appendSwitch(s);
 // Smoke never touches the user's account or credentials. VALI_USER_DATA runs a separate, throwaway instance.
 if (smoke) app.setPath('userData', path.join(app.getPath('temp'), `vali-smoke-${process.pid}`));
@@ -699,7 +701,7 @@ else {
     trayImage.setTemplateImage(true);
     if (trayImage.isEmpty()) throw new Error('Tray icon could not be created.');
     tray = new Tray(trayImage.resize({ width: 18, height: 18 })); tray.setToolTip('Vali'); tray.on('click', () => openChat());
-    if (!smoke && !talkCheck) {
+    if (!smoke && !talkCheck && !liveApp) {
       for (const key of ['Alt+Space', 'Alt+V']) if (globalShortcut.register(key, () => quickWithPage('type'))) { shortcuts.quick = key; break; }
       // Hold to talk: the box records while the keys are held and sends when they come up (or on a second press).
       // Key repeat while held must not toggle: presses closer than 0.5 s apart count as one.
@@ -715,7 +717,7 @@ else {
       const onTalk = () => { if (Date.now() - lastTalk > 500) toggleTalk(); lastTalk = Date.now(); };
       if (globalShortcut.register('Alt+Shift+V', onTalk)) shortcuts.talk = 'Alt+Shift+V';
     }
-    if (!smoke && !talkCheck) imessage = makeMessageBridge({ getConfig: () => config, save, safeStorage, fetchImpl: apiFetch,
+    if (!smoke && !talkCheck && !liveApp) imessage = makeMessageBridge({ getConfig: () => config, save, safeStorage, fetchImpl: apiFetch,
       onStatus: value => { for (const w of windows()) w.webContents.send('vali:imessage', value); trayMenu(); } });
     trayMenu();
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Vali', submenu: [{ label: 'Open chat', click: () => openChat() }, { role: 'quit' }] }, { role: 'editMenu' }, { role: 'windowMenu' }]));
@@ -728,6 +730,12 @@ else {
       if (!welcoming) openChat();
       connect().then(async () => { if (config.imessage?.enabled) await imessage.enable(); await poll(); }).catch(e => { config.connectionError = e.message; changes({ connectionError: e.message }, {}); });
       pollTimer = setInterval(() => poll().catch(() => {}), 4000);
+      if (liveApp) {
+        setTimeout(() => { console.error('Live app check timed out.'); app.exit(1); }, 20 * 60000).unref();
+        const { runLiveApp } = await import('./scripts/live-app.mjs');
+        const ok = await runLiveApp({ root, windows: () => ({ mascot, chat, quick, glance }), tasks: () => tasks, connect, setConfig, handleMessage, showQuick, showGlance, openChat, waitFor, capture });
+        console.log(ok ? 'PASS live app flow' : 'FAIL live app flow'); app.exit(ok ? 0 : 1);
+      }
     }
   }).catch(e => { console.error(e.message); app.exit(1); });
 }

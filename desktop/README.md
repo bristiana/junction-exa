@@ -45,6 +45,14 @@ npm run live-check
 
 Drives `api.mjs` (the client the app uses) against the live server with a throwaway account: new account, link/voice/letters endpoints, a Talk to Vali credential (`POST /v1/voice/session`), a find errand, a claim errand, and a cloud browser run on httpbin's test form (https://httpbin.org/forms/post) that it approves. It approves nothing else.
 
+## Live app check
+
+```sh
+VALI_USER_DATA=/tmp/vali-live LIVE_OUT=/tmp/vali-live-out npm run live-app
+```
+
+Walks the demo flow in the real app against the live server on a throwaway account with made-up profile data (`scripts/live-app.mjs`): quick box errand, research with "How Vali found this" open in the chat, a letter (`scripts/fixtures/letter.png`) dropped on the mascot, and a cloud browser run on httpbin's test form approved from the list until it is done. It saves `live-*.png` captures in `LIVE_OUT` and approves nothing but httpbin.
+
 ## Talk check
 
 ```sh
