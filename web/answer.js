@@ -111,7 +111,12 @@ function howFound(task) {
   const t = exaTrail(task);
   if (t.reused) return h('p', { class: 'exa-line' }, 'Used an answer Vali had already checked a few minutes ago.');
   if (!t.searches.length && !t.pages.length && !t.checked) return null;
-  const shown = t.pages.slice(0, 8);
+  const sites = [];  // one link per site, with how many of its pages were read
+  for (const page of t.pages) {
+    const site = sites.find((x) => x.domain === page.domain);
+    if (site) site.n += 1; else sites.push({ ...page, n: 1 });
+  }
+  const shown = sites.slice(0, 8);
   return h('section', { class: 'how card', 'aria-label': 'How Vali found this' },
     h('h2', { class: 'section-title' }, 'How Vali found this'),
     h('ol', { class: 'how-steps' },
@@ -120,8 +125,8 @@ function howFound(task) {
         h('span', { class: 'how-detail' }, t.searches.slice(0, 3).map((q) => `“${q}”`).join(', ') + (t.searches.length > 3 ? ', …' : ''))) : null,
       t.pages.length ? h('li', {},
         h('span', { class: 'how-what' }, `Read ${t.pages.length} ${t.pages.length === 1 ? 'page' : 'pages'} with Exa`),
-        h('span', { class: 'how-detail' }, shown.map((p, i) => [i ? ', ' : '', h('a', { href: p.url, target: '_blank', rel: 'noopener noreferrer' }, p.domain)]),
-          t.pages.length > shown.length ? ` and ${t.pages.length - shown.length} more` : '')) : null,
+        h('span', { class: 'how-detail' }, shown.map((p, i) => [i ? ', ' : '', h('a', { href: p.url, target: '_blank', rel: 'noopener noreferrer' }, p.domain), p.n > 1 ? ` (${p.n})` : '']),
+          sites.length > shown.length ? ` and ${sites.length - shown.length} more sites` : '')) : null,
       t.checked ? h('li', {},
         h('span', { class: 'how-what' }, `Checked ${t.checked} ${t.checked === 1 ? 'sentence' : 'sentences'} against the page`),
         h('span', { class: 'how-detail' }, `${t.backed} of ${t.checked} match a quote from today’s page. The numbers link to it.`)) : null,
