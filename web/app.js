@@ -98,6 +98,7 @@ $('landing-try')?.addEventListener('click', () => {
 let pollGen = 0;     // only the newest poll may schedule the next one
 let acting = false;  // one action request at a time: Approve, Stop and Fill it for me can't double-submit
 let leaving = '';    // a note to show once the page is back home
+let pollNote = '';   // the problem line the poll itself showed, cleared once a poll gets through again
 
 const handlers = {
   onReply: (text, button) => act(() => api.message(followed.id, text), button),
@@ -118,7 +119,9 @@ const handlers = {
 async function act(request, button) {
   if (acting) return;
   acting = true;
-  if (button) button.disabled = true;
+  // The whole row waits with it: a Stop pressed while Approve is on its way would otherwise do nothing, silently.
+  const row = button ? [...(button.closest('.actions, form')?.querySelectorAll('button') || [button])] : [];
+  for (const b of row) b.disabled = true;
   try {
     render(await request());
     notice('');
@@ -128,7 +131,7 @@ async function act(request, button) {
     else notice(error.message);
   } finally {
     acting = false;
-    if (button) button.disabled = false;
+    for (const b of row) b.disabled = false;
   }
 }
 
@@ -154,7 +157,8 @@ async function poll() {
   try {
     const task = await api.task(current.id);
     if (gen !== pollGen) return;
-    if (!$('notice').hidden && $('notice').classList.contains('quiet')) notice('');
+    if (pollNote && !$('notice').hidden && $('notice').textContent === pollNote) notice('');
+    pollNote = '';
     render(task);
     if (isActive(task)) current.timer = setTimeout(poll, POLL_MS);
   } catch (error) {
@@ -163,10 +167,10 @@ async function poll() {
       leaving = 'That errand is not in this browser’s account.';
       location.hash = '#/';
     } else if (error.status === 429) {
-      notice('Busy, retrying…', true);
+      notice(pollNote = 'Busy, retrying…', true);
       current.timer = setTimeout(poll, error.retryAfter ? error.retryAfter * 1000 : BUSY_MS);
     } else {
-      notice(`Lost touch with Vali: ${error.message}`);
+      notice(pollNote = `Lost touch with Vali: ${error.message}`);
       current.timer = setTimeout(poll, BUSY_MS);
     }
   }
