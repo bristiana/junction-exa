@@ -18,7 +18,7 @@ globalThis.fetch = async (url, init = {}) => {
 };
 
 const { api } = await import("../web/api.js");
-const { deleteProfile, fillPlaceholders, loadProfile, missingDetails, saveProfile } = await import("../web/profile.js");
+const { DEMO_PROFILE, deleteProfile, fillPlaceholders, loadProfile, missingDetails, saveProfile } = await import("../web/profile.js");
 
 const fake = { name: "Test Person", email: "test@example.com", phone: "+358 40 000 0000" };
 
@@ -50,7 +50,7 @@ test("Delete my details clears this browser's copy", () => {
   assert.deepEqual(JSON.parse(store.get("vali.profile")), fake);
   deleteProfile();
   assert.equal(store.has("vali.profile"), false);
-  assert.deepEqual(loadProfile(), {});
+  assert.deepEqual(loadProfile(), DEMO_PROFILE);  // back to the demo details
 });
 
 test("the plan's placeholders say which details are missing, and approval values fill in locally", () => {
