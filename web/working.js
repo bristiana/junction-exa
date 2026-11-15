@@ -24,7 +24,7 @@ export function renderWorking(task, { onReply, onCancel }) {
 const STAGES = [
   ['Search the web', 'Exa Search finds the official pages'],
   ['Read the pages', 'Exa Contents reads today’s version'],
-  ['Check every sentence', 'Each sentence must match a quote'],
+  ['Check sentences', 'Each sentence must match a quote'],
 ];
 
 function stages(task) {

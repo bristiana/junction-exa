@@ -404,3 +404,94 @@ export function linkActions(task, n = 3) {
   return list(structured(task).actions).map((a) => ({ label: String(a?.label || '').trim(), url: safeUrl(a?.url) }))
     .filter((a) => a.url && a.label).slice(0, n).map((a) => ({ ...a, domain: domainOf(a.url) }));
 }
+
+// ---------- one row of the errands list, shaped by what kind of errand it is ----------
+// answer: find and check errands; booking: a form Vali fills (book, claim, or any run); watch: a daily Exa Monitor;
+// draft: a write errand that ended on text for you to send.
+export function errandKind(task) {
+  const mode = String(task?.mode || '');
+  if (mode === 'watch' || task?.research?.watch_id || task?.research?.kind === 'monitor') return 'watch';
+  if (mode === 'write' && !task?.execution) return 'draft';
+  if (['book', 'write', 'claim'].includes(mode) || task?.execution) return 'booking';
+  return 'answer';
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_RE = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+
+// "22 Nov 2026 17:30", "2026-11-22T17:30" or "Sunday 22 November at 17:30" as "Sun 22 Nov 17:30"; '' when no day.
+export function shortWhen(text, year = new Date().getFullYear()) {
+  const s = String(text || '');
+  const time = (/(?<![\d:.])([01]?\d|2[0-3])[:.]([0-5]\d)(?!\d|\.\d)/.exec(s.replace(/\d{4}-\d{2}-\d{2}/, '')) || []).slice(1);
+  const clock = time.length ? ` ${time[0].padStart(2, '0')}:${time[1]}` : '';
+  let m = /(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  let date = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+  if (!date && (m = new RegExp(`\\b(\\d{1,2})\\.?\\s+(${MONTH_RE})[a-z]*\\.?(?:\\s+(\\d{4}))?`, 'i').exec(s))) {
+    date = new Date(Date.UTC(+(m[3] || year), MONTHS.findIndex((x) => x.toLowerCase() === m[2].toLowerCase()), +m[1]));
+  }
+  if (!date && (m = /\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/.exec(s))) date = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+  if (date && !Number.isNaN(date.getTime())) return `${WEEKDAYS[date.getUTCDay()]} ${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}${clock}`;
+  const day = /\b(mon|tues|wednes|thurs|fri|satur|sun)day\b/i.exec(s);
+  return day ? `${day[1].slice(0, 3)[0].toUpperCase()}${day[1].slice(1, 3).toLowerCase()}${clock}` : '';
+}
+
+// "kulttuurisauna.fi" as "Kulttuurisauna": the site's own name, for a booking row.
+export function siteName(url) {
+  const parts = domainOf(url).split('.');
+  const name = parts.length > 1 ? parts[parts.length - 2] : parts[0];
+  if (!name) return '';
+  return name.length <= 3 ? name.toUpperCase() : name[0].toUpperCase() + name.slice(1); // dvv.fi as DVV
+}
+
+// Place and time of a booking: the site Vali fills, and the time it filled in, else the time asked for.
+export function bookingWhere(task) {
+  const run = task?.execution || {};
+  const place = siteName(run.start_url || run.current_url || primaryAction(task)?.url);
+  const filled = list(run.approval?.filled).concat(list(run.filled));
+  const slot = filled.filter((f) => /date|time|when|day|aika|päivä/i.test(String(f?.label || '')) && f?.value)
+    .map((f) => String(f.value)).join(' '); // one "Date/time" field, or a "Date" and a "Time"
+  const year = new Date(Date.parse(task?.created_at) || Date.now()).getFullYear();
+  const when = shortWhen(slot, year) || shortWhen(task?.task, year);
+  return [place, when].filter(Boolean).join(', ');
+}
+
+// The kind as a short noun: a booking errand is a Booking, any other form (claim, write) is a Form.
+export function kindLabel(task, kind = errandKind(task)) {
+  if (kind === 'booking') return task?.mode === 'book' ? 'Booking' : 'Form';
+  return { answer: 'Answer', watch: 'Watch', draft: 'Draft' }[kind] || 'Answer';
+}
+
+// The one status line of a row: {kind, label, word, detail}. Who acts next (errandStatus.tone) still sorts the list.
+export function errandLine(task) {
+  const kind = errandKind(task);
+  const status = errandStatus(task);
+  const run = runStatus(task);
+  const research = task?.research || {};
+  const said = sentences(String(structured(task).answer || '').replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, ''));
+  const first = said[0] && said[0].length < 24 && said[1] ? `${said[0]} ${said[1]}` : said[0] || ''; // "Yes." says little alone
+  const label = kindLabel(task, kind);
+  const line = (word, detail) => ({ kind, label, word, detail: detail || '' });
+  if (kind === 'booking' && run) {
+    const where = bookingWhere(task);
+    if (run === 'awaiting_approval') return line('Waiting for your OK', where);
+    if (['starting', 'running', 'submitting'].includes(run)) {
+      return task.execution.question?.text ? line('Needs your answer', task.execution.question.text) : line(run === 'submitting' ? 'Sending' : 'Filling the form', where);
+    }
+    if (run === 'done' || run === 'completed') return line('Booked', where);
+    if (run === 'stopped') return line('Stopped, nothing sent', where);
+    if (run === 'failed') return line("Couldn't finish", where);
+  }
+  if (status.tone === 'working' || status.tone === 'you' || status.tone === 'failed') return line(status.word, status.detail);
+  if (kind === 'watch') {
+    const latest = list(research.updates).at(-1);
+    if (!latest) return line('Checks daily', 'no new matches yet');
+    const title = list(latest.sources)[0]?.title || String(latest.text || '').replace(/^new:\s*/i, '');
+    return line('New match', title);
+  }
+  if (kind === 'booking') return line(task?.mode === 'book' ? 'Ready to book' : 'Ready to fill', bookingWhere(task) || first);
+  if (kind === 'draft') {
+    const draft = draftsOf(task)[0];
+    return line('Draft ready', draft ? draft.subject || draft.label || sentences(draft.body)[0] : first);
+  }
+  return first ? line('', first) : line(status.word, status.detail);
+}

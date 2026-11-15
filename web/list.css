@@ -1,0 +1,49 @@
+/* The errands list, one row per errand shaped by its kind (answer, booking, watch, draft), and the working screen on a phone. */
+:root {
+  --kind-answer: var(--accent);  --kind-answer-soft: var(--ring-soft);
+  --kind-booking: var(--good);   --kind-booking-soft: var(--good-soft);
+  --kind-watch: #2c5f8a;         --kind-watch-soft: #e2edf6;
+  --kind-draft: var(--ink);      --kind-draft-soft: var(--fill-2);
+}
+
+/* the working view's .working rule (centred, 640px) must not reach the "Working now" group or its rows */
+.errand-group.working, .errand.working { max-width: none; margin-left: 0; margin-right: 0; text-align: left; }
+
+.errand .kind-icon svg path { fill-rule: evenodd; }
+.errand.kind-answer .kind-icon { background: var(--kind-answer-soft); color: var(--kind-answer); }
+.errand.kind-booking .kind-icon { background: var(--kind-booking-soft); color: var(--kind-booking); }
+.errand.kind-watch .kind-icon { background: var(--kind-watch-soft); color: var(--kind-watch); }
+.errand.kind-draft .kind-icon { background: var(--kind-draft-soft); color: var(--kind-draft); }
+
+/* the right column: what kind of errand, then where it came from and when */
+.errand-meta { flex: none; display: grid; justify-items: end; gap: 2px; }
+.kind-label { font-size: 12px; font-weight: 700; color: var(--muted); }
+.errand.kind-answer .kind-label { color: var(--kind-answer); }
+.errand.kind-booking .kind-label { color: var(--kind-booking); }
+.errand.kind-watch .kind-label { color: var(--kind-watch); }
+.errand-meta .errand-when { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.channel-hint { display: inline-flex; color: var(--muted); opacity: .8; }
+.channel-hint svg { width: 12px; height: 12px; fill: currentColor; }
+
+/* an answer row reads as the answer: plain ink, no status word */
+.errand.done.kind-answer .errand-status { color: var(--ink); opacity: .78; }
+
+@media (max-width: 480px) {
+  .errand { gap: 10px; padding: 11px 12px; }
+  .errand .kind-icon { width: 30px; height: 30px; }
+  .errand-name { font-size: 15px; }
+  .kind-label { display: none; } /* the coloured icon already says the kind; the title gets the room */
+}
+
+/* working screen on a phone: three short steps in a row, text that wraps by word, not by letter */
+@media (max-width: 640px) {
+  .stages { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .stage { grid-template-columns: 1fr; align-content: start; padding: 10px; row-gap: 4px; }
+  .stage-mark { grid-row: auto; width: 22px; height: 22px; font-size: 12px; }
+  .stage-title { font-size: 13px; line-height: 1.2; }
+  .stage-detail { display: none; }
+  .stage.now .stage-detail { display: block; font-size: 12px; }
+  .errand-title { font-size: 21px; overflow-wrap: anywhere; }
+  .trail { padding: 12px 14px; }
+  .trail-item { font-size: 13px; overflow-wrap: break-word; word-break: normal; }
+}

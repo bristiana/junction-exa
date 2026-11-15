@@ -1,6 +1,6 @@
 // "Your errands": every errand of this account from every channel, newest first, with account counters on top.
 import { h, show } from './dom.js';
-import { channelOf, countersOf, errandStatus, timeAgo } from './model.js';
+import { channelOf, countersOf, errandLine, errandStatus, timeAgo } from './model.js';
 
 export const CHANNELS = {
   web: ['Web', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.9 9h-3.9a15 15 0 0 0-2-6.6A8 8 0 0 1 19.9 11ZM12 4.3A13 13 0 0 1 14 11h-4a13 13 0 0 1 2-6.7ZM4.1 13h3.9a15 15 0 0 0 2 6.6A8 8 0 0 1 4.1 13Zm3.9-2H4.1A8 8 0 0 1 10 4.4 15 15 0 0 0 8 11Zm4 8.7A13 13 0 0 1 10 13h4a13 13 0 0 1-2 6.7Zm2 0a15 15 0 0 0 2-6.7h3.9a8 8 0 0 1-5.9 6.7Z'],
@@ -59,15 +59,30 @@ function counter(value, label) {
   return value == null ? null : h('div', {}, h('dt', {}, String(value)), h('dd', {}, label));
 }
 
+// What kind of errand a row is, as its main icon; the channel it came from is a small hint by the time.
+export const KINDS = {
+  answer: ['Answer', 'M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3.3 6.3-1.4 1.4L9 13.8l6.1-6.1-1.4-1.4L9 11 7.3 9.3Z'],
+  booking: ['Booking', 'M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2Zm-2 8v9h14v-9H5Zm2 2h4v4H7v-4Z'],
+  watch: ['Watch', 'M12 5c5 0 9 4.5 10 7-1 2.5-5 7-10 7S3 14.5 2 12c1-2.5 5-7 10-7Zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z'],
+  draft: ['Draft', 'M3 17.2V21h3.8L17.8 10 14 6.2 3 17.2ZM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8L19 8.8 20.7 7Z'],
+};
+
 function row(task, status, hidden) {
   const [label, path] = CHANNELS[channelOf(task)] || CHANNELS.extension;
+  const line = errandLine(task);
+  const [, kindPath] = KINDS[line.kind] || KINDS.answer;
   return h('li', { hidden: hidden || null },
-    h('a', { class: `errand ${status.tone}`, href: `#/t/${encodeURIComponent(task.id)}` },
-      h('span', { class: 'channel', title: label }, icon(path), h('span', { class: 'sr-only' }, label)),
+    h('a', { class: `errand ${status.tone} kind-${line.kind}`, href: `#/t/${encodeURIComponent(task.id)}` },
+      h('span', { class: 'channel kind-icon', title: line.label }, icon(kindPath), h('span', { class: 'sr-only' }, `${line.label}: `)),
       h('span', { class: 'errand-text' },
         h('span', { class: 'errand-name' }, task.task),
-        h('span', { class: 'errand-status' }, h('b', {}, status.word), status.detail ? ` · ${status.detail}` : '')),
-      h('span', { class: 'errand-when' }, timeAgo(task.created_at))));
+        h('span', { class: 'errand-status' }, line.word ? h('b', {}, line.word) : null,
+          line.word && line.detail ? ` · ${line.detail}` : line.detail || '')),
+      h('span', { class: 'errand-meta' },
+        h('span', { class: 'kind-label', 'aria-hidden': 'true' }, line.label),
+        h('span', { class: 'errand-when' },
+          h('span', { class: 'channel-hint', title: `From ${label}` }, icon(path), h('span', { class: 'sr-only' }, `From ${label}, `)),
+          timeAgo(task.created_at)))));
 }
 
 export function icon(path) {
