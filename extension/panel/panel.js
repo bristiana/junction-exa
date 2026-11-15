@@ -282,6 +282,24 @@ $("showMacCode").addEventListener("click", async () => {
   } finally { button.disabled = false; }
 });
 
+$("signInBtn").addEventListener("click", async () => {
+  const button = $("signInBtn");
+  button.disabled = true;
+  $("signStatus").textContent = "Signing in…";
+  try {
+    await send({ type: "signIn", email: $("signEmail").value.trim(), password: $("signPassword").value });
+    $("signPassword").value = "";
+    currentTask = null;
+    drafts.clear();
+    answered.clear();
+    $("signStatus").textContent = "Signed in.";
+    await refreshServerStatus();
+    await send({ type: "poll" });
+  } catch (e) {
+    $("signStatus").textContent = e.message;
+  } finally { button.disabled = false; }
+});
+
 $("linkMac").addEventListener("click", async () => {
   const button = $("linkMac");
   button.disabled = true;

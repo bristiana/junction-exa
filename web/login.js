@@ -2,7 +2,6 @@
 // continue on this browser, or link WhatsApp with a one-time code.
 import { api, session } from './api.js';
 import { h, show } from './dom.js';
-import { openWhatsapp } from './whatsapp.js';
 
 // Setting the hash to the one already open fires no hashchange, so the route runs by hand.
 function goTo(next) {
@@ -41,23 +40,14 @@ export function renderLogin(next = '#/dashboard') {
       button.disabled = false;
     }
   };
-  const create = h('button', { type: 'button', class: 'btn quiet', onclick: (e) => submit(e, true) }, 'Create account');
   const form = h('form', { class: 'login-form', onsubmit: (e) => submit(e, false) },
     email, password, error,
-    h('div', { class: 'login-buttons' }, h('button', { type: 'submit', class: 'btn' }, 'Sign in'), create));
+    h('div', { class: 'login-buttons' }, h('button', { type: 'submit', class: 'btn' }, 'Sign in')));
 
   const others = [];
   if (session.hasDemo()) {
-    others.push(choice('Open the demo account', 'Bogdan, a master’s student at Aalto, settling in and at Junction. See what Vali did for him. View only: create your own account to try it.', () => { session.useDemo(); go(); }, true));
-  } else if (session.hasAccount()) {
-    others.push(choice('Continue on this browser', 'Your errands so far, no sign-in needed.', go));
+    others.push(choice('Open the demo account', 'Bogdan, a master’s student at Aalto, settling in and at Junction. See what Vali did for him. View only.', () => { session.useDemo(); go(); }, true));
   }
-  others.push(choice('Continue with WhatsApp', 'Get a code, send it to Vali, and your chats show up here.', async () => {
-    await session.ensureAccount();
-    session.markSignedIn();
-    document.getElementById('whatsapp').addEventListener('close', () => goTo(next), { once: true });
-    openWhatsapp();
-  }));
 
   show('login',
     h('div', { class: 'login card' },
@@ -66,6 +56,8 @@ export function renderLogin(next = '#/dashboard') {
       h('p', { class: 'muted login-sub' }, 'Your valet for life in Finland.'),
       session.hasDemo() ? h('div', { class: 'login-choices' }, others.shift()) : null,
       form,
-      h('p', { class: 'login-or' }, 'or'),
-      h('div', { class: 'login-choices' }, others)));
+      h('p', { class: 'muted login-sub' }, 'Vali is closed while the judges try it. Sign in with the account you were sent.'),
+      h('p', { class: 'muted login-sub' },
+        h('a', { href: '/vali-extension.zip', download: 'vali-extension.zip' }, 'Get the Chrome extension'),
+        ': unzip it, open chrome://extensions, turn on Developer mode, choose Load unpacked, then sign in from its settings with the same account.')));
 }

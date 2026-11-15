@@ -48,7 +48,10 @@ function notice(text, quiet = false) {
 // ---------- asking ----------
 // The one way an errand starts on this page: the home ask box, follow-ups and the corner bubble all call it.
 function startErrand(errand, previousTaskId) {
-  session.markSignedIn();
+  if (!session.signedIn()) {  // closed for judging: no new accounts, so sign in first
+    location.hash = '#/login';
+    return Promise.reject(new Error('Sign in first.'));
+  }
   return api.createTask(errand, previousTaskId, Object.keys(loadProfile()));
 }
 

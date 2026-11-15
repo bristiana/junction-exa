@@ -114,6 +114,8 @@ def check_task_budget(application, user, *, count_request=True):
     state = application.state
     if count_request:
         state.limiter.check('user:' + user['id'], state.limiter.user_limit, what='errands')
+    if user['id'] in getattr(state.config, 'owner_ids', ()):  # the presenter's account is never stopped by others' spend
+        return
     if state.store.daily_spend(user['id']) >= state.config.daily_cap_usd:
         raise HTTPException(429, 'Daily research spend cap reached')
     if state.store.daily_spend() >= state.config.global_daily_cap_usd:  # kill switch across all users

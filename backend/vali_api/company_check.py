@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from .citations import domain_of, fold, split_sentences, squash, verbatim
 from .exa import ExaError, TTLCache
-from .guard import authenticate
+from .guard import authenticate, check_task_budget
 
 logger = logging.getLogger('vali.company_check')
 
@@ -269,6 +269,7 @@ router = APIRouter()
 def check(body: CheckBody, request: Request, user=Depends(authenticate)):
     state = request.app.state
     state.limiter.check('check:' + user['id'], 20, 3600, what='company checks')
+    check_task_budget(request.app, user, count_request=False)
     cache = cache_of(state)
     key = '|'.join([' '.join(name_tokens(body.name)), clean_domain(body.domain), fold(squash(body.city))])
     hit = cache.get(key)
