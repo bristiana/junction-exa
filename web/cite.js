@@ -1,6 +1,6 @@
 // Numbered citation pills and the one dark popover they share: "n · domain · title · read today HH:MM" and the quote.
 import { h } from './dom.js';
-import { publishedStamp, readStamp } from './model.js';
+import { publishedStamp, quoteUrl, readStamp } from './model.js';
 
 let popover = null;
 let pinned = null;
@@ -29,7 +29,7 @@ function card(task, source) {
     source.quote ? h('blockquote', { class: 'pop-quote' }, `“${source.quote}”`) : null,
     stamp || source.stale ? h('p', { class: source.stale ? 'pop-stamp stale' : 'pop-stamp' },
       [stamp, source.stale ? 'may be outdated' : ''].filter(Boolean).join(' · ')) : null,
-    h('a', { class: 'pop-link', href: source.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open the page ↗'),
+    h('a', { class: 'pop-link', href: quoteUrl(source.url, source.quote) || source.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open the page ↗'),
   ];
 }
 
@@ -41,6 +41,7 @@ function place(anchor, children) {
     document.addEventListener('click', () => { pinned = null; hide(); });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { pinned = null; hide(); } });
     window.addEventListener('scroll', () => !pinned && hide(), { passive: true });
+    window.addEventListener('hashchange', () => { pinned = null; hide(); }); // a pinned quote never follows you to another page
   }
   popover.replaceChildren(...children.filter(Boolean));
   popover.hidden = false;

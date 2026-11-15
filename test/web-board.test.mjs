@@ -94,7 +94,7 @@ test('a stopped booking reads Stopped even when the research had asked something
   const { errandStatus } = await import('../web/model.js');
   const task = { research: { status: 'completed', question: { text: 'Which day?', answer: null }, output: { structured: { status: 'needs_info' } } },
                  execution: { status: 'stopped' } };
-  assert.equal(errandStatus(task).word, 'Stopped');
+  assert.equal(errandStatus(task).word, 'Held, nothing sent');
   assert.equal(errandStatus({ ...task, execution: null }).word, 'Needs your answer');
 });
 

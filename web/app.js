@@ -30,6 +30,7 @@ $('exa-uses').replaceChildren(...EXA_USES.map(([label, detail]) => h('div', {}, 
 function showView(name) {
   for (const id of ['home', 'working', 'answer', 'hub', 'dashboard', 'login']) $(id).hidden = id !== name;
   document.body.classList.toggle('signed-in', session.signedIn());
+  document.body.dataset.view = name;
   for (const link of document.querySelectorAll('.top [data-view]')) {
     if (link.dataset.view === name) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
@@ -45,6 +46,11 @@ function notice(text, quiet = false) {
   node.hidden = !text;
   node.classList.toggle('quiet', quiet);
 }
+
+// The install steps show only right after "Get the extension" is clicked.
+document.addEventListener('click', (event) => {
+  if (event.target.closest?.('a[href="/vali-extension.zip"]')) notice('Chrome extension: unzip, open chrome://extensions, turn on Developer mode, Load unpacked, then sign in from its settings.', true);
+});
 
 // ---------- asking ----------
 // The one way an errand starts on this page: the home ask box, follow-ups and the corner bubble all call it.

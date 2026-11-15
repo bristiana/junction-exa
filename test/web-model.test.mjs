@@ -63,7 +63,7 @@ test("errand rows: who acts next, which channel, and counters with or without /v
   assert.equal(errandStatus(legacy).word, "Done");
   assert.equal(errandStatus({ ...legacy, execution: { status: "awaiting_approval", approval: { summary: "Send the form" } } }).tone, "you");
   assert.equal(errandStatus({ research: { status: "running", progress: [] } }).word, "Working");
-  assert.equal(errandStatus({ research: { status: "cancelled" } }).word, "Stopped");
+  assert.equal(errandStatus({ research: { status: "cancelled" } }).word, "Held, nothing sent");
   assert.equal(channelOf({ source: "voice" }), "voice");
   assert.equal(channelOf({ channel: "web", source: "extension" }), "web");
   assert.equal(channelOf({ source: "extension", page: { title: "Uploaded letter" } }), "letter");
@@ -87,7 +87,7 @@ test("the privacy sheet lists each page once, browser pages first", () => {
 
 test("an approved run reads as submitting before the worker notices", () => {
   assert.equal(runStatus({ execution: { status: "awaiting_approval", approval_decision: "approved" } }), "submitting");
-  assert.equal(errandStatus({ ...legacy, execution: { status: "running", approval_decision: "stopped" } }).word, "Stopped");
+  assert.equal(errandStatus({ ...legacy, execution: { status: "running", approval_decision: "stopped" } }).word, "Held, nothing sent");
 });
 
 test("a drafted email or message is shown with its text; other actions are not drafts", () => {
@@ -163,7 +163,7 @@ test("errand rows are shaped by kind: answer, booking, watch, draft", async () =
   const booking = { mode: "book", task: "Book a sauna", research: done, execution: run };
   assert.deepEqual(errandLine(booking), { kind: "booking", label: "Booking", word: "Waiting for your OK", detail: "Kulttuurisauna, Sun 22 Nov 17:30" });
   assert.equal(errandLine({ ...booking, execution: { ...run, status: "done" } }).word, "Booked");
-  assert.equal(errandLine({ ...booking, execution: { ...run, status: "stopped" } }).word, "Stopped, nothing sent");
+  assert.equal(errandLine({ ...booking, execution: { ...run, status: "stopped" } }).word, "Held, nothing sent");
   const watch = { mode: "watch", research: { ...done, watch_id: "w_1" }, execution: { status: "done" } };
   assert.deepEqual(errandLine(watch), { kind: "watch", label: "Watch", word: "Checks daily", detail: "no new matches yet" });
   watch.research.updates = [{ text: "new: Studio 545 €", sources: [{ url: "https://hoas.fi/a", title: "Studio at Kilonkallio 6" }] }];
@@ -186,4 +186,33 @@ test("an answer goes to whoever asked: running form, stopped run, Vali's own que
   assert.equal(answerRoute({ ...base, execution: { status: 'failed', steps: [] } }, ''), 'continue');
   assert.equal(answerRoute(base, 'Which city?'), 'research');
   assert.equal(answerRoute({ ...base, research: { ...base.research, question: { ...stale, answer: 'Espoo' } } }, 'Which date?'), 'followup');
+});
+
+test("a citation links to its quote with a text fragment of the first words", async () => {
+  const { quoteUrl } = await import('../web/model.js');
+  assert.equal(quoteUrl('https://danskebank.fi/en/basic', 'A Finnish personal identity code is not required to open basic banking services.'),
+    'https://danskebank.fi/en/basic#:~:text=A%20Finnish%20personal%20identity%20code%20is%20not%20required%20to%20open');
+  assert.equal(quoteUrl('https://migri.fi/en/reg', 'Apply for the registration of your right of residence (EU registration) if:'),
+    'https://migri.fi/en/reg#:~:text=Apply%20for%20the%20registration%20of%20your%20right%20of%20residence%20(EU%20registration)%20if');
+  assert.equal(quoteUrl('https://a.fi/p#top', 'Choose a date, a time and the ticket types you want'), 'https://a.fi/p#top:~:text=Choose%20a%20date%2C%20a%20time%20and%20the%20ticket%20types%20you%20want');
+  assert.equal(quoteUrl('https://a.fi/p', 'Self-service opens at 9…'), 'https://a.fi/p#:~:text=Self%2Dservice%20opens%20at%209');
+  assert.equal(quoteUrl('https://a.fi/p', ''), 'https://a.fi/p');
+  assert.equal(quoteUrl('https://a.fi/p#:~:text=x', 'one two three four'), 'https://a.fi/p#:~:text=x');
+  assert.equal(quoteUrl('javascript:alert(1)', 'one two three four'), null);
+});
+
+test("held, handed-to-you and blocked runs read in plain words", async () => {
+  const { errandStatus, bookingStatus, failReason, plainError, BLOCKED_LINE } = await import('../web/model.js');
+  const done = { status: 'completed', output: { structured: { answer: 'Yes.' } } };
+  const captcha = { research: done, execution: { status: 'failed', result: 'needs captcha: finish by hand at https://lomakkeet.dvv.fi/x', steps: [] } };
+  assert.deepEqual([errandStatus(captcha).word, errandStatus(captcha).tone], ['Handed to you', 'you']);
+  assert.equal(bookingStatus(captcha).word, 'Handed to you');
+  const demo = { research: done, execution: { status: 'failed', result: 'This is the demo, so Vali stopped right before sending.' } };
+  assert.deepEqual([errandStatus(demo).word, errandStatus(demo).tone, errandStatus(demo).group], ['Held, nothing sent', 'held', 'failed']);
+  const raw = "Error: locator.click: Target closed\n    at ShadowRoot.querySelector (/app/x.js:1:2)";
+  assert.equal(plainError(raw), BLOCKED_LINE);
+  assert.equal(plainError('The site said the slot is full.'), 'The site said the slot is full.');
+  const broke = { research: done, execution: { status: 'failed', error: raw, steps: [] } };
+  assert.equal(errandStatus(broke).detail, BLOCKED_LINE);
+  assert.equal(failReason(broke).text, BLOCKED_LINE);
 });
