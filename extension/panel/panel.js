@@ -130,16 +130,6 @@ $("saveSettings").addEventListener("click", async () => {
   const profile = {};
   for (const i of $("profileFields").querySelectorAll("input")) if (i.value.trim()) profile[i.dataset.k] = i.value.trim();
   await chrome.storage.local.set({ exaKey: $("exaKey").value.trim(), effort: $("effort").value, profile, presence: $("presence").checked });
-  // The first time a server URL is saved, this browser gets a user on it (same as pressing Connect).
-  const url = $("backendUrl").value.trim();
-  try {
-    if (!url) await useDirectMode();
-    else if (normalizeBaseUrl(url) !== state.backendUrl) await connectServer(url);
-  } catch (e) {
-    $("backendStatus").textContent = e.message;
-    toast("Saved, but the Vali server did not connect");
-    return;
-  }
   $("settings").hidden = true;
   toast("Saved");
 });
@@ -164,6 +154,7 @@ async function connectServer(url) {
 
 function showServerStatus(who) {
   $("backendStatus").textContent = "Connected";
+  $("signStatus").textContent = "Signed in.";
   $("pairBtn").disabled = false;
   $("waStatus").textContent = who?.whatsapp_linked ? `Linked${who.whatsapp_last4 ? " (…" + who.whatsapp_last4 + ")" : ""}` : "Not linked yet";
 }
@@ -185,6 +176,7 @@ async function refreshServerStatus() {
     showServerStatus(await serverMe());
   } catch (e) {
     st.textContent = "Not connected: " + e.message;
+    $("signStatus").textContent = "Not signed in yet.";
   }
 }
 
