@@ -1,5 +1,5 @@
 // The dashboard's numbers and lists, read from GET /v1/tasks, /v1/stats and /v1/watches. Pure, no DOM.
-import { TERMINAL, activityOf, channelOf, domainOf, errandStatus, friendlySteps, webWork, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
+import { TERMINAL, activityOf, errorText, channelOf, domainOf, errandStatus, friendlySteps, webWork, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
 import { exaUses } from './exa-uses.js';
 
 const list = (value) => (Array.isArray(value) ? value : []);
@@ -184,7 +184,7 @@ export function threadOf(task) {
   } else if (research.status === 'cancelled') {
     bubbles.push({ who: 'vali', text: 'Stopped. Nothing was sent.', tone: 'failed' });
   } else if (research.status === 'failed') {
-    bubbles.push({ who: 'vali', text: String(research.error || "I couldn't finish this one."), tone: 'failed' });
+    bubbles.push({ who: 'vali', text: errorText(research.error) || "I couldn't finish this one.", tone: 'failed' });
   } else {
     const facts = list(structured(task).key_facts).filter((f) => f?.label && f?.value).slice(0, 3)
       .map((f) => ({ label: String(f.label), value: String(f.value) }));
@@ -216,7 +216,7 @@ function runBubbles(task) {
   }
   if (run.approval_decision === 'approved') out.push({ who: 'me', text: 'Approve' });
   if (run.approval_decision === 'stopped') out.push({ who: 'me', text: 'Stop' });
-  if (run.error) out.push({ who: 'vali', text: plainPlaceholders(run.error), tone: 'failed' });
+  if (run.error) out.push({ who: 'vali', text: plainPlaceholders(errorText(run.error)), tone: 'failed' });
   else if (state === 'stopped') { /* the state block under the chat says where it stopped */ }
   else if (run.result) out.push({ who: 'vali', text: plainPlaceholders(run.result), tone: 'done' });
   return out;
