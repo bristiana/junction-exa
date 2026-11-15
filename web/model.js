@@ -495,3 +495,160 @@ export function errandLine(task) {
   }
   return first ? line('', first) : line(status.word, status.detail);
 }
+
+// ---------- the errand page's shape ----------
+// Which card leads the errand page: a watch, a form Vali fills, a draft to send, or an answer.
+export function pageKind(task) {
+  if (task?.mode === 'watch' || task?.research?.watch_id) return 'watch';
+  if (task?.execution || errandStage(task).stages.length > 2) return 'form';
+  if (draftsOf(task).length && !['find', 'check'].includes(task?.mode)) return 'draft';
+  return 'answer';
+}
+
+const WHEN_LABEL = /\b(date|time|when|slot|day|visit)\b|aika|päivä/i;
+
+// When the booking is for: the date and time Vali filled, else the calendar entry it prepared, else a dated key fact.
+export function bookingWhen(task) {
+  const filled = list(task?.execution?.approval?.filled).filter((f) => f?.label && /\d/.test(f?.value || '') && WHEN_LABEL.test(f.label));
+  if (filled.length) return filled.slice(0, 2).map((f) => String(f.value)).join(', ');
+  const cal = list(structured(task).actions).find((a) => a?.type === 'calendar' && a.start);
+  const at = cal ? new Date(cal.start) : null;
+  if (at && !Number.isNaN(at.getTime())) {
+    return at.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Helsinki' });
+  }
+  if (task?.mode !== 'book') return '';
+  const fact = list(structured(task).key_facts).find((f) => f?.label && /\d/.test(f?.value || '') && WHEN_LABEL.test(f.label) && !/response|processing|deadline/i.test(f.label));
+  return fact ? String(fact.value).split(';')[0].trim() : '';
+}
+
+// Where it happens: the calendar entry's place, else the site Vali works on.
+export function calendarWhere(task) {
+  const cal = list(structured(task).actions).find((a) => a?.type === 'calendar' && a.location);
+  return cal ? String(cal.location) : '';
+}
+
+// One status word for the booking card and its tone.
+export function bookingStatus(task) {
+  const run = runStatus(task);
+  const sent = ['write', 'claim'].includes(task?.mode) ? 'Sent' : task?.mode === 'book' ? 'Booked' : 'Done';
+  if (!run) return errandStage(task).stages.length > 2 ? { word: 'Ready to fill', tone: 'ready' } : { word: 'Not started', tone: 'stopped' };
+  if (run === 'awaiting_approval') return { word: 'Waiting for your OK', tone: 'you' };
+  if (['starting', 'running'].includes(run)) return { word: 'Filling', tone: 'working' };
+  if (run === 'submitting') return { word: 'Sending', tone: 'working' };
+  if (['done', 'completed'].includes(run)) {
+    // A run that ended without your OK sent nothing: the answer is found, nothing is booked.
+    return task.execution.approval_decision === 'approved' ? { word: sent, tone: 'done' } : { word: 'Not booked yet', tone: 'ready' };
+  }
+  if (run === 'stopped') return { word: 'Stopped', tone: 'stopped' };
+  return { word: "Couldn't finish", tone: 'failed' };
+}
+
+// Today's matches for a watch: its key facts with the link Vali kept for each, without the "Watching for" line.
+export function watchMatches(task) {
+  const links = list(structured(task).actions).filter((a) => safeUrl(a?.url));
+  const used = new Set();
+  return list(structured(task).key_facts).filter((f) => f?.label && f?.value && f.label !== 'Watching for').map((f) => {
+    const i = links.findIndex((a, j) => !used.has(j) && a.label === f.label);
+    if (i >= 0) used.add(i);
+    return { label: String(f.label), value: String(f.value), url: i >= 0 ? safeUrl(links[i].url) : null };
+  });
+}
+
+export function watchCriteria(task) {
+  const fact = list(structured(task).key_facts).find((f) => f?.label === 'Watching for' && f.value);
+  return String(fact?.value || task?.task || '');
+}
+
+// What Exa did for a form errand: the research before it (exaTrail) and the lookups made while filling.
+// lookups: execution.exa [{kind: 'search'|'read', query|url}]; used: execution.sources [{url, title}].
+export function formExa(task) {
+  const trail = exaTrail(task);
+  const run = task?.execution || {};
+  const lookups = list(run.exa).filter((e) => e && ['search', 'read'].includes(e.kind)).map((e) => ({
+    kind: e.kind, text: e.kind === 'search' ? String(e.query || '') : domainOf(e.url) || String(e.url || ''),
+    url: safeUrl(e.url), failed: Boolean(e.error),
+  })).filter((e) => e.text);
+  const seen = new Set();
+  const used = list(run.sources).map((s) => safeUrl(s?.url ?? s)).filter((url) => url && !seen.has(url) && seen.add(url))
+    .map((url) => ({ url, domain: domainOf(url) }));
+  return { ...trail, lookups, used };
+}
+
+// What Vali typed or picked on the form: the approval's list, else the run's own, with field labels cleaned up.
+// Picker labels such as "-- Make a choice -- NAINEN / WOMAN MIES / MAN" read as "Choice".
+export function filledOf(task) {
+  const run = task?.execution || {};
+  const given = list(run.approval?.filled).length ? run.approval.filled : list(run.filled);
+  return given.filter((f) => f?.label && f.value != null && String(f.value) !== '').map((f) => {
+    let label = String(f.label).replace(/[*:]+\s*$/, '').trim();
+    if (/^--/.test(label) || label.length > 40) label = 'Choice';
+    const value = String(f.value) === 'checked' ? 'Yes' : String(f.value);
+    return { label, value };
+  }).slice(0, 8);
+}
+
+const BRING = /\b(bring|documents?|attachments?|proof|what to take|take with)\b/i;
+
+// What the errand still needs from the person, as a short checklist: the open question, missing details, what to bring.
+// missing: [{key, label}] from profile.missingDetails, passed in so this stays free of storage.
+export function needsOf(task, missing = []) {
+  const stage = errandStage(task);
+  const items = [];
+  const ask = stage.next?.kind;
+  if (['answer', 'reply'].includes(ask) || (ask === 'refill' && stage.next.question)) {
+    items.push({ kind: 'question', text: String(stage.next.question || '') });
+  } else if (structured(task).status === 'needs_info') {
+    for (const text of missingInfo(task).slice(0, 3)) items.push({ kind: 'question', text });
+  }
+  const run = runStatus(task);
+  if (missing.length && !['done', 'completed', 'submitting', 'awaiting_approval'].includes(run) && stage.stages.length > 2) {
+    items.push({ kind: 'details', text: missing.map((d) => d.label.toLowerCase()).join(', '), missing });
+  }
+  const bring = list(structured(task).key_facts).find((f) => f?.label && f?.value && BRING.test(f.label) && !/not (required|needed)/i.test(f.value));
+  if (bring) items.push({ kind: 'bring', text: shorten(String(bring.value), 140), label: String(bring.label) });
+  return items.filter((item) => item.text);
+}
+
+// A long value cut at a sentence or word end, for a fact read at a glance.
+export function shorten(text, n = 120) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= n) return t;
+  const cut = t.slice(0, n);
+  const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('; '));
+  return (stop > n * 0.4 ? cut.slice(0, stop + 1) : cut.slice(0, cut.lastIndexOf(' ')).replace(/[,;:]$/, '') + '…');
+}
+
+// Why a browser run could not finish, in plain words; null when it did not fail.
+const TECHNICAL = /timeout|locator|playwright|net::|ERR_|exception|traceback|selector|\bnull\b|undefined/i;
+export function failReason(task) {
+  const run = task?.execution;
+  if (runStatus(task) !== 'failed') return null;
+  const error = String(run?.error || '').trim();
+  const last = friendlySteps(task).at(-1) || '';
+  const url = safeUrl(run?.current_url || run?.start_url);
+  if (error && !TECHNICAL.test(error)) return { text: shorten(error, 160), url };
+  if (error) return { text: `The site was too slow or changed while Vali was filling it${last ? `, after: ${last}` : ''}.`, url };
+  if (/^Opened\b/.test(last)) return { text: 'The site stopped Vali right after the form opened. Open it yourself:', url };
+  if (last) return { text: `Vali got stuck after: ${last.replace(/\.$/, '')}. Open it yourself:`, url };
+  return { text: 'The site stopped Vali before the form opened. Open it yourself:', url };
+}
+
+// A draft with {{placeholders}} filled from your saved details, else a readable blank such as "[your name]".
+export function fillBlanks(text, profile = {}) {
+  return String(text ?? '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, key) => profile[key.toLowerCase()] || `[your ${key.toLowerCase().replaceAll('_', ' ')}]`);
+}
+
+// Which form this is, in a few words: the approval's first sentence, else the prepared action's label, else the site.
+export function formTitle(task) {
+  const summary = sentences(task?.execution?.approval?.summary || '')[0];
+  if (summary) return shorten(summary, 90);
+  const action = primaryAction(task);
+  if (action?.label) return action.label;
+  const site = domainOf(task?.execution?.current_url || task?.execution?.start_url) || action?.domain;
+  return site ? `Form on ${site}` : '';
+}
+
+// The errand's own words with web addresses shown as their site, so a pasted link does not fill the title.
+export function readableTitle(text) {
+  return String(text || '').replace(/https?:\/\/[^\s)]+/g, (url) => domainOf(url.replace(/[.,;:]+$/, '')) || url).replace(/:\s*$/, '');
+}

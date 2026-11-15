@@ -69,3 +69,9 @@ function approval(details, profile, onApprove, onStop, quiet = false) {
       h('button', { type: 'button', class: 'btn', onclick: (e) => onApprove(e.currentTarget) }, 'Approve'),
       h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop')));
 }
+
+// The run's picture on its own (live frame or last screenshot), for the booking card on top of the errand page.
+export function runFrame(task) {
+  stopFrames();
+  return task?.execution ? frame(task, LIVE.has(runStatus(task))) : null;
+}
