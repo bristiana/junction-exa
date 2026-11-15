@@ -842,6 +842,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.post('/v1/tasks/{tid}/approve')
     def approve(tid: str, user=Depends(authenticate)):
+        return approve_for_user(tid, user)
+
+    def approve_for_user(tid, user, notify=True):
         task = owned(tid, user)
         config = application.state.config
         host = (urlsplit((task['execution'] or {}).get('current_url') or (task['execution'] or {}).get('start_url') or '').hostname or '').lower().rstrip('.')  # httpbin.org. is httpbin.org
@@ -850,7 +853,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             # The shared demo never sends a real application: Vali stops right before the submit.
             application.state.store.patch_execution(tid, {'status': 'stopped', 'approval_decision': 'stopped', 'result': (
                 f'This is the demo, so Vali stopped right before sending. Nothing reached {host or "the site"}.')})
-            push_task(application, tid, render_execution_update)
+            if notify:  # WhatsApp's own Approve replies with the update itself
+                push_task(application, tid, render_execution_update)
             return application.state.store.get_task(tid)
         if not application.state.store.approve_execution(tid, task['execution']):
             raise HTTPException(409, 'Execution is not awaiting approval')
@@ -1068,7 +1072,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         get_active_task=active_task,
         message=lambda tid, text: message_for_user(tid, MessageBody(text=text), sender.get(), 'whatsapp'),
         execute=lambda tid, index: execute_for_user(tid, ExecuteBody(action_index=index), sender.get(), 'whatsapp'),
-        approve=lambda tid: approve(tid, sender.get()), stop=lambda tid: stop_for_user(tid, sender.get(), notify=False),
+        approve=lambda tid: approve_for_user(tid, sender.get(), notify=False), stop=lambda tid: stop_for_user(tid, sender.get(), notify=False),
         resume=lambda tid: continue_for_user(tid or resumable_task(sender.get()), ContinueBody(), sender.get(), 'whatsapp'),
         transcribe=transcribe if config.elevenlabs_api_key else None,
         read_letter=read_letter if config.anthropic_api_key else None,
