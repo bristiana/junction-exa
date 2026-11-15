@@ -38,7 +38,7 @@ from .stats import channel_of_origin, pick_channel, summarize
 from .store import make_store, now, token_hash
 from .uploads import UPLOAD_PATHS, UploadLimit
 from .voice_agent import add_voice_routes
-from vali_wa.flow import WhatsAppFlow
+from vali_wa.flow import WhatsAppFlow, stale as wa_stale
 from vali_wa.webhook import parse_webhook, verify_signature
 from vali_wa.render import render_result, render_execution_update, render_error
 from .wa_channel import ChannelAPI, push_task, push_watch_update, log_failure, logger as whatsapp_logger
@@ -1016,8 +1016,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def active_task(user):
         # The latest actionable task across both channels, even behind newer research.
         tasks = application.state.store.list_tasks(user['id'], 100)
-        return next((task for task in tasks if
-                     (task.get('execution') or {}).get('status') in {'starting', 'running', 'awaiting_approval', 'submitting'}),
+        return next((task for task in tasks if  # a run quiet for 15 minutes is dead and no longer takes replies
+                     (task.get('execution') or {}).get('status') in ACTIVE_EXECUTION and not wa_stale(task)),
                     next((task for task in tasks if task['research']['status'] == 'completed'
                           and not task.get('execution')), tasks[0] if tasks else None))
 

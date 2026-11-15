@@ -7,6 +7,8 @@ and make final approval atomic in their task store.
 """
 
 import inspect
+import re
+from datetime import datetime, timedelta, timezone
 
 from .parse import Command, parse_command
 from .render import (continue_buttons, next_errand, render_ack, render_check, render_error, render_execution_update,
@@ -16,6 +18,36 @@ from .render import (continue_buttons, next_errand, render_ack, render_check, re
 SITUATION_REPLIES = {"eu": {"citizenship": "eu"}, "non_eu": {"citizenship": "non_eu"},
                      "student": {"student": True}, "not_student": {"student": False}}
 STUDENT_QUESTION = ("Are you a student here?", [("sit:student", "Student"), ("sit:not_student", "Not a student")])
+
+
+ACTIVE = {"starting", "running", "awaiting_approval", "submitting"}
+# A live run patches the task every few seconds and an approval times out after 10 minutes: a quieter one is dead.
+STALE = timedelta(minutes=15)
+_URL = re.compile(r"https?://|\bwww\.", re.I)
+WAITING = ("Vali is still waiting for your OK on the earlier errand. Reply *approve* to send it or *stop*. "
+           "To start a new errand, send it with a link or in a full sentence.")
+
+
+def stale(task, now=None):
+    try:
+        at = datetime.fromisoformat((task or {}).get("updated_at") or "")
+    except (TypeError, ValueError):
+        return False
+    at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+    return (now or datetime.now(timezone.utc)) - at > STALE
+
+
+def starts_new_errand(task, text):
+    """While a form waits for Approve it reads no messages, so a text that is clearly an errand of its own (a link,
+    a full sentence) starts one; so does any text once the run has gone quiet. A form's open question takes the reply."""
+    execution = (task or {}).get("execution") or {}
+    if execution.get("status") not in ACTIVE or not text.strip():
+        return False
+    if stale(task):
+        return True
+    if execution.get("question") or execution.get("status") != "awaiting_approval":
+        return False
+    return bool(_URL.search(text)) or len(text.split()) >= 6
 
 
 async def _call(callback, *args, **kwargs):
@@ -130,8 +162,9 @@ class WhatsAppFlow:
                 self.reaction = "👁️"
                 return render_ack(watch)
             command = Command("choose", n=int(n)) if action == "choose" else parse_command(action)
+        fresh = msg.kind == "text" and command.kind == "new_errand" and starts_new_errand(task, text)
         # Short answers (yes, a number, etc.) belong to an outstanding question.
-        if self.message and task and msg.kind == "text" and text.strip() and (
+        if self.message and task and not fresh and msg.kind == "text" and text.strip() and (
                 execution.get("status") in {"starting", "running"} or execution.get("question")) and (
                 command.kind not in {"stop", "status", "continue"} or (
                     execution.get("question") and text.strip().casefold() in {"no", "nu", "ei"})):
@@ -183,13 +216,15 @@ class WhatsAppFlow:
                                  "stop": "Stop requested."}[command.kind])
         if not text.strip():
             return render_help()
-        if self.message and task and execution.get("status") in {"starting", "running", "awaiting_approval", "submitting"}:
+        if self.message and task and not fresh and execution.get("status") in ACTIVE:
             await _call(self.message, task["id"], command.text)
             self.reaction = "✍️"  # the running errand has it; a reaction says so without a message
-            return []
+            # A form waiting for Approve reads nothing until then: say how to go on instead of a silent reaction.
+            return [WAITING] if execution.get("status") == "awaiting_approval" else []
+        waiting = fresh and execution.get("status") == "awaiting_approval" and not stale(task)
         task = await _call(self.create_task, user, command.text, source="whatsapp")
         self.reaction = "👀"
-        return render_ack(task)
+        return render_ack(task) + (["Your earlier errand still waits for your OK: reply *approve* or *stop*."] if waiting else [])
 
     async def _continue(self, tid):
         """Start the stopped run again; it asks again in this chat for anything it was waiting on."""
