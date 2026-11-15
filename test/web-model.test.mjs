@@ -153,3 +153,25 @@ test("browser stories shorten navigation, collapse repeats and show detail names
   assert.deepEqual(detailsOf({ execution: { steps: [{ text: 'Opened https://example.org' }] } }), []);
   assert.deepEqual(detailsOf({ execution: { steps: [{ text: 'Filled in your email' }] } }), ['email']);
 });
+
+test("errand rows are shaped by kind: answer, booking, watch, draft", async () => {
+  const { errandKind, errandLine, shortWhen, siteName } = await import("../web/model.js");
+  const done = { status: "completed", output: { structured: { answer: "Yes. You can open a basic account with a passport [2]. Bring proof of study." } } };
+  assert.equal(errandKind({ mode: "check", research: done }), "answer");
+  assert.deepEqual(errandLine({ mode: "check", research: done }), { kind: "answer", label: "Answer", word: "", detail: "Yes. You can open a basic account with a passport." });
+  const run = { status: "awaiting_approval", start_url: "https://kulttuurisauna.fi/", approval: { filled: [{ label: "Date", value: "22 Nov 2026" }, { label: "Time", value: "17:30" }] } };
+  const booking = { mode: "book", task: "Book a sauna", research: done, execution: run };
+  assert.deepEqual(errandLine(booking), { kind: "booking", label: "Booking", word: "Waiting for your OK", detail: "Kulttuurisauna, Sun 22 Nov 17:30" });
+  assert.equal(errandLine({ ...booking, execution: { ...run, status: "done" } }).word, "Booked");
+  assert.equal(errandLine({ ...booking, execution: { ...run, status: "stopped" } }).word, "Stopped, nothing sent");
+  const watch = { mode: "watch", research: { ...done, watch_id: "w_1" }, execution: { status: "done" } };
+  assert.deepEqual(errandLine(watch), { kind: "watch", label: "Watch", word: "Checks daily", detail: "no new matches yet" });
+  watch.research.updates = [{ text: "new: Studio 545 €", sources: [{ url: "https://hoas.fi/a", title: "Studio at Kilonkallio 6" }] }];
+  assert.equal(errandLine(watch).detail, "Studio at Kilonkallio 6");
+  assert.equal(errandKind({ mode: "write", research: done }), "draft");
+  assert.equal(errandLine({ mode: "claim", research: done }).label, "Form");
+  assert.equal(shortWhen("this Friday at 17:30"), "Fri 17:30");
+  assert.equal(shortWhen("2026-11-22T17:30:00"), "Sun 22 Nov 17:30");
+  assert.equal(shortWhen("22.11.2026 klo 17.30"), "Sun 22 Nov 17:30");
+  assert.equal(siteName("https://www.dvv.fi/en"), "DVV");
+});
