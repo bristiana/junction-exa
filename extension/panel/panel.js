@@ -126,10 +126,25 @@ $("settingsBtn").addEventListener("click", () => {
   if (!s.hidden) renderSettings();
   else clearMacCode();
 });
-$("saveSettings").addEventListener("click", async () => {
+async function saveSettings() {
   const profile = {};
   for (const i of $("profileFields").querySelectorAll("input")) if (i.value.trim()) profile[i.dataset.k] = i.value.trim();
   await chrome.storage.local.set({ exaKey: $("exaKey").value.trim(), effort: $("effort").value, profile, presence: $("presence").checked });
+}
+$("useDemoDetails").addEventListener("click", async () => {
+  const demo = {
+    name: "Bogdan Caraeane", email: "demo@vali.demo", phone: "+358 40 123 4567",
+    address: "Otakaari 1", postal_code: "02150", city: "Espoo", country: "Finland",
+    date_of_birth: "2000-01-01", nationality: "Romanian",
+  };
+  for (const i of $("profileFields").querySelectorAll("input")) if (i.dataset.k in demo) i.value = demo[i.dataset.k];
+  try {
+    await saveSettings();
+    toast("Demo details saved");
+  } catch (e) { toast(e.message); }
+});
+$("saveSettings").addEventListener("click", async () => {
+  await saveSettings();
   $("settings").hidden = true;
   toast("Saved");
 });
@@ -594,7 +609,7 @@ function renderFormFill(t, fills) {
         onclick: async () => {
           try {
             const res = await send({ type: "fill", taskId: t.id });
-            toast(res.error ? res.error : `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check them, then submit yourself.`);
+            toast(res.error ? res.error : `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check them and press submit yourself.`);
           } catch (e) { toast(e.message); }
         },
       })),
@@ -784,7 +799,7 @@ function fillHereButton(t) {
     onclick: async () => {
       try {
         const res = await send({ type: "fillHere", taskId: t.id, tabId: activeTab?.id, url: activeTab?.url });
-        toast(res.error || `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check and send it yourself.`);
+        toast(res.error || `Filled ${res.filled} field${res.filled === 1 ? "" : "s"}. Check them and press submit yourself.`);
       } catch (e) { toast(e.message); }
     },
   });
