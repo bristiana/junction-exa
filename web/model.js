@@ -295,7 +295,7 @@ export function errandStage(task) {
     || list(structured(task).actions).some((a) => ['fill', 'book', 'apply'].includes(a?.type) && safeUrl(a?.url))
     || /^(?:(?:please|can you|could you|help me|I want to|I need to|I need you to)\s+)*(?:fill\b|book\b|apply\b)/i.test(String(task?.task || '').trim());
   const canFill = action && wantsForm;
-  const stages = canFill || run ? ['Found', 'Filled', 'Your OK', 'Done'] : ['Found', 'Done'];
+  const stages = canFill || run ? ['Research', 'Fill', 'Your OK', 'Done'] : ['Research', 'Done'];
   const done = stages.length - 1;
   const out = (at, tone, line, next, extra = {}) => ({ stages, at, tone, line, next, site, ...extra });
   if (!TERMINAL.has(research.status)) return out(0, 'working', 'Vali is reading the web with Exa.', null);

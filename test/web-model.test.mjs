@@ -113,7 +113,7 @@ test("information links finish research without offering to fill a form", async 
       { type: 'open_link', label: 'Visit the site', url: 'https://ainoapteekki.fi/hours' },
     ] } } } };
     assert.equal(errandStage(task).next.kind, 'done', text);
-    assert.deepEqual(errandStage(task).stages, ['Found', 'Done']);
+    assert.deepEqual(errandStage(task).stages, ['Research', 'Done']);
     assert.equal(linkActions(task)[0].domain, 'ainoapteekki.fi');
   }
 });
