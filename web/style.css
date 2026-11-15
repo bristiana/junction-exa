@@ -655,3 +655,31 @@ body.signed-in .top .guest { display: none; }
 body:not(.signed-in) #errands { display: none; }
 
 .extension-hint { font-size: 13px; margin: 12px 0 20px; }
+
+/* signed in, home is the ask box and your errands; the story about Vali is for visitors */
+body.signed-in #home .landing { display: none; }
+
+/* working: the three things Vali does, with the Exa feature behind each */
+.stages { list-style: none; margin: 0 0 22px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: left; }
+.stage { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 2px; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); }
+.stage-mark { grid-row: span 2; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; border: 2px solid var(--line-3); }
+.stage-title { font-weight: 700; font-size: 15px; }
+.stage-detail { font-size: 13px; line-height: 1.35; }
+.stage.now { border-color: var(--accent); box-shadow: 0 0 0 4px var(--ring-soft); color: var(--ink); }
+.stage.now .stage-mark { border-color: var(--accent); background: var(--accent); color: #fff; animation: pulse 1.2s infinite; }
+.stage.done { color: var(--ink); }
+.stage.done .stage-mark { border-color: var(--accent); color: var(--accent); }
+.trail-label { margin: 0 0 8px; text-align: left; font-size: 13px; font-weight: 600; color: var(--muted); }
+@media (max-width: 640px) { .stages { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .stage.now .stage-mark { animation: none; } }
+
+/* answer: how Vali found it, in three plain lines */
+.how { padding: 16px 18px; }
+.how .section-title { margin-bottom: 10px; }
+.how-steps { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.how-steps li::marker { color: var(--accent); font-weight: 700; }
+.how-what { display: block; font-weight: 600; font-size: 15px; }
+.how-detail { display: block; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.how-detail a { color: inherit; text-decoration: underline; text-decoration-color: var(--line-3); text-underline-offset: 3px; }
+.plan > summary { cursor: pointer; list-style: revert; margin: 0; }
+.plan[open] > summary { margin-bottom: 12px; }

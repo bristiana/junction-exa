@@ -1,6 +1,6 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, detailsOf, draftsOf, factsOf, sourcesOf, stepsOf, webWork } from './model.js';
+import { claimsOf, detailsOf, draftsOf, exaTrail, factsOf, sourcesOf, stepsOf } from './model.js';
 import { renderExecution } from './execution.js';
 import { citePill } from './cite.js';
 import { renderState } from './state.js';
@@ -25,9 +25,9 @@ export function renderAnswer(task, handlers) {
           rest.length ? h('p', { class: 'claims' }, rest.map((claim) => [claimText(claim, pill), ' '])) : null,
           facts(factsOf(task, sources)),
           drafts(draftsOf(task)),
-          run ? null : steps(stepsOf(task)),
-          h('p', { class: 'exa-line' }, webWork(task)),
-          nextErrand(task, handlers)]),
+          howFound(task),
+          nextErrand(task, handlers),
+          run ? null : steps(stepsOf(task))]),
         run ? chapter('Vali did', [renderExecution(task, { ...handlers, quiet: true }),
           h('p', { class: 'exa-line' }, 'In a private cloud browser on Modal, one errand at a time.')]) : null,
         chapter('Now', renderState(task, handlers), 'now'))));
@@ -106,10 +106,34 @@ function facts(items) {
     h('dd', {}, fact.value, fact.source ? [' ', h('a', { class: 'fact-source', href: fact.source.url, target: '_blank', rel: 'noopener noreferrer' }, fact.source.domain)] : null))));
 }
 
+// What Exa did for this answer, in plain words: the searches, the pages it read, the sentences it checked.
+function howFound(task) {
+  const t = exaTrail(task);
+  if (t.reused) return h('p', { class: 'exa-line' }, 'Used an answer Vali had already checked a few minutes ago.');
+  if (!t.searches.length && !t.pages.length && !t.checked) return null;
+  const shown = t.pages.slice(0, 8);
+  return h('section', { class: 'how card', 'aria-label': 'How Vali found this' },
+    h('h2', { class: 'section-title' }, 'How Vali found this'),
+    h('ol', { class: 'how-steps' },
+      t.searches.length ? h('li', {},
+        h('span', { class: 'how-what' }, `Searched the live web with Exa ${t.searches.length === 1 ? 'once' : `${t.searches.length} times`}`),
+        h('span', { class: 'how-detail' }, t.searches.slice(0, 3).map((q) => `“${q}”`).join(', ') + (t.searches.length > 3 ? ', …' : ''))) : null,
+      t.pages.length ? h('li', {},
+        h('span', { class: 'how-what' }, `Read ${t.pages.length} ${t.pages.length === 1 ? 'page' : 'pages'} with Exa`),
+        h('span', { class: 'how-detail' }, shown.map((p, i) => [i ? ', ' : '', h('a', { href: p.url, target: '_blank', rel: 'noopener noreferrer' }, p.domain)]),
+          t.pages.length > shown.length ? ` and ${t.pages.length - shown.length} more` : '')) : null,
+      t.checked ? h('li', {},
+        h('span', { class: 'how-what' }, `Checked ${t.checked} ${t.checked === 1 ? 'sentence' : 'sentences'} against the page`),
+        h('span', { class: 'how-detail' }, `${t.backed} of ${t.checked} match a quote from today’s page. The numbers link to it.`)) : null,
+      t.fill ? h('li', {},
+        h('span', { class: 'how-what' }, `Looked up ${t.fill} ${t.fill === 1 ? 'detail' : 'details'} for the form`),
+        h('span', { class: 'how-detail' }, 'Exa search from inside the cloud browser.')) : null));
+}
+
 function steps(items) {
   if (!items.length) return null;
-  return h('section', { class: 'next' },
-    h('h2', { class: 'section-title' }, 'The plan'),
+  return h('details', { class: 'next plan' },
+    h('summary', { class: 'section-title' }, `The plan, ${items.length} ${items.length === 1 ? 'step' : 'steps'}`),
     h('ol', { class: 'steps' }, items.map((step) => h('li', { class: 'step' },
       h('span', { class: `who ${step.by.toLowerCase()}` }, step.by),
       h('div', {},

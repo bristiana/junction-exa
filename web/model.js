@@ -362,6 +362,26 @@ export function detailsOf(task) {
 }
 
 // What Vali did on the web for this errand, as one plain sentence.
+// Where the research is, for the three steps on the working screen: 0 searching, 1 reading pages, 2 checking quotes.
+export function researchStage(task) {
+  const trail = activityOf(task);
+  if (trail.some((l) => /^(Checking|Research finished|Answer ready)/.test(l.text))) return 2;
+  if (trail.some((l) => l.kind === 'read')) return 1;
+  return 0;
+}
+
+// What Exa did for one errand, for "How Vali found this": the searches, the pages read, the sentences checked.
+export function exaTrail(task) {
+  const trail = activityOf(task);
+  const searches = [...new Set(trail.filter((l) => l.kind === 'search').map((l) => l.text))];
+  const seen = new Set();
+  const pages = trail.filter((l) => l.kind === 'read' && l.url && !seen.has(l.url) && seen.add(l.url))
+    .map((l) => ({ url: l.url, domain: domainOf(l.url) || l.text }));
+  const claims = list(output(task).claims).filter((c) => c && !c.own && typeof c.supported === 'boolean');
+  return { searches, pages, checked: claims.length, backed: claims.filter((c) => c.supported).length,
+    reused: Boolean(task?.research?.reused_from), fill: list(task?.execution?.exa).length };
+}
+
 export function webWork(task) {
   const trail = list(task?.research?.activity);
   const searches = trail.filter((e) => e?.kind === 'search').length;
