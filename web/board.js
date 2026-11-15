@@ -212,9 +212,6 @@ function tiles(totals) {
   const n = (v) => h('b', { class: 'tally-num' }, String(v ?? 0));
   const cost = `$${Number(totals.cost || 0).toFixed(2)}`;
   return h('div', { class: 'tally' },
-    h('p', { class: 'tally-line' },
-      n(totals.errands), totals.errands === 1 ? ' errand. ' : ' errands. ',
-      'Exa searched ', n(totals.searches), ' times, read ', n(totals.pages), ' pages and checked ', n(totals.quoted), ' quotes, for ', n(cost), '.'),
     h('p', { class: 'tally-channels' }, totals.channels.filter(([, c]) => c).map(([channel, c]) =>
       h('span', { class: `ch ch-${channel}` }, glyph(channel), `${label(channel)} ${c}`))));
 }

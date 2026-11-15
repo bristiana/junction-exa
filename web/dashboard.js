@@ -32,12 +32,7 @@ export function renderDashboard(tasks, stats) {
     items: rows.filter((r) => (r.status.group || r.status.tone) === tone) }));
   show('errands',
     h('div', { class: 'errands-head' },
-      h('h2', { class: 'section-title' }, 'Your errands'),
-      h('dl', { class: 'counters' },
-        counter(counters.errands, counters.errands === 1 ? 'errand' : 'errands'),
-        counter(counters.searches, 'Exa searches'),
-        counter(counters.pages, 'pages read'),
-        counter(counters.cost == null ? null : `$${counters.cost.toFixed(2)}`, 'Exa cost'))),
+      h('h2', { class: 'section-title' }, 'Your errands')),
     tasks.length
       ? groups.filter((g) => g.items.length).map(group)
       : h('p', { class: 'muted empty' }, 'No errands yet. Ask Vali above, or message it on WhatsApp.'));
