@@ -15,7 +15,7 @@ def test_web_page_and_api_routes_coexist():
     with TestClient(application) as client:
         page = client.get('/')
         assert page.status_code == 200 and page.headers['content-type'].startswith('text/html')
-        assert 'Hand me the errand' in page.text
+        assert 'Hand Vali your first errand' in page.text
         assert client.get('/app.js').headers['content-type'].startswith('text/javascript')
         assert client.get('/health').json()['ok'] is True
         assert client.get('/v1/tasks').status_code == 401

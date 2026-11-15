@@ -64,3 +64,27 @@ def test_closed_for_judging_only_the_demo_account_writes(api):
     client.headers['Authorization'] = 'Bearer ' + other['token']
     reply = client.post('/v1/tasks', json={'task': 'find café'})
     assert reply.status_code == 403 and 'account you were given' in reply.json()['detail']
+
+
+
+def test_closed_demo_never_sends_a_real_form(api):
+    """In the closed demo, Approve sends only on the test host; anywhere else Vali stops before the submit."""
+    from test_api import poll_research_once
+    client, application, store, *_ , user = api
+    application.state.config.closed = True
+    application.state.config.owner_ids = frozenset({store.user_by_token(client.headers['Authorization'].split()[1])['id']})
+    application.state.config.submit_hosts = frozenset({'httpbin.org'})
+    task = client.post('/v1/tasks', json={'task': 'claim refund'}).json()
+    url = '/v1/tasks/' + task['id']
+    poll_research_once(task['id'], application)
+    client.post(url + '/execute', json={'action_index': 0, 'profile': {}})
+    store.patch_execution(task['id'], {'status': 'awaiting_approval', 'current_url': 'https://lomakkeet.dvv.fi/form'})
+    reply = client.post(url + '/approve'); assert reply.status_code == 200, reply.text
+    stopped = reply.json()['execution']
+    assert stopped['status'] == 'stopped' and 'Nothing reached lomakkeet.dvv.fi' in stopped['result']
+    other = client.post('/v1/tasks', json={'task': 'claim another refund'}).json()['id']
+    poll_research_once(other, application)
+    client.post(f'/v1/tasks/{other}/execute', json={'action_index': 0, 'profile': {}})
+    store.patch_execution(other, {'status': 'awaiting_approval', 'current_url': 'https://httpbin.org/forms/post'})
+    again = client.post(f'/v1/tasks/{other}/approve'); assert again.status_code == 200, again.text
+    assert again.json()['execution']['approval_decision'] == 'approved'
