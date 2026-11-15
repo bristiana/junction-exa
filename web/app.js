@@ -214,6 +214,8 @@ $('details').addEventListener('close', () => { if (followed?.task) { followed.ke
 
 // ---------- routes ----------
 function route() {
+  // A demo link pasted into an open tab only changes the hash; api.js reads it on load, so load again.
+  if (/(?:^#|&)demo=[A-Za-z0-9_-]{20,}/.test(location.hash)) return location.reload();
   notice('');
   // Errands and the dashboard need a signed-in account; the landing page and sign-in do not.
   const gated = /^#\/(dashboard|t\/)/.test(location.hash);
