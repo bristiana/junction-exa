@@ -36,7 +36,7 @@ from .router import route
 from .services import create_router as services_router
 from .stats import channel_of_origin, pick_channel, summarize
 from .store import make_store, now, token_hash
-from .uploads import UploadLimit
+from .uploads import UPLOAD_PATHS, UploadLimit
 from .voice_agent import add_voice_routes
 from vali_wa.flow import WhatsAppFlow
 from vali_wa.webhook import parse_webhook, verify_signature
@@ -417,6 +417,9 @@ TERMS_HTML = PAGE.format(title='terms', body=(
     '<p>Vali is a demo built for a hackathon. It prepares forms and bookings and always stops before the final '
     'button until you approve. You stay responsible for what you approve. No warranty.</p>'))
 
+CLOSED = 'Vali is closed while the judges try it. Sign in with the account you were sent.'
+CLOSED_PATHS = {'/v1/users', '/v1/auth/register', '/v1/pair'}
+
 def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None, whatsapp_api=None,
                llm=None, spawn_quote_check=None):
     config = config or Config()
@@ -456,22 +459,40 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
 
     @application.middleware('http')
     async def guards(request, call_next):
+        scheme, _, token = request.headers.get('authorization', '').partition(' ')
+        token = token if scheme.lower() == 'bearer' else ''
+        readonly = bool(token) and token_hash(token) in config.readonly_tokens
+        writing = request.method not in ('GET', 'HEAD', 'OPTIONS')
+        owner = None
+        if token and not readonly and (config.owner_ids or config.closed):
+            found = application.state.store.user_by_token(token)
+            owner = bool(found) and found['id'] in config.owner_ids
         try:
+            if config.closed and writing and (request.url.path in CLOSED_PATHS or (token and not readonly and owner is False)):
+                raise HTTPException(403, CLOSED)
             check_origin(request.headers.get('origin'), config.allowed_origins)
+            declared = request.headers.get('content-length', '')
+            if declared.isdigit() and int(declared) > 1_000_000 and request.url.path not in UPLOAD_PATHS:
+                raise HTTPException(413, 'Request too large')
             if request.method not in ('GET', 'HEAD', 'OPTIONS'):
                 limiter, ip = application.state.limiter, client_ip(request)
                 limiter.check('ip:' + ip, limiter.ip_limit, limiter.ip_seconds)
                 if request.url.path in ('/v1/users', '/v1/auth/login'):
                     limiter.check('signup:' + ip, limiter.signup_limit, limiter.signup_seconds, what='new accounts')
-                else:
-                    scheme, _, token = request.headers.get('authorization', '').partition(' ')
-                    if scheme.lower() == 'bearer' and token and token_hash(token) in config.readonly_tokens:
+                elif readonly:
                         raise HTTPException(403, 'This is the shared demo, so it is view only. Create your own account to try Vali.')
         except RateLimited as exc:
             return await rate_limited(request, exc)
         except HTTPException as exc:
             return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
-        return await call_next(request)
+        response = await call_next(request)
+        if (readonly or owner) and response.headers.get('content-type', '').startswith('application/json'):
+            # The demo account is shown to judges: emails typed in its chats show as a•••@domain.
+            body = b''.join([chunk async for chunk in response.body_iterator])
+            body = re.sub(rb'([A-Za-z0-9])[A-Za-z0-9._%+-]*@', '\\1•••@'.encode(), body)
+            headers = {k: v for k, v in response.headers.items() if k.lower() != 'content-length'}
+            return Response(body, status_code=response.status_code, headers=headers)
+        return response
 
     @application.exception_handler(RateLimited)
     async def rate_limited(request, exc):
@@ -550,6 +571,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         return {**application.state.store.create_pair_code(user['id']), 'whatsapp': config.whatsapp_number}
 
     def create_task_for_user(body, user, source='extension', *, budget_checked=False):
+        if config.closed and user['id'] not in config.owner_ids:  # WhatsApp and voice reach here without the middleware
+            raise HTTPException(403, CLOSED)
         if not body.task.strip():
             raise HTTPException(422, 'Task must not be blank')
         check_task_budget(application, user, count_request=not budget_checked)
@@ -713,7 +736,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         return application.state.store.get_task(tid)
 
     def running_limit(user, most=2):
-        """A cloud browser costs real money: an account runs at most two at once."""
+        """A cloud browser costs real money: an account runs at most two at once, ten starts in ten minutes."""
+        check_task_budget(application, user, count_request=False)
+        application.state.limiter.check('runs:' + user['id'], 10, 600, what='browser runs')
         live = [t for t in application.state.store.list_tasks(user['id'], 100)
                 if (t.get('execution') or {}).get('status') not in (None, 'done', 'failed', 'stopped')]
         if len(live) >= most:

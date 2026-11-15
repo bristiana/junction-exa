@@ -68,6 +68,17 @@
       </div>
       <p id="pairInfo" class="pair" hidden></p>
     </div>
+    <h3>Sign in</h3>
+    <p class="muted small">Use the account you were sent. This browser will show that account’s errands.</p>
+    <label class="field"><span>Email</span><input id="signEmail" class="v-input" type="email" autocomplete="username" /></label>
+    <label class="field">
+      <span>Password</span>
+      <div class="row">
+        <input id="signPassword" class="v-input" type="password" autocomplete="current-password" />
+        <button id="signInBtn" class="v-btn v-btn--quiet" type="button">Sign in</button>
+      </div>
+    </label>
+    <p id="signStatus" class="muted small" role="status"></p>
     <h3>Link with Vali on your Mac</h3>
     <p class="muted small">Linking uses the same account on both devices. This browser will show that account’s errands.</p>
     <button id="showMacCode" class="v-btn v-btn--quiet" type="button">Show this browser’s code</button>

@@ -7,6 +7,7 @@ image = (
     modal.Image.debian_slim(python_version='3.13')
     .pip_install_from_requirements(str(Path(__file__).with_name('requirements.txt')))
     .run_commands('playwright install --with-deps chromium')
+    .env({'VALI_CLOSED': '1'})  # judging: see Config.closed
     .add_local_python_source('vali_api', 'vali_agent', 'vali_media', 'vali_wa')
     .add_local_dir(str(Path(__file__).resolve().parent.parent / 'web'), '/root/web')
     # add_local_python_source ships only .py files; package data goes in explicitly.

@@ -9,7 +9,7 @@ from vali_api.config import Config, vali_env
     ('SQLITE_PATH', 'sqlite_path', 'existing.db', 'new.db', 'vali.db'),
     ('PUBLIC_URL', 'public_url', 'https://old.example', 'https://new.example', ''),
     ('ALLOWED_ORIGINS', 'allowed_origins', 'https://old.example', 'https://new.example', ''),
-    ('DAILY_CAP_USD', 'daily_cap_usd', '3.5', '4.5', 10.0),
+    ('DAILY_CAP_USD', 'daily_cap_usd', '3.5', '4.5', 3.0),
     ('EFFORT', None, 'low', 'high', ''),
     ('PRICES', None, '1,2,3,4', '5,6,7,8', ''),
 ])

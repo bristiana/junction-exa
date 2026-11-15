@@ -452,6 +452,18 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       await pollBackend();
       return true;
     },
+    signIn: async () => {
+      if (!isLinkSender(sender, chrome.runtime.id)) throw new Error("Sign in from the extension panel.");
+      const config = await backend.loadConfig();
+      const { token } = await backend.createClient(config).login(String(msg.email || ""), String(msg.password || ""));
+      if (!token || typeof token !== "string") throw new Error("Wrong email or password.");
+      await withTasks(async (tasks) => {
+        tasks.splice(0, tasks.length, ...tasks.filter((t) => !t.backend));
+        await chrome.storage.local.set({ tasks, backendUrl: config.baseUrl, backendToken: token, backendTokenUrl: config.baseUrl, backendUserId: "", hiddenTasks: [] });
+      });
+      await pollBackend();
+      return true;
+    },
     start: () => startTask(msg),
     poll: () => pollAll().then(() => true),
     "companion-tip": () => companionTip(msg.page, sender),

@@ -71,6 +71,7 @@ export function createClient({ baseUrl = "", token = "", fetchImpl = globalThis.
     me: () => call("/v1/me"),
     linkCode: () => call("/v1/link/code", { method: "POST", body: {} }),
     redeemLink: (code) => call("/v1/link", { method: "POST", body: { code }, auth: false }),
+    login: (email, password) => call("/v1/auth/login", { method: "POST", body: { email, password }, auth: false }),
     pair: () => call("/v1/pair", { method: "POST", body: {} }),
     createTask: ({ task, page, effort, previous_task_id } = {}) =>
       call("/v1/tasks", { method: "POST", body: clean({ task, page, effort, previous_task_id }) }),
