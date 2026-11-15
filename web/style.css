@@ -748,3 +748,6 @@ body.signed-in #home .how-it-works { margin-top: 16px; }
 body:not(.signed-in) #ask, body:not(.signed-in) #examples { display: none; }
 .guest-cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 20px 0 4px; }
 body.signed-in .guest-cta { display: none; }
+
+/* signed out, the header is just the name: Log in and Get the extension sit under the headline */
+body:not(.signed-in) .top-right .link-btn, body:not(.signed-in) #to-login { display: none; }
