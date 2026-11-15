@@ -82,7 +82,7 @@ Live eval on production, fresh account, fake details: 13 of 13 research errands 
 
 Tonight, from WhatsApp, Vali also filled three real public forms with made-up details and stopped before each send: the City of Helsinki feedback form, Nordea's contact form and an Allas Sea Pool ticket. They wait in the demo account as "Filled form, not sent".
 
-On 15 Nov Vali made a real booking from WhatsApp: Kulttuurisauna, Sunday 22 Nov at 17:30, after a Stop and a Continue. The sauna confirmed it by email.
+During the event Vali made a real booking from WhatsApp: Kulttuurisauna, Sunday 22 Nov at 17:30, after a Stop and a Continue. The sauna confirmed it by email.
 
 ## You stay in control
 
