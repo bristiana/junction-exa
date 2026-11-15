@@ -104,6 +104,7 @@ class MessageBody(BaseModel):
 
 
 ACTIVE_EXECUTION = {'starting', 'running', 'awaiting_approval', 'submitting'}
+PAUSED = 'Paused:'  # result prefix of a run that stopped because a question of Vali's went unanswered
 
 
 def research_from_run(run, kind='agent'):
@@ -375,7 +376,7 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
             if not should_stop():
                 # No answer: stop here instead of going on with empty fields; Continue picks it up with the answer.
                 store.patch_execution(task_id, {'approval_decision': 'stopped',
-                                                'result': 'Paused: no answer yet. Reply, then tap Continue.'})
+                                                'result': PAUSED + ' no answer yet. Reply and Vali continues.'})
             return None
         finally:
             store.patch_execution(task_id, {'question': None})
@@ -392,8 +393,11 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
             hooks = AgentHooks(**base)
         result = run_browser_agent(goal=goal, start_url=start_url, profile=profile, hooks=hooks)
         value = result if isinstance(result, dict) else vars(result)
+        paused = str((store.get_task(task_id)['execution'] or {}).get('result') or '')
+        # A run that stopped waiting for an answer says so, not "Stopped by the user": the reply continues it.
+        keep = paused if should_stop() and paused.startswith(PAUSED) else None
         patch_execution(task_id, {'status': 'stopped' if should_stop() else value['status'],
-                                       'result': value.get('result', ''), 'current_url': value.get('final_url'), 'error': value.get('error'),
+                                       'result': keep or value.get('result', ''), 'current_url': value.get('final_url'), 'error': value.get('error'),
                                        **{k: value[k] for k in ('usage', 'sources', 'filled', 'exa', 'private_view') if value.get(k) is not None}})
     except Exception:
         patch_execution(task_id, {'status': 'stopped' if should_stop() else 'failed', 'error': 'Browser session failed.'})
@@ -852,16 +856,43 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         return application.state.store.get_task(tid)
 
     def message_for_user(tid, body, user, source='extension'):
+        """A reply always lands somewhere that moves the errand on, never a 409 on a stopped run:
+        a live form hears it (and it answers the card's open question too), an open research question reruns the
+        research with it, a run paused on Vali's question continues with it, and any other stopped run keeps it
+        for the next Continue."""
         task = owned(tid, user)
-        executing = task['execution'] and task['execution']['status'] in ACTIVE_EXECUTION
+        store = application.state.store
+        execution = task['execution'] or {}
+        status = execution.get('status')
         question = task['research'].get('question')
-        if not executing and question and question.get('answer') is None:
+        open_question = bool(question and question.get('answer') is None)
+        message = {'at': now(), 'text': body.text, 'source': source}
+        if status in ACTIVE_EXECUTION:
+            store.patch_execution(tid, message=message)
+            if open_question and not execution.get('question'):
+                research = task['research']
+                store.update_research(tid, {**research, 'question': {**question, 'answer': body.text.strip()[:200]}},
+                                      expected=research)
+            return store.get_task(tid)
+        if status in {'stopped', 'failed'} and str(execution.get('result') or '').startswith(PAUSED):
+            try:  # the newest question is the form's own: the answer continues it
+                return continue_for_user(tid, ContinueBody(answer=body.text), user, execution.get('channel'))
+            except HTTPException as exc:
+                if exc.status_code != 429:
+                    raise
+        if open_question:
             check_task_budget(application, user)  # the follow-up pass is research too
-            return refine_research(application, task, body.text)
-        if not executing:
-            raise HTTPException(409, 'No running execution')
-        application.state.store.patch_execution(tid, message={'at': now(), 'text': body.text, 'source': source})
-        return application.state.store.get_task(tid)
+            refined = refine_research(application, task, body.text)
+            if status in {'stopped', 'failed'}:
+                store.patch_execution(tid, message=message)  # the next Continue knows it too
+                refined = store.get_task(tid)
+            return refined
+        if status in {'stopped', 'failed'}:
+            store.patch_execution(tid, message=message)  # kept: Continue carries it to the next run
+            return store.get_task(tid)
+        if status == 'done':
+            raise HTTPException(409, 'This errand is done. Send a new errand instead.')
+        raise HTTPException(409, 'No running execution')
 
     @application.post('/v1/tasks/{tid}/messages')
     def message(tid: str, body: MessageBody, user=Depends(authenticate)):
