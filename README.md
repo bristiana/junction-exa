@@ -6,7 +6,19 @@ The demo story: Bogdan, a master's student from Romania at Aalto, settling in (b
 
 **Live:** https://bogdan-c-2206--vali-web.us-east.modal.run/
 
-Built for the Exa "Internet Butler" challenge at Junction 2026. Submission texts, video script and slide outline: [docs/SUBMISSION.md](docs/SUBMISSION.md).
+Built for the Exa "Internet Butler" challenge at Junction 2026, with Modal as the tech challenge. Submission texts, video script and slide outline: [docs/SUBMISSION.md](docs/SUBMISSION.md).
+
+## At a glance
+
+| | |
+|---|---|
+| Live app | https://bogdan-c-2206--vali-web.us-east.modal.run/ |
+| Chrome extension | **Get the extension** on the live app (`/vali-extension.zip`) |
+| Judges | Sign in with the demo account (email and password are in the submission notes, never in the repo). The `#demo=<token>` link opens the same account, view only. |
+| Demo rules | The shared demo is closed: only the demo account writes, and **Approve** only really sends on the httpbin.org test form. Anywhere else Vali stops right before sending and says nothing reached the site. |
+| Channels | WhatsApp, the web app, the Chrome extension (and a Mac app) on one shared task list |
+| Built with | Exa (Agent runs, Search, Contents, Monitors, Fast search), Modal, Claude, Jev (TypeSafe AI), Aiven Postgres, WhatsApp Cloud API, ElevenLabs, Playwright |
+| Tests | 154 Node tests (`npm test`) and 742 backend tests (`pytest tests/api tests/wa`) passing |
 
 ## What it does
 
@@ -15,10 +27,11 @@ Built for the Exa "Internet Butler" challenge at Junction 2026. Submission texts
 - **Bookings.** Tap **Book it**. Vali asks once for your name and email, fills the real form in a private cloud browser, sends a picture with **Approve** / **Stop**, and books only after Approve. Pay-on-site bookings are completed for real; paid tickets stop at the payment page and open in your own browser.
 - **Stop and Continue.** Continue starts a fresh run told what the last one did and everything you already said, so it does not ask again. A question left unanswered pauses the run instead of going on with empty fields.
 - **Watches.** "Watch ..." creates a daily Exa Monitor for things that change. Only new findings reach WhatsApp. "Check now" runs it right away.
-- **Dashboard.** `#/dashboard` shows every errand, Exa searches, pages read, quotes checked and cost in one sentence, the activity feed and every search query. Click an errand to see the chat, everything Vali opened, and where it stands, with Continue, Approve or the options right there.
+- **Dashboard.** `#/dashboard` shows every errand, the activity feed and every search query. Click an errand to see the chat, everything Vali opened, and where it stands, with Continue, Approve or the options right there.
 - **Errand page.** A short story: You asked (channel, context, details shared), Vali found (the cited answer and facts), Vali did (the browser steps in plain words), Now (the path Found, Filled, Your OK, Done, and the one thing that moves it on).
 - **Sign-in.** Email and password, a WhatsApp code, or the demo link (it opens the sign-in page with **Open the demo account**).
-- **Mascot.** Vali sits in a corner of the web app and of every page (Chrome extension). The extension's side panel is a chat with Vali, with stats and history.
+- **Chrome extension.** Vali on the page you are on. Exa Fast search adds the fact you need as a tip on the page (for example when to apply on migri.fi). **Fill it here** fills the form on your own computer: Finnish compound labels, bilingual names, iframes and open shadow roots, placeholder dropdowns. It skips hidden spam-trap fields, blocks any submit the page starts during the fill, and never presses submit itself. Errands you start from the panel are routed by Jev like any other and stay in sync with WhatsApp and the web.
+- **Mascot.** Vali sits in a corner of the web app and of every page (Chrome extension). The extension's side panel is a chat with Vali, with your errand history.
 
 ## Live eval (15 Nov, production, fake details)
 
@@ -28,7 +41,8 @@ Research answered 13 of 13 errands; 24 of 26 facts were confirmed on the source 
 
 - **WhatsApp:** open the live app, tap **WhatsApp**, and send the `link 123456` message it gives you. Then send an errand. Vali reacts 👀 when it is on it.
 - **Web:** sign in (email and password, or the demo link), then type an errand or tap an example.
-- **Chrome extension:** `chrome://extensions`, Developer mode, "Load unpacked", pick `extension/`. The mascot appears on every page.
+- **Chrome extension:** download it from **Get the extension** on the live app (or use `extension/` from this repo), unzip, open `chrome://extensions`, turn on Developer mode, **Load unpacked**, then sign in from its settings with the same account. The mascot appears on every page.
+- **Errands to try:** "How can I open a bank account without a Finnish personal ID?", "I study my master's at Aalto. How do I get the HSL student discount?", and "Watch for new HOAS student apartments in Espoo under 700 euros a month". Open any "Filled form, not sent" errand on Home to see what Vali filled, the last picture from the cloud browser and the Exa trail.
 
 ## How Vali uses Exa
 
