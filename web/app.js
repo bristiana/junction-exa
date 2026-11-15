@@ -122,8 +122,11 @@ async function act(request, button) {
   // The whole row waits with it: a Stop pressed while Approve is on its way would otherwise do nothing, silently.
   const row = button ? [...(button.closest('.actions, form')?.querySelectorAll('button') || [button])] : [];
   for (const b of row) b.disabled = true;
+  const on = followed;  // the answer lands only on the errand it was for, never on one opened since (or on home)
   try {
-    render(await request());
+    const task = await request();
+    if (followed !== on) return;
+    render(task);
     notice('');
     poll();
   } catch (error) {
