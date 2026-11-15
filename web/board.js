@@ -26,7 +26,7 @@ export function openBoard(id = null) {
   open = true;
   threadId = id;
   if (last) render(last);
-  else show('board-content', h('p', { class: 'muted board-loading' }, 'Loading your dashboard…'));
+  else show('board-content', h('p', { class: 'muted board-loading' }, 'Loading your activity…'));
   load();
 }
 
@@ -59,7 +59,7 @@ async function load() {
   } catch (error) {
     if (mine !== gen || !open) return;
     failing = true;
-    if (!last) show('board-content', h('p', { class: 'muted board-loading' }, `Couldn't load the dashboard: ${error.message}`));
+    if (!last) show('board-content', h('p', { class: 'muted board-loading' }, `Couldn't load your activity: ${error.message}`));
   }
   stamp();
   if (mine === gen && open) timer = setTimeout(load, failing ? POLL_MS * 2 : POLL_MS);
@@ -81,12 +81,12 @@ function render({ tasks, stats, watches, extra, checked }) {
   show('board-content', h('div', { class: 'board' },
     h('div', { class: 'board-head' },
       h('div', {},
-        h('h1', { class: 'board-title' }, 'Dashboard')),
+        h('h1', { class: 'board-title' }, 'Activity')),
       liveBadge()),
     tiles(totals),
     h('div', { class: 'board-grid' },
       h('section', { class: 'card panel feed-panel', 'aria-labelledby': 'feed-title' },
-        panelHead('feed-title', 'Activity', feed.length),
+        panelHead('feed-title', 'Errands', feed.length),
         feed.length
           ? h('ul', { class: 'feed' }, feed.map((row) => feedRow(row, fresh.has(row.id))))
           : h('p', { class: 'muted empty' }, 'No errands yet. Message Vali on WhatsApp or ask here.')),
@@ -136,11 +136,20 @@ function renderThread(task, checked) {
   stamp();
 }
 
+// A failed action (the shared demo is view only, a 409, the network) shows in the line under the header.
+function say(text) {
+  const node = document.getElementById('notice');
+  if (!node || (!text && node.classList.contains('quiet'))) return;
+  node.textContent = text;
+  node.hidden = !text;
+  node.classList.remove('quiet');
+}
+
 // The same moves as on the errand page, straight from the chat: continue, answer, approve, stop.
 function threadHandlers(task) {
   const act = async (call, button) => {
     if (button) button.disabled = true;
-    try { await call(); } catch (error) { console.warn('Vali:', error.message); } finally { if (button) button.disabled = false; load(); }
+    try { await call(); say(''); } catch (error) { say(error.message || 'That did not go through. Try again.'); } finally { if (button) button.disabled = false; load(); }
   };
   const fill = (index, button) => act(() => api.execute(task.id, index, loadProfile()), button);
   return {

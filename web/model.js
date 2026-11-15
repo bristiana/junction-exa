@@ -209,6 +209,8 @@ export function errandStatus(task) {
   const run = runStatus(task);
   const question = research.status === 'completed' ? null : questionOf(task); // a finished research's question is stale
   if (run === 'awaiting_approval') return { word: 'Waiting for your OK', tone: 'you', detail: task.execution.approval?.summary || '' };
+  // A live run that asked something waits for you, so it sits under Needs you, not Working now.
+  if (['starting', 'running'].includes(run) && task.execution.question?.text) return { word: 'Needs your answer', tone: 'you', detail: String(task.execution.question.text) };
   if (['starting', 'running', 'submitting'].includes(run)) return { word: 'Filling the form', tone: 'working', detail: lastStep(task) };
   if (question && !run) return { word: 'Needs your answer', tone: 'you', detail: question.text };
   if (!TERMINAL.has(research.status)) {
@@ -217,10 +219,16 @@ export function errandStatus(task) {
   }
   if (research.status === 'cancelled' || run === 'stopped') return { word: 'Stopped', tone: 'failed', detail: 'Nothing was sent.' };
   if (research.status === 'failed' || run === 'failed') {
-    return { word: "Couldn't finish", tone: 'failed', detail: research.error || task.execution?.error || '' };
+    return { word: "Couldn't finish", tone: 'failed', detail: errorText(research.error) || errorText(task.execution?.error) };
   }
   if (structured(task).status === 'needs_info' && !run) return { word: 'Needs your answer', tone: 'you', detail: missingInfo(task)[0] || '' };
   return { word: 'Done', tone: 'done', detail: task.execution?.result || sentences(structured(task).answer)[0] || '' };
+}
+
+// An error is a sentence from the API; an object with a message is read for its message, never "[object Object]".
+export function errorText(error) {
+  if (!error) return '';
+  return typeof error === 'object' ? String(error.message || error.detail || '') : String(error);
 }
 
 function lastStep(task) {

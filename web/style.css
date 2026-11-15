@@ -64,6 +64,8 @@ svg { fill: currentColor; }
 main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .notice { max-width: 640px; margin: 0 auto 16px; padding: 10px 16px; border-radius: 14px; background: var(--warn-soft); color: var(--warn); font-size: 14px; text-align: center; }
 .notice.quiet { background: transparent; color: var(--muted); padding: 0; font-size: 13px; }
+/* A real problem stays in view while you scroll, so an error after a click far down the page is seen. */
+.notice:not(.quiet) { position: sticky; top: 12px; z-index: 30; box-shadow: var(--shadow); }
 
 /* ---------- shared bits ---------- */
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
