@@ -677,3 +677,17 @@ export function answerRoute(task, question = '') {
   if (open) return 'research';
   return 'followup';
 }
+
+// Why a run stopped when it was not you: the shared demo stops right before sending (after your Approve), and a run
+// whose question went unanswered pauses. Null when you pressed Stop or the run is not stopped.
+export function stopNote(task) {
+  const run = task?.execution;
+  if (runStatus(task) !== 'stopped' && run?.status !== 'failed') return null;
+  const result = String(run?.result || '').trim();
+  if (/^This is the demo\b/i.test(result)) return { kind: 'demo', line: result, word: 'Stopped before sending' };
+  if (/^Paused:/i.test(result)) {
+    const asked = String(run?.question?.text || '');
+    return { kind: 'paused', line: asked ? `Vali paused, waiting for your answer: ${asked}` : 'Vali paused, waiting for your answer.', word: 'Waiting for you' };
+  }
+  return null;
+}

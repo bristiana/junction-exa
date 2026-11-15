@@ -40,17 +40,49 @@ export function renderExecution(task, { onApprove, onStop, onReply, quiet = fals
 
 // While the run is live, the frame reloads every 1.2 s; afterwards it shows the last screenshot.
 // A run that typed your details keeps no picture after that point, so it says so instead.
+// One box per task survives the 2 s redraws: the same node moves into the new card, so the picture never blanks,
+// and a new frame fades in over the old one only after it has loaded.
+let held = null; // { id, box, shown, live }
+
 function frame(task, live) {
   if (!live && task.execution.private_view) return h('p', { class: 'muted' }, 'No picture: the page showed your details.');
   const shots = task.execution.shots || [];
   const last = shots[shots.length - 1];
   const lastShot = last && Number.isInteger(last.n) ? shotSrc(task, last.n) : null;
   const src = live ? api.imageUrl(`/v1/tasks/${encodeURIComponent(task.id)}/live.jpg`) : lastShot;
-  if (!src) return null;
-  const img = h('img', { class: 'run-frame', alt: 'What the browser Vali drives shows now', src: src + (live ? `&ts=${Date.now()}` : '') });
-  img.addEventListener('error', () => { if (lastShot) img.src = lastShot; else img.hidden = true; }, { once: true });
-  if (live) frameTimer = setInterval(() => { if (img.isConnected && !document.hidden) img.src = src + `&ts=${Date.now()}`; }, 1200);
-  return img;
+  if (!src) return held && held.id === task.id && held.shown ? (held.box.classList.remove('is-live'), held.box) : null; // keep the last live picture
+  if (!held || held.id !== task.id) {
+    const box = h('div', { class: 'run-frame-box' }, h('span', { class: 'run-live', 'aria-hidden': 'true' }, 'Live'));
+    held = { id: task.id, box, shown: '', live };
+  }
+  held.live = live;
+  held.box.classList.toggle('is-live', live);
+  const next = live ? `${src}&ts=${Date.now()}` : src;
+  if (live || held.shown !== src) swap(held, next, lastShot);
+  if (live) frameTimer = setInterval(() => { if (held?.box.isConnected && !document.hidden) swap(held, `${src}&ts=${Date.now()}`, lastShot); }, 1200);
+  return held.box;
+}
+
+// Load the next picture off screen, then fade it in over the one on show; a failed load keeps the old picture.
+function swap(state, src, fallback) {
+  if (state.loading) return;
+  state.loading = true;
+  const img = h('img', { class: 'run-frame', alt: 'What the browser Vali drives shows now' });
+  img.decoding = 'async';
+  const done = () => { state.loading = false; };
+  img.onload = () => {
+    done();
+    const old = [...state.box.querySelectorAll('img.run-frame')];
+    state.shown = src.replace(/&ts=\d+$/, '');
+    state.box.append(img);
+    requestAnimationFrame(() => img.classList.add('shown'));
+    setTimeout(() => old.forEach((o) => o.remove()), 260);
+  };
+  img.onerror = () => {
+    done();
+    if (fallback && src !== fallback && !state.box.querySelector('img.run-frame')) swap(state, fallback, null);
+  };
+  img.src = src;
 }
 
 // Screenshots always load from this API's own /v1 path (signed with ?t=), never from a URL inside the task.

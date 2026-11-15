@@ -48,8 +48,23 @@ a.booking-site:hover { color: var(--ink); text-decoration: underline; }
 .booking .state-line { font-size: 16px; }
 .booking .state-hint { font-size: 14px; }
 .booking-shot { margin: 0; }
-.booking-shot .run-frame { aspect-ratio: auto; height: auto; max-height: 420px; object-fit: contain; }
+/* the cloud browser's picture: a fixed 16:10 box, so frames and steps never shift the card; new frames fade in */
+.run-frame-box { position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 12px; border: 1px solid var(--line-2); background: var(--fill-2); }
+.run-frame-box .run-frame { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; aspect-ratio: auto; border: 0; border-radius: 0;
+  object-fit: contain; object-position: top; opacity: 0; transition: opacity .25s ease; }
+.run-frame-box .run-frame.shown { opacity: 1; }
+.run-live { position: absolute; top: 8px; left: 8px; z-index: 1; display: none; align-items: center; gap: 5px; padding: 2px 8px;
+  border-radius: 999px; background: rgba(0, 0, 0, .62); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.run-live::before, .live-dot { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #e5484d; animation: live-pulse 1.4s ease-in-out infinite; }
+.run-frame-box.is-live .run-live { display: inline-flex; }
+.live-dot { margin-right: 6px; vertical-align: 1px; }
+@keyframes live-pulse { 50% { opacity: .35; } }
 .booking-shot figcaption { margin-top: 6px; font-size: 12px; color: var(--muted); text-align: center; }
+.booking-steps .run-steps li.new { animation: step-in .35s ease-out; }
+@keyframes step-in { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .run-frame-box .run-frame, .booking-steps .run-steps li.new, .run-live::before, .live-dot { transition: none; animation: none; }
+}
 .booking-shot > p.muted { margin: 0; padding: 18px; font-size: 13px; text-align: center; border: 1px dashed var(--line-2); border-radius: 12px; }
 .booking-steps { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .booking-steps > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); }

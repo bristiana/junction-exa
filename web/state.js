@@ -1,9 +1,15 @@
 // The state block on top of an errand: the path it takes, where it stands now, and the one thing that moves it on.
 import { h } from './dom.js';
-import { answerRoute, domainOf, errandStage, linkActions, primaryAction, safeUrl } from './model.js';
+import { answerRoute, domainOf, stopNote, errandStage, linkActions, primaryAction, safeUrl } from './model.js';
 
 export function renderState(task, handlers) {
   const stage = errandStage(task);
+  const note = stopNote(task);  // the demo or an unanswered question stopped it, not you
+  if (note) {
+    stage.line = note.line;
+    if (note.kind === 'demo') stage.next = { kind: 'demo' };
+    else stage.next = { ...stage.next, hint: 'Answer and Vali picks up from there.' };
+  }
   return h('section', { class: `state tone-${stage.tone}`, 'aria-label': 'Where this errand stands' },
     h('ol', { class: 'track' }, stage.stages.map((name, i) => h('li', {
       class: i < stage.at || (i === stage.at && stage.tone === 'done') ? 'past' : i === stage.at ? 'now' : null,
@@ -24,6 +30,7 @@ function next(task, stage, handlers) {
   const where = safeUrl(task.execution?.current_url) || action?.url;
   const site = where ? h('a', { class: 'btn quiet', href: where, target: '_blank', rel: 'noopener noreferrer' }, `Open ${domainOf(where)}`) : null;
   const stop = h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop');
+  if (kind === 'demo') return site ? h('div', { class: 'actions' }, site) : null;
   if (kind === 'fill') return h('div', { class: 'actions' }, fill('Fill it for me'), site);
   if (kind === 'stop') return h('div', { class: 'actions' }, stop);
   if (kind === 'approve') {
