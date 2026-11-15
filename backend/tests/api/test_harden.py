@@ -1,5 +1,6 @@
 """The shared demo link is view only; an account runs at most two cloud browsers; wrong passwords lock per email."""
-from test_api import api  # noqa: F401  (fixture)
+import pytest
+from test_api import api, pair_whatsapp, wa  # noqa: F401  (fixtures)
 from vali_api.store import token_hash
 
 
@@ -88,3 +89,105 @@ def test_closed_demo_never_sends_a_real_form(api):
     store.patch_execution(other, {'status': 'awaiting_approval', 'current_url': 'https://httpbin.org/forms/post'})
     again = client.post(f'/v1/tasks/{other}/approve'); assert again.status_code == 200, again.text
     assert again.json()['execution']['approval_decision'] == 'approved'
+
+
+# Rule 1: every write route refuses the shared demo token, except the routes below that are public by design.
+WRITE_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
+PUBLIC_WRITES = {
+    ('POST', '/v1/users'): 'a visitor on the demo link can still make their own account',
+    ('POST', '/v1/auth/login'): 'the demo link page tells viewers to sign in with the demo account',
+    ('POST', '/webhooks/whatsapp'): 'Meta calls it, signed with the app secret, never with a bearer token',
+    ('POST', '/webhooks/exa'): 'Exa calls it server to server, never with a bearer token',
+    ('POST', '/v1/voice/tools/{name}'): 'ElevenLabs calls it with the tool secret and a voice session, never with a bearer token',
+}
+
+
+def write_routes():
+    from vali_api.app import create_app
+    from vali_api.config import Config
+    from vali_api.store import SQLiteStore
+    application = create_app(Config(sqlite_path=':memory:'), SQLiteStore(':memory:'), None, lambda tid: None)
+    return sorted({(method, route.path) for route in application.routes
+                   for method in (getattr(route, 'methods', None) or ()) if method in WRITE_METHODS})
+
+
+WRITE_ROUTES = write_routes()
+
+
+def test_public_write_exemptions_are_real_routes():
+    assert set(PUBLIC_WRITES) <= set(WRITE_ROUTES), set(PUBLIC_WRITES) - set(WRITE_ROUTES)
+
+
+@pytest.mark.parametrize('method,path', [r for r in WRITE_ROUTES if r not in PUBLIC_WRITES], ids=' '.join)
+def test_demo_token_cannot_write(api, method, path):
+    client, application, store, *_ = api
+    tid = client.post('/v1/tasks', json={'task': 'find café in Helsinki'}).json()['id']
+    application.state.config.readonly_tokens = frozenset({token_hash(client.headers['Authorization'].split()[1])})
+    url = path.replace('{tid}', tid).replace('{wid}', 'w_any').replace('{name}', 'any')
+    reply = client.request(method, url, json={})
+    assert reply.status_code == 403 and 'view only' in reply.json()['detail'], (method, path, reply.status_code, reply.text[:200])
+
+
+# Rule 2: in the closed demo, Approve sends only when the page's host is a submit host or a subdomain of it.
+def awaiting_approval(api, current_url, start_url=None, closed=True):
+    from test_api import poll_research_once
+    client, application, store, *_ = api
+    config = application.state.config
+    config.closed, config.submit_hosts = closed, frozenset({'httpbin.org'})
+    config.owner_ids = frozenset({store.user_by_token(client.headers['Authorization'].split()[1])['id']})
+    tid = client.post('/v1/tasks', json={'task': 'claim refund'}).json()['id']
+    poll_research_once(tid, application)
+    client.post(f'/v1/tasks/{tid}/execute', json={'action_index': 0, 'profile': {}})
+    store.patch_execution(tid, {'status': 'awaiting_approval', 'current_url': current_url, 'start_url': start_url or current_url})
+    return tid
+
+
+@pytest.mark.parametrize('current_url,start_url,sends', [
+    ('https://httpbin.org/forms/post', None, True),
+    ('https://www.httpbin.org/forms/post', None, True),
+    ('https://HTTPBIN.ORG/forms/post', None, True),
+    ('https://httpbin.org./forms/post', None, True),  # the root-dot spelling of the same host
+    ('https://evilhttpbin.org/forms/post', None, False),  # ends in httpbin.org without a dot boundary
+    ('https://httpbin.org.evil.example/forms/post', None, False),
+    ('https://httpbin.org@evil.example/forms/post', None, False),  # userinfo is not the host
+    ('https://lomakkeet.dvv.fi/form', 'https://httpbin.org/forms/post', False),  # the page it is on now wins
+    ('https://httpbin.org/forms/post', 'https://lomakkeet.dvv.fi/form', True),
+])
+def test_closed_demo_sends_only_on_the_test_host(api, current_url, start_url, sends):
+    client, application, store, *_ = api
+    tid = awaiting_approval(api, current_url, start_url)
+    reply = client.post(f'/v1/tasks/{tid}/approve')
+    assert reply.status_code == 200, reply.text
+    execution = reply.json()['execution']
+    if sends:
+        assert execution['approval_decision'] == 'approved', execution
+    else:
+        assert execution['status'] == 'stopped' and execution['approval_decision'] == 'stopped', execution
+        assert 'Nothing reached' in execution['result']
+
+
+def test_continue_after_the_demo_stop_meets_the_same_guard(api):
+    client, application, store, *_ = api
+    tid = awaiting_approval(api, 'https://lomakkeet.dvv.fi/form')
+    assert client.post(f'/v1/tasks/{tid}/approve').json()['execution']['status'] == 'stopped'
+    resumed = client.post(f'/v1/tasks/{tid}/continue', json={})
+    assert resumed.status_code == 200, resumed.text
+    assert resumed.json()['execution']['approval_decision'] is None  # a new run starts unapproved
+    store.patch_execution(tid, {'status': 'awaiting_approval', 'current_url': 'https://lomakkeet.dvv.fi/form'})
+    again = client.post(f'/v1/tasks/{tid}/approve').json()['execution']
+    assert again['status'] == 'stopped' and again['approval_decision'] == 'stopped'
+
+
+@pytest.mark.parametrize('how', ['text', 'button'])
+def test_whatsapp_approve_meets_the_same_guard(wa, how):
+    api, graph, deliver = wa
+    store = api[2]
+    pair_whatsapp(api, deliver)
+    tid = awaiting_approval(api, 'https://lomakkeet.dvv.fi/form')
+    if how == 'text':
+        deliver('yes', mid='approve')
+    else:
+        deliver(mid='button', type='interactive', interactive={'button_reply': {'id': f'approve:{tid}', 'title': 'Approve'}})
+    execution = store.get_task(tid)['execution']
+    assert execution['status'] == 'stopped' and execution['approval_decision'] == 'stopped', execution
+    assert 'Nothing reached lomakkeet.dvv.fi' in execution['result']
