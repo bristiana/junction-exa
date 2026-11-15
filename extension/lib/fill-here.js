@@ -104,6 +104,23 @@ function errandValueFor(field, values) {
   return hit ? String(hit.value) : null;
 }
 
+// Finnish and short names for the same choice in a dropdown: "Finland" is "Suomi" on a Finnish form.
+const OPTION_ALIASES = {
+  finland: ["suomi", "finland", "fi", "finnland", "finlande"],
+  romanian: ["romania", "romanian", "romanialainen", "romanialaiset", "ro"],
+  romania: ["romania", "romanialainen", "ro"],
+};
+// The option text to pick for a value, or null when the dropdown has no such choice.
+function optionFor(value, options) {
+  const n = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  const wants = [n(value), ...(OPTION_ALIASES[n(value)] || [])];
+  for (const w of wants) {
+    const hit = options.find((o) => n(o) === w) || (w.length > 3 && options.find((o) => n(o).split(/[^\p{L}\p{N}]+/u).includes(w)));
+    if (hit) return hit;
+  }
+  return null;
+}
+
 // fields: capturePage().fields. Returns [{ field_id, value, label }] for the fields Vali can fill here.
 export function planFill(fields, { profile = {}, values = [] } = {}) {
   const plan = [];
@@ -115,6 +132,10 @@ export function planFill(fields, { profile = {}, values = [] } = {}) {
     if (!value || unfilledPlaceholders(value).length) continue;
     if (f.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) continue;
     if (kind === "date_of_birth" && f.type === "text") value = dateForText(value, f);
+    if (f.type === "select-one" && Array.isArray(f.options)) {
+      value = optionFor(value, f.options);
+      if (!value) continue;
+    }
     plan.push({ field_id: f.id, value, label: f.label || f.id });
   }
   return plan;
