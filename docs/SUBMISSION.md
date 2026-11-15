@@ -22,7 +22,7 @@ Chrome extension: download it from **Get the extension** on the site (`/vali-ext
 | Source Code URL | github.com/bristiana/junction-exa (make it public first) |
 | Video link | The 2-minute video from section 5, public |
 | Other Link | The extension zip: /vali-extension.zip on the live app |
-| Presentation | The slides as PDF |
+| Presentation | The slides as PDF (content in [SLIDES.md](SLIDES.md)) |
 | Tech Challenge Participation | Modal, Aiven, plus any other we can back with the running product |
 
 ## 1. Project name (max 30)
@@ -36,75 +36,72 @@ Vali
 ## 2. Punchline (max 200)
 
 ```
-Your valet for life in Finland. Message Vali on WhatsApp: it reads the live web with Exa, answers for your situation with the exact source, fills the real form and books when you tap Approve.
+New in Finland? Vali handles it. Ask on WhatsApp or the web: Exa reads today's official pages, Vali answers with the exact source and fills the real form. Nothing is sent until you tap Approve.
 ```
 
-191 characters.
+193 characters.
 
 ## 3. Description (max 5000, markdown)
 
-Paste everything between the two lines. 4,653 characters (4,710 if the form counts line breaks as two).
+Paste everything between the two lines. 4,233 characters (4,287 if the form counts line breaks as two).
 
 ---
 
-Vali is your valet for life in Finland, made for foreigners. Meet Bogdan: a master's student from Romania at Aalto, a few weeks into life in Espoo. He still has no Finnish personal ID, no Finnish bank account and pays full price on HSL. And this weekend he is at Junction. The answers he needs are spread over Finnish pages that change every year. No chatbot knows them.
+Vali is the errand agent for newcomers in Finland. It fills the forms for you, with live research behind every field.
 
-So he messages Vali on WhatsApp: *"How can I open a bank account without a Finnish personal ID?"* Vali reacts 👀 and about 30 seconds later answers in one sentence, with the page picture, the key facts and the exact Danske Bank and Migri links. Every sentence is checked against a quote from today's version of the page. The answer ends with **Next for you**: register your EU right of residence at Migri. One tap starts it.
+Moving to Finland means forms: DVV registration, a HOAS housing application, a sauna or a court for the weekend. The rules behind them sit on Finnish pages that change every year. On 1 August 2025 Kela moved students to the student housing supplement and they had to apply again. A model trained before that does not know.
+
+## How it works
+
+1. **You ask** on WhatsApp, the web or the Chrome extension. Then get on with your day.
+2. **Vali researches in the background.** Exa searches the live web, reads today's official pages and checks every sentence against a quote.
+3. **Vali answers** in one sentence, with the key facts and the exact source links, fitted to you: EU or not, student or not, Finnish ID or not.
+4. **Vali fills the real form** in a private cloud browser on Modal and sends you a picture of it with **Approve** and **Stop**. Nothing is sent before Approve.
+5. **Vali keeps watching.** "Watch ..." sets up a daily Exa Monitor, for example for new flats. Only new findings reach you.
+
+The Chrome extension fills the form on the page you are on with your details, on your device. It never presses submit.
 
 ## Who it is for
 
-International students and newcomers in Finland. Bank, Kela, DVV, Migri, HSL and housing errands, and a new life to set up: a sauna with friends, a film on Saturday, a court for a game.
-
-## What Vali does
-
-- **Answers for your situation.** Vali asks once: EU or not, student or not. Answers then fit you (no Finnish ID yet, no bank ID, student prices) and explain Finnish words.
-- **Answers with sources.** One sentence, the key facts, the exact links. Route questions get an HSL journey planner link with both ends already filled in.
-- **Gets it done.** Tap **Book it**. A private cloud browser opens the real booking page, fills it, and sends a picture of the filled form with **Approve** and **Stop**. Nothing is sent before Approve.
-- **Stop and Continue.** Plans change. Tap Stop. Tap Continue later and Vali picks up where it stopped, without asking again for what you already told it.
-- **Never pays for you.** Pay-on-site bookings are completed for real. Paid tickets stop at the payment page and open in your own browser.
-- **Keeps watching.** "Watch ..." sets up a daily Exa Monitor for things that change: prices, rules, slots, flats. Only new findings reach your WhatsApp.
-
-Tonight Vali made a real booking from WhatsApp: Kulttuurisauna in Helsinki, Sunday 22 Nov at 17:30, after a Stop and a Continue. The sauna confirmed it by email.
-
-## Same Vali, everywhere
-
-- **WhatsApp:** the main channel. Buttons, reactions, page pictures, PDFs.
-- **Web:** sign in with email and password, a WhatsApp code or the demo link. The dashboard shows every errand, Exa search and page read, live. Each errand reads as a short story: you asked, Vali found, Vali did, and where it stands now, with the one button that moves it on.
-- **Chrome extension:** a chat with Vali in the side panel and the mascot in the corner of every page.
+International students and newcomers in their first year in Finland: bank, DVV, Migri, Kela, HSL, housing, and the weekend plans that come with a new life.
 
 ## How Vali uses Exa
 
-Answers come from pages Exa reads live, not from training data.
+Answers and form facts come from pages Exa reads live, not from training data.
 
-- **Agent runs** research the errand into a structured answer with field citations and the next errand.
-- **Search** with domain and location filters, moderation and an output schema for quick finds.
-- **Contents** re-reads every cited page (at most a day old) and checks each sentence against a quote. It also brings the page picture for WhatsApp.
-- **Monitors** with a signed webhook for watches, plus "check now".
-- **Fast search** for the mascot's page tips.
-- **Search and Contents inside the cloud browser** when a form needs a fact or the real booking link.
+- **Agent runs** (with events and continuation): research the errand into a structured answer with field citations, the steps, the form to fill and the next errand.
+- **Search** with an output schema, highlights, domain and location filters and moderation: quick finds and service facts from the official site.
+- **Contents** (at most a day old, live crawl fallback): re-reads every cited page so each sentence is checked against a quote, and brings the page picture for WhatsApp.
+- **Monitors** with a signed webhook and "check now": the daily watches.
+- **Fast search**: the extension's tip for the page you are on.
+- **Search and Contents inside the cloud browser**: while the form stays open, Vali looks up a fact it needs (an address, a fee) and reads the page's real application links.
 
 ## Does it work
 
-Live eval on production, fresh account, fake details: 13 of 13 research errands answered, 24 of 26 facts confirmed on the source page (92%), median 25 s, $0.33 of Exa in total. Continue reached the approval step on 4 of 5 booking sites (Kulttuurisauna, Allas Sea Pool, play.fi padel, a test form). Finnkino stops at its bot wall by design and hands over the page.
+Live eval on production, fresh account, fake details: 13 of 13 research errands answered, 24 of 26 facts confirmed on the source page (92%), median 25 s, $0.33 of Exa in total. After Stop and Continue, the form reached the Approve step on 4 of 5 sites (Kulttuurisauna, Allas Sea Pool, play.fi padel, a test form). Finnkino stops at its bot wall by design and hands the page over.
+
+On 15 Nov Vali made a real booking from WhatsApp: Kulttuurisauna, Sunday 22 Nov at 17:30, after a Stop and a Continue. The sauna confirmed it by email.
 
 ## You stay in control
 
-- Nothing is booked, sent or submitted without your Approve.
-- Payments are always yours.
-- The AI sees placeholders like `{{name}}` for details you saved; real values are typed only into a form you approve.
+- Nothing is sent, booked or submitted without your Approve. Stop any time; Continue picks up where it stopped without asking again.
+- Payments are always yours. Paid tickets stop at the payment page.
+- Logins (Suomi.fi, bank ID), CAPTCHAs and bot walls stop the run with a reason and a link to finish yourself.
+- The AI sees placeholders like `{{name}}`. Real values are typed only into the form, at the last moment.
 - Page text is treated as data, never as instructions.
+- In the shared demo, Approve sends only on a test site. Anywhere else Vali stops right before sending.
 
 ## Built on Modal
 
-Every **Book it** runs in its own private Chromium browser on Modal (2 CPUs, 4 GB), driven by Claude, with a live view on WhatsApp and the web. **Continue** starts a fresh run told what the last one did and what you said. Exa research runs in separate Modal workers. The API and web app run on Modal too, with Aiven Postgres as the shared store.
+Every form runs in its own private Chromium browser on Modal (2 CPUs, 4 GB), driven by Claude, with a live view on WhatsApp and the web. Exa research runs in separate Modal workers. The API and web app run on Modal too, with Aiven Postgres as the shared store.
 
 ## Try it
 
-Sign in on the live app with the demo account (email and password in the form's notes) and ask:
+Sign in on the live app with the demo account (email and password in the form's notes). The dashboard shows every errand, Exa search and page read. Then ask:
 
 1. `How can I open a bank account without a Finnish personal ID?`
 2. `I study my master's at Aalto. How do I get the HSL student discount?`
-3. `Book a public sauna at Kulttuurisauna on Sunday at 17:30`
+3. `Book a public sauna at Kulttuurisauna on Sunday at 17:30, 1 man`, then tap **Fill it for me** and give any test name and email. Vali fills the real form and stops at Approve.
 
 ---
 
@@ -116,21 +113,21 @@ Exa (Agent runs, Search, Contents, Monitors), Modal, Playwright + Chromium, Anth
 
 ## 5. Video (under 2:00)
 
-Screen recordings are in the scratchpad (`rec/`): WhatsApp in phone format, the web on a laptop. Blur the name and email in the booking shots. Speed up cloud browser waits and say "sped up".
+Screen recordings are in the scratchpad (`rec/`): WhatsApp in phone format, the web on a laptop. Blur the name and email in the form shots. Speed up cloud browser waits and say "sped up".
 
 | Time | On screen | Voiceover |
 |---|---|---|
-| 0:00-0:12 | Bogdan's situation: Aalto student from Romania, no Finnish ID, Junction this weekend. | "Bogdan studies at Aalto. No Finnish ID yet, no Finnish bank, and this weekend he is at Junction." |
-| 0:12-0:32 | WhatsApp: `How can I open a bank account without a Finnish personal ID?` 👀, then the answer with the Danske Bank picture, facts, links and Next for you. | "Vali reads the live web with Exa, answers for his situation in one sentence, and links the exact pages." |
-| 0:32-1:05 | WhatsApp: book Kulttuurisauna Sunday 17:30. Book it, name and email, the filled-form picture with Approve and Stop. Stop, then Continue: back at Approve without asking again. Approve. "Booked". | "A private cloud browser on Modal fills the real form. Stop, Continue, and it picks up where it left off. Nothing is sent until he taps Approve." |
-| 1:05-1:12 | The sauna's confirmation email (blurred details). | "A real booking." |
-| 1:12-1:32 | Web dashboard: the sentence of numbers, click the sauna errand, the chat thread to "Booked". | "Everything from WhatsApp lands on the dashboard, live." |
-| 1:32-1:50 | The errand story: You asked, Vali found, Vali did, Now, with the options and Next for you. | "Each errand tells what he asked, what Vali found, what it did, and what is next." |
-| 1:50-2:00 | Landing page: "Your valet for life in Finland." Built on Exa and Modal. | "Vali. Your valet for life in Finland." |
+| 0:00-0:12 | The newcomer: Bogdan, Aalto student from Romania, a few weeks in Espoo. No Finnish ID yet, a pile of forms. | "Bogdan is new in Finland. Every errand here is a form, and the rules change every year." |
+| 0:12-0:35 | WhatsApp: `How can I open a bank account without a Finnish personal ID?` 👀, then the answer with the page picture, facts, links and Next for you. | "He asks Vali. In the background Exa searches the live web, reads today's official pages and checks every sentence against a quote." |
+| 0:35-1:10 | WhatsApp: book Kulttuurisauna Sunday 17:30. Book it, name and email, the cloud browser filling the real form (sped up), the filled-form picture with Approve and Stop. | "Then Vali fills the real form in a private cloud browser on Modal. It stops and waits. Nothing is sent until he taps Approve." |
+| 1:10-1:18 | Approve, "Booked", then the sauna's confirmation email (blurred). | "He approved. A real booking." |
+| 1:18-1:40 | Web dashboard: the numbers sentence, the errand list, open the sauna errand: You asked, Vali found, Vali did, Now. | "Everything lands on the web dashboard: what he asked, what Exa found, what Vali filled." |
+| 1:40-1:52 | The demo account as judges will find it: errands answered, one form waiting at Approve, a watch on HOAS flats. | "The demo account is ready for you. In the demo, Approve stops right before sending." |
+| 1:52-2:00 | Landing page: "New in Finland? Vali handles it." Built on Exa and Modal. | "Vali. New in Finland? Vali handles it." |
 
 ## 6. Slides
 
-The deck: https://claude.ai/artifact/37ghc6G5jLHQTEqyKDPh6q (share it, then export the PDF).
+Slide content: [SLIDES.md](SLIDES.md). The earlier deck: https://claude.ai/artifact/37ghc6G5jLHQTEqyKDPh6q (update it to match, share it, then export the PDF).
 
 ## 7. Checklist (on the platform)
 
@@ -138,7 +135,10 @@ The deck: https://claude.ai/artifact/37ghc6G5jLHQTEqyKDPh6q (share it, then expo
 - [ ] Upload the video as **Public**, paste the link.
 - [ ] Export the slides as PDF and upload.
 - [ ] Name, punchline and description from sections 1 to 3. Technologies from section 4.
-- [ ] Links: live app, repo, demo link as Other Link.
+- [ ] Demo account email and password in the form's notes, never in the repo.
+- [ ] Links: live app, repo, extension zip as Other Link.
+- [ ] Before recording, leave the demo account in the state the video shows: answered errands, one form at Approve, a HOAS watch.
+- [ ] Check the 3 "Try it" queries on the live app with the demo account.
 - [ ] Main challenge: Exa, The Internet Butler. Tech challenges: Modal, Aiven.
 - [ ] Do not deploy in the last hour.
 - [ ] Set the submission to **FINAL** before 10:00 EET (aim for 09:30).
