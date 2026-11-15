@@ -122,3 +122,11 @@ test("dropdowns: Finland is picked as Suomi, and a dropdown without the choice i
     { id: "d", type: "select-one", label: "Valitse maa", options: ["Valitse", "Suomi (+358)", "Ruotsi (+46)"] },
   ]), { a: "Suomi", b: "Finland", d: "Suomi (+358)" });
 });
+
+test("one box for postal code and town gets both", () => {
+  assert.deepEqual(plan([{ id: "a", type: "text", label: "Postinumero ja -toimipaikka" }, { id: "b", type: "text", label: "Postal code and city" }]), { a: "02150 Espoo", b: "02150 Espoo" });
+});
+
+test("an unlabelled email box gets the email, an unlabelled tel box gets nothing", () => {
+  assert.deepEqual(plan([{ id: "a", type: "email", label: "", hint: " input input" }, { id: "b", type: "tel", label: "", hint: " otp1" }, { id: "c", type: "tel", label: "", hint: " input" }]), { a: "demo@vali.demo" });
+});
