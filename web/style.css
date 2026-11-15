@@ -731,3 +731,7 @@ h1 { text-wrap: balance; }
   .facts dt { font-size: 13px; }
   .top nav, .top .links { flex-wrap: nowrap; overflow-x: auto; }
 }
+
+/* signed in, the errands come first: the marketing headline is for visitors */
+body.signed-in #home > h1, body.signed-in #home > .sub { display: none; }
+body.signed-in #home .how-it-works { margin-top: 16px; }
