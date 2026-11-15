@@ -1,67 +1,96 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, detailsOf, draftsOf, exaTrail, factsOf, sourcesOf, stepsOf } from './model.js';
-import { renderExecution } from './execution.js';
+import { claimsOf, detailsOf, draftsOf, pageKind, errandStage, exaTrail, factsOf, fillBlanks, needsOf, readableTitle, shorten, sourcesOf, stepsOf } from './model.js';
+import { bookingCard, exaHelped, needsBlock, watchCard, watchMatchList } from './kinds.js';
 import { citePill } from './cite.js';
 import { renderState } from './state.js';
+import { loadProfile, missingDetails } from './profile.js';
 
-// One errand as a short story: what you asked, what Vali found, what it did, and where it stands now.
+// One errand, shaped by what it is: the card that matters most on top, the research below it, the plan folded.
+// Answers lead with the answer; bookings and forms with the booking; watches with the watch; drafts with the draft.
 export function renderAnswer(task, handlers) {
   const research = task.research || {};
   if (research.status !== 'completed') return show('answer', back(), unfinished(task, handlers));
+  const kind = pageKind(task);
   const sources = sourcesOf(task);
   const claims = claimsOf(task, sources);
   const pill = (n) => citePill(task, sources.find((s) => s.n === n));
   const [first, ...rest] = claims;
-  const run = task.execution;
-  show('answer',
-    back(),
-    h('div', { class: 'answer-main', lang: task.lang || null },
-      h('h1', { class: 'errand-title' }, task.task),
-      h('ol', { class: 'story' },
-        chapter('You asked', asked(task)),
-        chapter('Vali found', [
-          first ? h('p', { class: 'headline' }, claimText(first, pill)) : null,
-          rest.length ? h('p', { class: 'claims' }, rest.map((claim) => [claimText(claim, pill), ' '])) : null,
-          facts(factsOf(task, sources)),
-          drafts(draftsOf(task)),
-          howFound(task),
-          nextErrand(task, handlers),
-          run ? null : steps(stepsOf(task))]),
-        run ? chapter('Vali did', [renderExecution(task, { ...handlers, quiet: true }),
-          h('p', { class: 'exa-line' }, 'In a private cloud browser on Modal, one errand at a time.')]) : null,
-        chapter('Now', renderState(task, handlers), 'now'))));
+  const allFacts = factsOf(task, sources);
+  const head = [h('h1', { class: 'errand-title' }, readableTitle(task.task)), meta(task)];
+  const asking = errandStage(task).next?.kind === 'answer'; // the needs block holds the answer box, so Now drops it
+  const needs = needsBlock(task, handlers, { inline: kind !== 'form' });
+  const blocking = needs && needsOf(task, missingDetails(task, loadProfile())).some((item) => item.kind !== 'bring');
+  let body;
+  if (kind === 'form') {
+    body = [
+      blocking ? needs : null,
+      bookingCard(task, handlers),
+      blocking ? null : needs,
+      exaHelped(task),
+      h('section', { class: 'found-short' },
+        h('h2', { class: 'section-title' }, 'Good to know'),
+        first ? h('p', { class: 'headline small' }, claimText(first, pill)) : null,
+        facts(allFacts.slice(0, 3))),
+      drafts(draftsOf(task)),
+      steps(stepsOf(task))];
+  } else if (kind === 'watch') {
+    const found = claims.filter((c) => c.sources.length);
+    body = [
+      watchCard(task),
+      needs,
+      watchMatchList(task),
+      found.length ? h('p', { class: 'claims' }, found.map((claim) => [claimText(claim, pill), ' '])) : null,
+      howFound(task),
+      steps(stepsOf(task))];
+  } else {
+    const draftFirst = kind === 'draft';
+    body = [
+      blocking ? needs : null,
+      asking ? null : now(task, handlers),
+      draftFirst ? drafts(draftsOf(task)) : null,
+      first ? h('p', { class: draftFirst ? 'headline small' : 'headline big' }, claimText(first, pill)) : null,
+      rest.length ? h('p', { class: 'claims' }, rest.map((claim) => [claimText(claim, pill), ' '])) : null,
+      facts(allFacts.slice(0, 5)),
+      blocking ? null : needs,
+      draftFirst ? null : drafts(draftsOf(task)),
+      howFound(task),
+      nextErrand(task, handlers),
+      steps(stepsOf(task))];
+  }
+  show('answer', back(), h('div', { class: `answer-main kind-${kind}`, lang: task.lang || null }, head, body));
 }
 
-function chapter(title, body, cls = '') {
-  return h('li', { class: `chapter ${cls}`.trim() }, h('h2', { class: 'chapter-title' }, title), h('div', { class: 'chapter-body' }, body));
+// Where an answer stands, without the two-step track: one status word, the links, a follow-up.
+// A booking errand that ended on an answer says so: the answer is found, nothing is booked.
+function now(task, handlers) {
+  const stage = errandStage(task);
+  const booking = ['book', 'write', 'claim'].includes(task.mode);
+  const word = stage.tone === 'done' ? (booking ? 'Answer found, not booked' : 'Answered') : null;
+  const line = stage.tone === 'done' && booking ? 'Nothing was booked or sent. Use the link to do it yourself, or ask Vali.' : null;
+  const state = renderState(task, handlers);
+  const head = word ? h('div', { class: 'now-head' }, h('span', { class: `kind-badge ${booking ? 'tone-ready' : 'tone-done'}` }, word),
+    line ? h('span', { class: 'now-line' }, line) : null) : null;
+  if (head && state.prepend) state.prepend(head);
+  return h('div', { class: 'kind-now' }, state);
 }
 
-// The request and the context it came with: channel, the page it was asked from, saved details shared, answers given.
-function asked(task) {
-  const via = { whatsapp: 'WhatsApp', web: 'the web', extension: 'Chrome', voice: 'a call' }[task.channel || task.source] || 'the web';
+// One small line under the title: the channel and time it came in, the page, the saved details shared, answers given.
+function meta(task) {
+  const via = { whatsapp: 'WhatsApp', web: 'Web', api: 'Web', extension: 'Chrome', voice: 'Call' }[task.channel || task.source] || 'Web';
   const when = task.created_at ? new Date(task.created_at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   const known = detailsOf(task);
   const answered = task.research?.question?.answer ? [task.research.question.text, task.research.question.answer] : null;
   const page = task.page && (task.page.title || task.page.url);
-  return h('dl', { class: 'context' },
-    row('From', `${via}${when ? `, ${when}` : ''}`),
-    page ? row('Page', task.page.title || task.page.url) : null,
-    known.length ? row('Your details', known.join(', ')) : null,
-    answered ? row(answered[0], answered[1]) : null);
+  const item = (label, value) => h('span', { class: 'meta-item' }, h('span', { class: 'meta-k' }, label), h('span', {}, value));
+  return h('p', { class: 'errand-meta' },
+    h('span', { class: 'meta-item' }, `${via}${when ? `, ${when}` : ''}`),
+    page ? item('Page', page) : null,
+    known.length ? item('Your details', known.join(', ')) : null,
+    answered ? item(answered[0], answered[1]) : null);
 }
 
-function row(label, value) {
-  return h('div', {}, h('dt', {}, label), h('dd', {}, value));
-}
 
-function exaLine(task, sources) {
-  const lines = (task.research?.activity || task.research?.progress || []);
-  const searches = lines.filter((l) => l?.kind === 'search').length;
-  const pages = new Set(lines.filter((l) => ['read', 'source'].includes(l?.kind)).map((l) => l.url || l.text)).size;
-  const parts = [searches ? `${searches} Exa ${searches === 1 ? 'search' : 'searches'}` : null, pages ? `${pages} pages read` : null, `${sources.length} ${sources.length === 1 ? 'source' : 'sources'} quoted`].filter(Boolean);
-  return parts.join(', ') + '.';
-}
 
 function back() {
   return h('a', { class: 'back', href: '#/' }, '← Your errands');
@@ -86,16 +115,20 @@ function claimText(claim, pill) {
 function drafts(items) {
   if (!items.length) return null;
   return h('section', { class: 'drafts' }, items.map((draft) => {
-    const text = [draft.subject ? `Subject: ${draft.subject}` : '', draft.body].filter(Boolean).join('\n\n');
+    const profile = loadProfile();
+    const text = fillBlanks([draft.subject ? `Subject: ${draft.subject}` : '', draft.body].filter(Boolean).join('\n\n'), profile);
     const copy = h('button', { type: 'button', class: 'btn soft' }, 'Copy');
     copy.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(text); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select and copy'; }
     });
+    const pre = h('pre', { class: text.length > 360 ? 'draft-text folded' : 'draft-text' }, text);
+    const more = text.length > 360 ? h('button', { type: 'button', class: 'btn quiet' }, 'Show all') : null;
+    more?.addEventListener('click', () => { pre.classList.remove('folded'); more.remove(); });
     return h('div', { class: 'draft card' },
-      h('p', { class: 'fact-label' }, draft.label || (draft.type === 'email' ? 'Email draft' : 'Message')),
-      draft.to ? h('p', { class: 'muted' }, `To: ${draft.to}`) : null,
-      h('pre', { class: 'draft-text' }, text),
-      copy);
+      h('p', { class: 'draft-label' }, draft.label || (draft.type === 'email' ? 'Email draft' : 'Message')),
+      draft.to ? h('p', { class: 'draft-to' }, `To: ${fillBlanks(draft.to, profile)}`) : null,
+      pre,
+      h('div', { class: 'actions' }, copy, more));
   }));
 }
 
@@ -103,7 +136,14 @@ function facts(items) {
   if (!items.length) return null;
   return h('dl', { class: 'facts' }, items.map((fact) => h('div', { class: 'fact' },
     h('dt', {}, fact.label),
-    h('dd', {}, fact.value, fact.source ? [' ', h('a', { class: 'fact-source', href: fact.source.url, target: '_blank', rel: 'noopener noreferrer' }, fact.source.domain)] : null))));
+    h('dd', {}, foldable(fact.value), fact.source ? [' ', h('a', { class: 'fact-source', href: fact.source.url, target: '_blank', rel: 'noopener noreferrer' }, fact.source.domain)] : null))));
+}
+
+// A long value shows its first sentence; the rest folds behind More.
+export function foldable(text) {
+  const short = shorten(text, 130);
+  if (short === text) return text;
+  return h('details', { class: 'fold' }, h('summary', {}, short, h('span', { class: 'fold-more' }, 'More')), h('span', { class: 'fold-full' }, text));
 }
 
 // What Exa did for this answer, in plain words: the searches, the pages it read, the sentences it checked.

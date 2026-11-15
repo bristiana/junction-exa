@@ -102,6 +102,7 @@ export const api = {
   login: (email, password) => send('POST', '/v1/auth/login', { email, password }, false),
   stats: () => call('GET', '/v1/stats'),
   watches: () => call('GET', '/v1/watches'),
+  checkWatch: (id) => call('POST', `/v1/watches/${encodeURIComponent(id)}/check`),
   services: () => call('GET', '/v1/services'),
   service: (id) => call('GET', `/v1/services/${encodeURIComponent(id)}`),
   places: (q) => call('GET', `/v1/places?q=${encodeURIComponent(q)}&city=helsinki`),
