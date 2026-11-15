@@ -19,6 +19,7 @@ import { EXA_USES } from './exa-uses.js';
 import { closeBoard, openBoard, resumeBoard } from './board.js';
 import { createAskDock } from './ask-dock.js';
 import { atWork, renderAtWork, renderFolder } from './folder.js';
+import { renderWelcome, resetWelcome } from './welcome.js';
 
 const POLL_MS = 2000;
 const BUSY_MS = 10000;
@@ -206,6 +207,7 @@ async function loadDashboard() {
     if ($('home').hidden) return;
     renderDashboard(tasks, stats);
     renderFolder(tasks);
+    renderWelcome(tasks);
     // Vali at work: while an errand runs in the background he poses for it and says what he is doing.
     const work = atWork(tasks);
     mascot?.setMood(work ? work.mood : 'idle');
@@ -219,7 +221,7 @@ $('to-trust')?.addEventListener('click', () => openTrust(followed?.task));
 $('trust').addEventListener('click', (event) => { if (event.target === $('trust')) $('trust').close(); });
 $('to-details').addEventListener('click', () => openDetails());
 $('to-whatsapp').addEventListener('click', () => openWhatsapp());
-$('to-logout').addEventListener('click', () => { session.signOut(); location.hash = '#/'; showView('home'); });
+$('to-logout').addEventListener('click', () => { session.signOut(); resetWelcome(); location.hash = '#/'; showView('home'); });
 $('whatsapp').addEventListener('click', (event) => { if (event.target === $('whatsapp')) $('whatsapp').close(); });
 $('details').addEventListener('click', (event) => { if (event.target === $('details')) $('details').close(); });
 // Saved or deleted details change the open answer's hint and approval values, so it redraws.
