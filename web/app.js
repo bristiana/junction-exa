@@ -18,6 +18,7 @@ import { openHub } from './hub.js';
 import { EXA_USES } from './exa-uses.js';
 import { closeBoard, openBoard, resumeBoard } from './board.js';
 import { createAskDock } from './ask-dock.js';
+import { atWork, renderAtWork, renderFolder } from './folder.js';
 
 const POLL_MS = 2000;
 const BUSY_MS = 10000;
@@ -191,6 +192,11 @@ async function loadDashboard() {
     const [{ tasks }, stats] = await Promise.all([api.tasks(), api.stats().catch(() => null)]);
     if ($('home').hidden) return;
     renderDashboard(tasks, stats);
+    renderFolder(tasks);
+    // Vali at work: while an errand runs in the background he poses for it and says what he is doing.
+    const work = atWork(tasks);
+    mascot?.setMood(work ? work.mood : 'idle');
+    renderAtWork(work);
     if (hasWorking(tasks) && !document.hidden) listTimer = setTimeout(loadDashboard, 4000);
   } catch { /* the list stays as it was until the next visit */ }
 }

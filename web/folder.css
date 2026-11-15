@@ -1,0 +1,47 @@
+/* "Your folder" on home and Vali's speech line while he works in the background (web/folder.js). */
+body:not(.signed-in) #folder { display: none; }
+#folder:empty { display: none; }
+
+.folder { margin: 40px auto 0; text-align: left; padding: 18px 18px 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.folder-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.folder-head .section-title { margin: 0; font-size: 18px; }
+.folder-note { margin: 0; font-size: 13px; color: var(--muted); }
+.folder-row-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.folder-sub { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 700; }
+.folder-edit { font-size: 13px; font-weight: 600; color: var(--accent); }
+.folder-empty { margin: 0; font-size: 13px; color: var(--muted); }
+.folder-saved { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* about you: facts are filled chips, saved details are outlined with a small lock dot (names only) */
+.folder-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.folder-chips li { font-size: 13px; font-weight: 500; padding: 4px 11px; border-radius: 999px; line-height: 1.4; }
+.folder-chips .fact { background: var(--fill); color: var(--ink); }
+.folder-chips .saved { border: 1px solid var(--line-2); color: var(--muted); }
+.folder-chips .saved::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--good); vertical-align: 1px; }
+
+/* files: small tiles, four across, each links to its errand */
+.folder-files { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.file { display: flex; flex-direction: column; height: 100%; text-decoration: none; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--fill-2); }
+.file:hover { border-color: var(--line-3); background: var(--card-hover); }
+.file-shot, .file-glyph { display: block; width: 100%; height: 64px; object-fit: cover; object-position: top; background: var(--fill); border-bottom: 1px solid var(--line); }
+.file-glyph { display: grid; place-items: center; color: var(--accent); }
+.file-glyph svg { width: 22px; height: 22px; opacity: .85; }
+.file-glyph.answer { color: var(--good); background: var(--good-soft); }
+.file-text { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; min-width: 0; }
+.file-meta { font-size: 12px; font-weight: 600; color: var(--muted); }
+.file-title { font-size: 13px; line-height: 1.35; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.file-place { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-saved .more { margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--accent); }
+@media (max-width: 720px) { .folder-files { grid-template-columns: repeat(2, minmax(0, 1fr)); } .folder { padding: 14px; } }
+
+/* Vali at work: one line beside him on home, linking to the errand he is on */
+#home .hero-slot { position: relative; }
+.vali-says { position: absolute; left: calc(100% + 4px); top: 28px; width: max-content; max-width: 230px; padding: 8px 12px; text-align: left;
+  background: var(--card); border: 1px solid var(--line-2); border-radius: 14px 14px 14px 4px; box-shadow: var(--shadow-2); text-decoration: none; z-index: 2; }
+.vali-says::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--accent); vertical-align: 1px; animation: pulse 1.2s infinite; }
+.vali-says-line { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.vali-says-more { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+@media (max-width: 600px) {
+  .vali-says { left: auto; right: -96px; top: auto; bottom: -6px; max-width: 170px; border-radius: 14px 14px 4px 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .vali-says::before { animation: none; } }
