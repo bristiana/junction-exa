@@ -131,18 +131,6 @@ async function saveSettings() {
   for (const i of $("profileFields").querySelectorAll("input")) if (i.value.trim()) profile[i.dataset.k] = i.value.trim();
   await chrome.storage.local.set({ exaKey: $("exaKey").value.trim(), effort: $("effort").value, profile, presence: $("presence").checked });
 }
-$("useDemoDetails").addEventListener("click", async () => {
-  const demo = {
-    name: "Bogdan Caraeane", email: "demo@vali.demo", phone: "+358 40 123 4567",
-    address: "Otakaari 1", postal_code: "02150", city: "Espoo", country: "Finland",
-    date_of_birth: "2000-01-01", nationality: "Romanian",
-  };
-  for (const i of $("profileFields").querySelectorAll("input")) if (i.dataset.k in demo) i.value = demo[i.dataset.k];
-  try {
-    await saveSettings();
-    toast("Demo details saved");
-  } catch (e) { toast(e.message); }
-});
 $("saveSettings").addEventListener("click", async () => {
   await saveSettings();
   $("settings").hidden = true;
