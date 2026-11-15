@@ -146,10 +146,14 @@ function say(text) {
 }
 
 // The same moves as on the errand page, straight from the chat: continue, answer, approve, stop.
+// One action at a time, like the errand page: a double Enter on a follow-up or Try again starts one errand, not two.
+let acting = false;
 function threadHandlers(task) {
   const act = async (call, button) => {
+    if (acting) return;
+    acting = true;
     if (button) button.disabled = true;
-    try { await call(); say(''); } catch (error) { say(error.message || 'That did not go through. Try again.'); } finally { if (button) button.disabled = false; load(); }
+    try { await call(); say(''); } catch (error) { say(error.message || 'That did not go through. Try again.'); } finally { acting = false; if (button) button.disabled = false; load(); }
   };
   const fill = (index, button) => act(() => api.execute(task.id, index, loadProfile()), button);
   return {
