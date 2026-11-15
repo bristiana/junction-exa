@@ -64,7 +64,7 @@ function exaLine(task, sources) {
 }
 
 function back() {
-  return h('a', { class: 'back', href: '#/dashboard' }, '← Dashboard');
+  return h('a', { class: 'back', href: '#/' }, '← Your errands');
 }
 
 function unfinished(task, { onFollowUp }) {
