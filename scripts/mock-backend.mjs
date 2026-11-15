@@ -136,7 +136,7 @@ export function createMockServer({ researchMs = 6000, execMs = 4000, ask = false
     Object.assign(failed.research, { status: "failed", error: { message: "The research run failed (mock)." } });
 
     const done = advance(makeTask(user, "Report the pothole at Mannerheimintie 5 to the city", { done: true }));
-    done.execution = exec(done, "https://palautteet.hel.fi/vikailmoitus-lomake", { status: "done", result: "Sent. The city answers by email, reference HEL-2026-4411 (mock)." });
+    done.execution = exec(done, "https://palautteet.hel.fi/vikailmoitus-lomake", { status: "done", approval_decision: "approved", result: "Sent. The city answers by email, reference HEL-2026-4411 (mock)." });
     addStep(done, 'Clicked "Send" once, after your approval');
 
     const blocked = advance(makeTask(user, "Apply for Kela housing benefit", { done: true }));
@@ -348,7 +348,7 @@ export function createMockServer({ researchMs = 6000, execMs = 4000, ask = false
         }
         if (op === "approve") {
           if (t.execution?.status !== "awaiting_approval") return send(res, 409, { detail: "Nothing is waiting for approval." });
-          Object.assign(t.execution, { status: "submitting", _at: Date.now() });
+          Object.assign(t.execution, { status: "submitting", approval_decision: "approved", _at: Date.now() });
         }
         if (op === "stop" && t.execution && !["done", "failed", "stopped"].includes(t.execution.status)) Object.assign(t.execution, { status: "stopped", approval_decision: "stopped", question: null });
         t.updated_at = now();
