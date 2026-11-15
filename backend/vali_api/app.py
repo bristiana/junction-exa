@@ -485,7 +485,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                 if request.url.path in ('/v1/users', '/v1/auth/login'):
                     limiter.check('signup:' + ip, limiter.signup_limit, limiter.signup_seconds, what='new accounts')
                 elif readonly:
-                        raise HTTPException(403, 'This is the shared demo, so it is view only. Create your own account to try Vali.')
+                        raise HTTPException(403, 'This link is view only. Sign in with the demo account to try Vali.')
         except RateLimited as exc:
             return await rate_limited(request, exc)
         except HTTPException as exc:
