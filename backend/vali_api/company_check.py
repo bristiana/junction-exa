@@ -268,6 +268,7 @@ router = APIRouter()
 @router.post('/v1/check')
 def check(body: CheckBody, request: Request, user=Depends(authenticate)):
     state = request.app.state
+    state.limiter.check('check:' + user['id'], 20, 3600, what='company checks')
     cache = cache_of(state)
     key = '|'.join([' '.join(name_tokens(body.name)), clean_domain(body.domain), fold(squash(body.city))])
     hit = cache.get(key)

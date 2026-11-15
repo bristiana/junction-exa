@@ -35,7 +35,7 @@ from .questions import early_question, with_answer
 from .router import route
 from .services import create_router as services_router
 from .stats import channel_of_origin, pick_channel, summarize
-from .store import make_store, now
+from .store import make_store, now, token_hash
 from .uploads import UploadLimit
 from .voice_agent import add_voice_routes
 from vali_wa.flow import WhatsAppFlow
@@ -463,6 +463,10 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                 limiter.check('ip:' + ip, limiter.ip_limit, limiter.ip_seconds)
                 if request.url.path in ('/v1/users', '/v1/auth/login'):
                     limiter.check('signup:' + ip, limiter.signup_limit, limiter.signup_seconds, what='new accounts')
+                else:
+                    scheme, _, token = request.headers.get('authorization', '').partition(' ')
+                    if scheme.lower() == 'bearer' and token and token_hash(token) in config.readonly_tokens:
+                        raise HTTPException(403, 'This is the shared demo, so it is view only. Create your own account to try Vali.')
         except RateLimited as exc:
             return await rate_limited(request, exc)
         except HTTPException as exc:
@@ -518,9 +522,12 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         return {'email': body.email.strip().lower()}
 
     @application.post('/v1/auth/login')
-    def login(body: AuthBody):
+    def login(body: AuthBody, request: Request):
+        limiter, key = application.state.limiter, 'login:' + client_ip(request) + ':' + body.email.strip().lower()
+        check_code_tries(limiter, key)
         signed = application.state.store.login(body.email, body.password)
         if not signed:
+            limiter.failed(key)
             raise HTTPException(401, 'Wrong email or password.')
         return signed
 
@@ -546,6 +553,8 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         if not body.task.strip():
             raise HTTPException(422, 'Task must not be blank')
         check_task_budget(application, user, count_request=not budget_checked)
+        if body.effort in ('xhigh', 'ultra'):
+            body.effort = 'high'
         if body.situation is not None:
             save_situation(user, body.situation)
         state = application.state
@@ -703,6 +712,13 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
             application.state.store.update_research(tid, {**research, 'status': 'cancelled'})
         return application.state.store.get_task(tid)
 
+    def running_limit(user, most=2):
+        """A cloud browser costs real money: an account runs at most two at once."""
+        live = [t for t in application.state.store.list_tasks(user['id'], 100)
+                if (t.get('execution') or {}).get('status') not in (None, 'done', 'failed', 'stopped')]
+        if len(live) >= most:
+            raise HTTPException(429, 'Two errands are already running. Stop one, then start this one.')
+
     def execute_for_user(tid, body, user, channel=None):
         task = owned(tid, user)
         if task['research']['status'] != 'completed':
@@ -722,6 +738,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
                            'key_facts': structured.get('key_facts', []), 'action': action, 'research': structured}, ensure_ascii=False)
         execution = dict(channel=channel, status='starting', goal=goal, start_url=start_url, current_url=start_url,
                          steps=[], shots=[], approval=None, approval_decision=None, result=None, error=None)
+        running_limit(user)
         if not application.state.store.start_execution(tid, execution, task['execution']):
             raise HTTPException(409, 'Execution already changed')
         application.state.spawn_browser_session(tid, goal, start_url, body.profile or {})
@@ -774,6 +791,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         execution = dict(channel=channel or previous.get('channel'), status='starting', goal=goal, start_url=start_url,
                          current_url=start_url, steps=[], shots=[], approval=None, approval_decision=None, result=None,
                          error=None, resumed_from=len(steps), runs=int(previous.get('runs') or 1) + 1)
+        running_limit(user)
         if not application.state.store.start_execution(tid, execution, previous):
             raise HTTPException(409, 'Execution already changed')
         application.state.spawn_browser_session(tid, goal, start_url, body.profile or {})
