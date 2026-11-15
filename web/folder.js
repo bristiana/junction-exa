@@ -3,7 +3,7 @@
 // speech line while any errand works in the background. Built only from the errand list, the profile and /v1/me.
 import { api } from './api.js';
 import { $, h, show } from './dom.js';
-import { activityLine, activityOf, domainOf, draftsOf, errandStatus, moodOf, sourcesOf, structured } from './model.js';
+import { activityLine, activityOf, domainOf, draftsOf, errandStatus, moodOf, readableTitle, sourcesOf, structured } from './model.js';
 import { PROFILE_FIELDS, loadProfile } from './profile.js';
 import { openDetails } from './details.js';
 import { icon } from './dashboard.js';
