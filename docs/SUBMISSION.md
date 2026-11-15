@@ -43,7 +43,7 @@ New in Finland? Vali handles it. Ask on WhatsApp or the web: Exa reads today's o
 
 ## 3. Description (max 5000, markdown)
 
-Paste everything between the two lines. 4,720 characters (4,779 if the form counts line breaks as two).
+Paste everything between the two lines. 4,869 characters (4,928 if the form counts line breaks as two).
 
 ---
 
@@ -99,7 +99,7 @@ Every form runs in its own private Chromium browser on Modal (2 CPUs, 4 GB), dri
 
 ## Try it
 
-Sign in on the live app with the demo account (email and password in the form's notes). The dashboard shows every errand, Exa search and page read. Then ask:
+Sign in on the live app with the demo account (email and password in the form's notes). WhatsApp runs on Meta's test number, which only answers allow-listed phones; the video shows that side, and all of it is in the demo account. The dashboard shows every errand, Exa search and page read. Then ask:
 
 1. `How can I open a bank account without a Finnish personal ID?`
 2. `I study my master's at Aalto. How do I get the HSL student discount?`
