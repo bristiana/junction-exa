@@ -133,3 +133,50 @@ def test_unanswered_question_pauses_and_the_late_answer_continues(api, monkeypat
     assert task['execution']['status'] == 'starting' and task['execution']['runs'] == 2
     resume = json.loads(browsers[-1][1])['resume']
     assert resume['question'] == 'Which slot?' and resume['answer'] == '19:30'
+
+
+def waiting_for_approval(wa):
+    api, graph, deliver = wa
+    client, application, store, *_, user = api
+    pair_whatsapp(api, deliver)
+    deliver('book a sauna in Espoo tomorrow', mid='new')
+    tid = store.list_tasks(user['user_id'])[0]['id']
+    poll_research_once(tid, application)
+    deliver('1', mid='execute')
+    store.patch_execution(tid, {'status': 'awaiting_approval', 'approval': {'summary': 'Book sauna'}})
+    return tid
+
+
+@pytest.mark.parametrize('text', ['Fill in the form at https://httpbin.org/forms/post',
+                                  'Where can I buy a cheap bike in Espoo this week?'])
+def test_whatsapp_new_errand_while_one_waits_for_approval(wa, text):
+    api, graph, deliver = wa
+    store, user = api[2], api[-1]
+    tid = waiting_for_approval(wa)
+    deliver(text, mid='second')
+    tasks = store.list_tasks(user['user_id'])
+    assert len(tasks) == 2 and tasks[0]['task'] == text
+    assert not store.get_task(tid)['execution'].get('inbox')
+    assert 'approve' in graph.sent[-1][1]  # the earlier one is still there to approve or stop
+    deliver('approve', mid='ok')
+    assert store.get_task(tid)['execution']['approval_decision'] == 'approved'
+
+
+def test_whatsapp_short_reply_while_waiting_says_how_to_go_on(wa):
+    api, graph, deliver = wa
+    store, user = api[2], api[-1]
+    tid = waiting_for_approval(wa)
+    deliver('make it 15:00', mid='short')
+    assert len(store.list_tasks(user['user_id'])) == 1
+    assert store.get_task(tid)['execution']['inbox'][-1]['text'] == 'make it 15:00'  # kept for a Continue
+    assert 'new errand' in graph.sent[-1][1]
+
+
+def test_whatsapp_a_dead_approval_no_longer_swallows_texts(wa):
+    api, graph, deliver = wa
+    store, user = api[2], api[-1]
+    tid = waiting_for_approval(wa)
+    store.sql('UPDATE tasks SET updated_at=? WHERE id=?', ('2026-01-01T00:00:00+00:00', tid))
+    deliver('cheap bike', mid='later')
+    tasks = store.list_tasks(user['user_id'])
+    assert len(tasks) == 2 and tasks[0]['task'] == 'cheap bike'
