@@ -17,6 +17,7 @@ const GROUPS = [
   ['you', 'Needs you', 'Vali is waiting for your answer or your OK.'],
   ['working', 'Working now', 'Vali is on it in the background. You can close this page.'],
   ['done', 'Done', null],
+  ['failed', 'Stopped', 'Nothing was sent. Open one to try again.'],
 ];
 const DONE_SHOWN = 6;
 
@@ -28,7 +29,7 @@ export function renderDashboard(tasks, stats) {
   const counters = countersOf(stats, tasks);
   const rows = tasks.map((task) => ({ task, status: errandStatus(task) }));
   const groups = GROUPS.map(([tone, title, note]) => ({ tone, title, note,
-    items: rows.filter((r) => (tone === 'done' ? ['done', 'failed'].includes(r.status.tone) : r.status.tone === tone)) }));
+    items: rows.filter((r) => r.status.tone === tone) }));
   show('errands',
     h('div', { class: 'errands-head' },
       h('h2', { class: 'section-title' }, 'Your errands'),
