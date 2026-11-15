@@ -738,7 +738,9 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def running_limit(user, most=2):
         """A cloud browser costs real money: an account runs at most two at once, ten starts in ten minutes."""
         check_task_budget(application, user, count_request=False)
-        application.state.limiter.check('runs:' + user['id'], 10, 600, what='browser runs')
+        owner = user['id'] in getattr(application.state.config, 'owner_ids', ())
+        most = 6 if owner else most  # the demo account fills several forms at once
+        application.state.limiter.check('runs:' + user['id'], 40 if owner else 10, 600, what='browser runs')
         live = [t for t in application.state.store.list_tasks(user['id'], 100)
                 if (t.get('execution') or {}).get('status') not in (None, 'done', 'failed', 'stopped')]
         if len(live) >= most:

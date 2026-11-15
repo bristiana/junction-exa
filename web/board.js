@@ -110,7 +110,7 @@ function liveBadge() {
 
 // ---------- one errand as a chat ----------
 function renderThread(task, checked) {
-  const back = h('a', { class: 'back thread-back', href: '#/dashboard', 'data-key': 'back' }, '← Exa activity');
+  const back = h('a', { class: 'back thread-back', href: '#/dashboard', 'data-key': 'back' }, '← Activity');
   if (!task) {
     show('board-content', h('div', { class: 'board thread-view' }, h('div', { class: 'thread-top' }, back, liveBadge()),
       h('p', { class: 'muted board-loading' }, checked ? 'This errand is not in this account.' : 'Loading the errand…')));
