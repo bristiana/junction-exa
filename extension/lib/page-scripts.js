@@ -176,10 +176,22 @@ export function capturePage(mode) {
   if (mode === "redactor") return R;
 
   const clip = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
+  // Seen by a person: not hidden, not see-through, not pushed off the page. Spam traps ("honeypots") hide a field
+  // that way, and a form with one filled is thrown away.
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     const cs = getComputedStyle(el);
-    return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none";
+    if (!(r.width > 0 && r.height > 0) || cs.visibility === "hidden" || cs.display === "none") return false;
+    if (el.type === "radio" || el.type === "checkbox") return true; // styled radios hide the real input on purpose
+    if (r.width <= 1 || r.height <= 1) return false;
+    if (r.right + scrollX <= 0 || r.bottom + scrollY <= 0) return false;
+    for (let a = el; a && a.nodeType === 1; a = a.parentElement || a.getRootNode?.().host) {
+      const st = getComputedStyle(a);
+      if (Number(st.opacity) === 0) return false;
+      const b = a.getBoundingClientRect();
+      if (a !== el && (st.overflow === "hidden" || st.overflowY === "hidden") && b.height <= 2) return false;
+    }
+    return true;
   };
   // Controls inside open shadow roots too (web components), after the ones in the page itself.
   const deepAll = (root, sel, out = []) => {
@@ -294,6 +306,11 @@ export function fillPage(values, expectedUrl) {
     el.setAttribute("data-vali-filled", "1");
   };
 
+  // The page may submit when a value changes (onchange="form.submit()" on a dropdown). While Vali fills, and a moment
+  // after, any submit the page starts is stopped: only the user sends a form.
+  const stopSubmit = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+  const on = typeof addEventListener === "function";
+  if (on) addEventListener("submit", stopSubmit, true);
   let filled = 0;
   const skipped = [];
   // Recheck the live control: a page can change a tagged field into a submit button after capture.
@@ -332,6 +349,7 @@ export function fillPage(values, expectedUrl) {
     }
     filled++;
   }
+  if (on) setTimeout(() => removeEventListener("submit", stopSubmit, true), 1000);
   const first = document.querySelector("[data-vali-filled]");
   first?.scrollIntoView({ behavior: "smooth", block: "center" });
   return { filled, skipped };
