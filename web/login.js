@@ -9,7 +9,7 @@ function goTo(next) {
   else location.hash = next;
 }
 
-export function renderLogin(next = '#/dashboard') {
+export function renderLogin(next = '#/') {
   const go = () => { session.markSignedIn(); goTo(next); };
   const choice = (title, detail, onclick, primary = false) =>
     h('button', { type: 'button', class: `login-choice${primary ? ' primary' : ''}`, onclick },

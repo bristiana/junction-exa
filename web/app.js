@@ -8,7 +8,7 @@ import { renderWorking, tickClock } from './working.js';
 import { renderAnswer } from './answer.js';
 import { stopFrames } from './execution.js';
 import { startMic } from './mic.js';
-import { renderDashboard } from './dashboard.js';
+import { hasWorking, renderDashboard } from './dashboard.js';
 import { createMascot, mountPalettePicker } from './mascot.js';
 import { openTrust } from './trust.js';
 import { openDetails } from './details.js';
@@ -182,18 +182,19 @@ function unfollow() {
 
 // ---------- your errands ----------
 // Loaded when home opens and when the tab comes back, never on a timer; /v1/stats is optional until the API ships it.
+// While an errand is working in the background, the list refreshes itself every few seconds.
+let listTimer = 0;
 async function loadDashboard() {
+  clearTimeout(listTimer);
   if (!session.signedIn()) return;
   try {
     const [{ tasks }, stats] = await Promise.all([api.tasks(), api.stats().catch(() => null)]);
-    if (!$('home').hidden) renderDashboard(tasks, stats);
+    if ($('home').hidden) return;
+    renderDashboard(tasks, stats);
+    if (hasWorking(tasks) && !document.hidden) listTimer = setTimeout(loadDashboard, 4000);
   } catch { /* the list stays as it was until the next visit */ }
 }
 
-$('to-errands').addEventListener('click', () => {
-  if (location.hash.startsWith('#/t/')) location.hash = '#/';
-  requestAnimationFrame(() => $('errands').scrollIntoView({ behavior: 'smooth' }));
-});
 
 $('to-trust')?.addEventListener('click', () => openTrust(followed?.task));
 $('trust').addEventListener('click', (event) => { if (event.target === $('trust')) $('trust').close(); });
@@ -219,8 +220,8 @@ function route() {
   if (location.hash === '#/login') {
     closeBoard();
     unfollow();
-    if (session.signedIn() && !session.hasDemo()) { location.hash = '#/dashboard'; return; }
-    renderLogin('#/dashboard');
+    if (session.signedIn() && !session.hasDemo()) { location.hash = '#/'; return; }
+    renderLogin('#/');
     return showView('login');
   }
   if ($('details').open) $('details').close();

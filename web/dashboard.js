@@ -12,8 +12,23 @@ export const CHANNELS = {
   imessage: ['iMessage', 'M12 3C6.5 3 2 6.6 2 11c0 2.5 1.4 4.7 3.7 6.2L5 21l4-2.3c1 .2 2 .3 3 .3 5.5 0 10-3.6 10-8s-4.5-8-10-8Z'],
 };
 
+// Vali works in the background, so the list is grouped by who acts next: you, Vali, or nobody.
+const GROUPS = [
+  ['you', 'Needs you', 'Vali is waiting for your answer or your OK.'],
+  ['working', 'Working now', 'Vali is on it in the background. You can close this page.'],
+  ['done', 'Done', null],
+];
+const DONE_SHOWN = 6;
+
+export function hasWorking(tasks) {
+  return tasks.some((task) => errandStatus(task).tone === 'working');
+}
+
 export function renderDashboard(tasks, stats) {
   const counters = countersOf(stats, tasks);
+  const rows = tasks.map((task) => ({ task, status: errandStatus(task) }));
+  const groups = GROUPS.map(([tone, title, note]) => ({ tone, title, note,
+    items: rows.filter((r) => (tone === 'done' ? ['done', 'failed'].includes(r.status.tone) : r.status.tone === tone)) }));
   show('errands',
     h('div', { class: 'errands-head' },
       h('h2', { class: 'section-title' }, 'Your errands'),
@@ -23,18 +38,30 @@ export function renderDashboard(tasks, stats) {
         counter(counters.pages, 'pages read'),
         counter(counters.cost == null ? null : `$${counters.cost.toFixed(2)}`, 'Exa cost'))),
     tasks.length
-      ? h('ul', { class: 'errand-list' }, tasks.map(row))
-      : h('p', { class: 'muted empty' }, 'No errands yet.'));
+      ? groups.filter((g) => g.items.length).map(group)
+      : h('p', { class: 'muted empty' }, 'No errands yet. Ask Vali above, or message it on WhatsApp.'));
+}
+
+function group({ tone, title, note, items }) {
+  const many = tone === 'done' && items.length > DONE_SHOWN;
+  const list = h('ul', { class: 'errand-list' }, items.map((r, i) => row(r.task, r.status, many && i >= DONE_SHOWN)));
+  const more = many ? h('button', { type: 'button', class: 'btn quiet more', onclick: (e) => {
+    for (const li of list.querySelectorAll('li[hidden]')) li.hidden = false;
+    e.currentTarget.remove();
+  } }, `Show all ${items.length}`) : null;
+  return h('section', { class: `errand-group ${tone}` },
+    h('h3', { class: 'group-title' }, title, h('span', { class: 'group-count' }, String(items.length))),
+    note ? h('p', { class: 'group-note' }, note) : null,
+    list, more);
 }
 
 function counter(value, label) {
   return value == null ? null : h('div', {}, h('dt', {}, String(value)), h('dd', {}, label));
 }
 
-function row(task) {
-  const status = errandStatus(task);
+function row(task, status, hidden) {
   const [label, path] = CHANNELS[channelOf(task)] || CHANNELS.extension;
-  return h('li', {},
+  return h('li', { hidden: hidden || null },
     h('a', { class: `errand ${status.tone}`, href: `#/t/${encodeURIComponent(task.id)}` },
       h('span', { class: 'channel', title: label }, icon(path), h('span', { class: 'sr-only' }, label)),
       h('span', { class: 'errand-text' },

@@ -17,8 +17,8 @@
   <a class="brand" href="#/">Vali</a>
   <div class="top-right">
     <a href="/vali-extension.zip" download="vali-extension.zip" class="link-btn">Get the extension</a>
-    <a href="#/dashboard" class="link-btn signed" data-view="dashboard">Dashboard</a>
-    <button type="button" id="to-errands" class="link-btn signed">Errands</button>
+    <a href="#/" class="link-btn signed" data-view="home">Your errands</a>
+    <a href="#/dashboard" id="to-errands" class="link-btn signed" data-view="dashboard">Exa activity</a>
     <button type="button" id="to-whatsapp" class="link-btn signed">WhatsApp</button>
     <button type="button" id="to-details" class="link-btn signed">Details</button>
     <button type="button" id="to-logout" class="link-btn signed">Log out</button>
@@ -37,7 +37,7 @@
   <section id="home" class="view home">
     <div class="hero-slot" data-slot="home"></div>
     <h1>Your valet for life in Finland.</h1>
-    <p class="sub">From your first bank account to your Sunday sauna. Message Vali on WhatsApp. Get on with student life.</p>
+    <p class="sub">Hand Vali an errand on WhatsApp or here. It works in the background, reads today’s official pages with Exa, and comes back with the answer or a filled form for your OK.</p>
     <form id="ask" class="ask">
       <label class="sr-only" for="errand">Your errand</label>
       <input id="errand" type="text" maxlength="2000" autocomplete="off" enterkeyhint="send"
@@ -54,72 +54,74 @@
       <button type="button" class="chip">Book a sauna on Sunday</button>
       <button type="button" class="chip">Basketball court for Saturday</button>
     </div>
+    <ol class="how-it-works" aria-label="How Vali works">
+      <li><b>You ask</b><span>On WhatsApp, here, or from the Chrome extension. Then get on with your day.</span></li>
+      <li><b>Vali works in the background</b><span>Exa searches the live web, reads today’s official pages and checks every sentence against a quote.</span></li>
+      <li><b>You get it done</b><span>An answer with exact sources, or a real form filled in a cloud browser that waits for your Approve.</span></li>
+    </ol>
    <section id="errands" class="errands"></section>
 
     <div class="landing">
-      <section class="feature" aria-labelledby="areas-title">
+      <section class="story-intro">
+        <h2>Meet Bogdan.</h2>
+        <p>A master’s student from Romania, three weeks into life in Espoo. No Finnish personal ID yet, no Finnish bank, full price on every bus. The answers he needs sit on Finnish pages that change every year. A chatbot trained last year doesn’t know them. Vali reads them today.</p>
+      </section>
+
+      <section class="feature" aria-labelledby="story-1">
         <div class="feature-text">
-          <h2 id="areas-title">Settle in with less hassle</h2>
-          <p>New at Aalto? Open a bank account without a Finnish ID. Sort your registration with Migri and DVV. Get the HSL student price.</p>
-          <p>Tell Vali where you are from and what you need. EU citizen or not, get answers that fit your situation. Exa reads the live web. Each answer links to the exact source.</p>
+          <p class="chapter-no">Monday</p>
+          <h2 id="story-1">“How do I open a bank account without a Finnish ID?”</h2>
+          <p>He sends it on WhatsApp and puts the phone away. In the background Exa searches the live web, reads the banks’ and Migri’s pages as they are today, and Vali keeps only the sentences a quote on the page backs.</p>
+          <p>Half a minute later: the answer for his case, the key facts, the exact Danske Bank and Migri links, and the one thing to do next.</p>
         </div>
         <div>
           <img class="shot" src="landing/whatsapp-answer.jpg" width="1200" height="730" loading="lazy"
              alt="WhatsApp chat: Vali explains how to open a bank account without a Finnish ID">
-          <img class="shot" src="landing/web-answer.jpg" width="1200" height="874" loading="lazy"
-             alt="Vali's answer page with sources and How Vali found this">
         </div>
       </section>
 
-      <section class="feature flip">
+      <section class="band card fresh">
+        <p class="chapter-no">Why live search matters</p>
+        <h2>The rules moved, and Vali noticed.</h2>
+        <p>On 1 August 2025 Kela moved students from the general housing allowance to the student housing supplement, and students had to apply again. Migri updates its student permit queue almost every week. Vali reads the page as it is now and links the exact line, so you can check it yourself.</p>
+        <p class="band-source">Source: <a href="https://www.kela.fi/news/students-will-be-transferred-from-the-general-housing-allowance-scheme-to-the-student-housing-supplement-scheme-on-1-august-2025" target="_blank" rel="noopener noreferrer">kela.fi</a></p>
+      </section>
+
+      <section class="feature flip" aria-labelledby="story-2">
         <div class="feature-text">
-          <h2>Make room for your weekend</h2>
-          <p>Off to Junction? Ask what to bring. Find a basketball court for Saturday, food with friends, a Sunday sauna and a film.</p>
-          <p>Ready to book? Vali fills the real form in a private cloud browser on Modal. Check it in WhatsApp. Nothing is sent until you tap Approve.</p>
+          <p class="chapter-no">Saturday</p>
+          <h2 id="story-2">“Book a public sauna at Kulttuurisauna on Sunday at 17:30.”</h2>
+          <p>Vali opens the real booking page in its own private browser on Modal and fills it. He gets a picture of the filled form with Approve and Stop. Nothing is sent before he taps Approve, and Vali never pays for him.</p>
+          <p>Plans change? Stop now, Continue later. Vali picks up where it stopped without asking again.</p>
         </div>
         <img class="shot tall" src="landing/whatsapp-approve.jpg" width="900" height="1218" loading="lazy"
              alt="WhatsApp: the filled sauna booking form with Approve and Stop buttons">
       </section>
 
       <section class="band card">
-        <h2>Stop now. Continue later.</h2>
-        <p>Plans change. Tap Stop to pause the booking. Tap Continue when you are ready. Vali picks up where it stopped. You still approve before anything is sent.</p>
-      </section>
-
-      <section class="band card">
-        <h2>Let a cheaper flat come to you</h2>
-        <p>Looking for a HOAS flat in Espoo under €700 a month? Ask Vali to watch. Daily Exa watches check for new matches. Get the links when something new appears.</p>
-        <ul class="band-tags">
-          <li>Checks daily</li><li>New matches with sources</li><li>Check now</li>
-        </ul>
+        <p class="chapter-no">Every day</p>
+        <h2>Let a cheaper flat come to you.</h2>
+        <p>“Watch for HOAS flats in Espoo under €700.” An Exa Monitor checks the web every day and messages him only when something new appears.</p>
       </section>
 
       <section class="feature flip">
         <div class="feature-text">
-          <h2>Everything in one dashboard</h2>
-          <p>Your WhatsApp errands are already here. See what Vali found, what it did and what needs your approval. Open any errand to see the chat and sources.</p>
+          <p class="chapter-no">Any time</p>
+          <h2>Everything Vali did, in one place.</h2>
+          <p>Errands from WhatsApp, the web and Chrome land here. Each one says what he asked, what Vali found and how, and what is waiting for him.</p>
         </div>
         <img class="shot" src="landing/dashboard.jpg" width="1200" height="711" loading="lazy"
-             alt="Vali dashboard: errands, Exa searches, pages read, quotes checked, cost">
+             alt="Vali dashboard: errands, Exa searches, pages read">
       </section>
 
       <section class="band card exa-band">
         <h2>Built on Exa and Modal</h2>
-        <p>Exa finds the answers and checks for updates. Modal gives Vali a private browser to handle your bookings. You give the final approval.</p>
+        <p>Exa does the finding and the checking. Modal gives Vali a private browser for the forms. You give the final OK.</p>
         <dl id="exa-uses" class="exa-uses"></dl>
       </section>
 
-      <section class="band card">
-        <p class="eyebrow">Modal</p>
-        <h2>Its own browser in the cloud</h2>
-        <p>Each booking runs in a private browser on Modal, not on your phone. You watch it live, stop it anytime, and tap Continue to pick up where it stopped.</p>
-        <ul class="band-tags">
-          <li>Runs on Modal</li><li>Live view</li><li>Waits for your Approve</li>
-        </ul>
-      </section>
-
       <section class="closer">
-        <h2>Hand me the errand.</h2>
+        <h2>Hand Vali the errand.</h2>
         <button type="button" id="landing-try" class="btn go">Ask Vali</button>
       </section>
     </div>
