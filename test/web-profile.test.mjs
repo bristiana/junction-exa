@@ -60,3 +60,11 @@ test("the plan's placeholders say which details are missing, and approval values
   assert.deepEqual(missingDetails({ task: "Fill it with my name, phone and date of birth" }, { phone: "1" }).map((d) => d.key), ["name", "date_of_birth"]);
   assert.equal(fillPlaceholders("{{name}} / {{phone}}", { name: "Test Person" }), "Test Person / {{phone}}");
 });
+
+test("the split name the cloud browser types fills in from the full name", () => {
+  const profile = { name: "Anna Maria Virtanen" };
+  assert.equal(fillPlaceholders("{{first_name}} | {{ last_name }} | {{full_name}}", profile), "Anna Maria | Virtanen | Anna Maria Virtanen");
+  assert.equal(fillPlaceholders("{{first_name}} {{last_name}}", { name: "Madonna" }), "{{first_name}} {{last_name}}");
+  assert.equal(fillPlaceholders("{{first_name}}", { name: "Anna Virtanen", first_name: "Own" }), "Own");
+  assert.deepEqual(missingDetails({ task: "Book it", research: { output: { structured: { steps: ["{{first_name}}"] } } } }, {}).map((d) => d.key), ["name"]);
+});
