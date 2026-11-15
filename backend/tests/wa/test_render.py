@@ -69,9 +69,19 @@ def test_execution(task):
     task["execution"] = {"status": "done", "result": "Claim submitted"}
     assert render_execution_update(task) == ["Claim submitted"]
     task["execution"] = {"status": "failed", "error": "Login required", "final_url": "https://airline.example/claim"}
-    assert render_execution_update(task) == ["Vali could not finish: Login required\nfinish here: https://airline.example/claim\nReply *continue* to pick up where it stopped."]
+    assert render_execution_update(task) == ["Vali could not finish: Login required. Finish here: https://airline.example/claim\nReply *continue* to pick up where it stopped."]
     task["execution"] = {"status": "stopped"}
     assert render_execution_update(task) == ["Stopped. Nothing was sent.\nReply *continue* to pick up where it stopped."]
+
+
+@pytest.mark.parametrize('result,reason', [
+    ('needs captcha/cloudflare: finish by hand at https://kela.example/form', 'needs captcha/cloudflare'),
+    ('Text ready to paste: Hello, I would like a refund.', 'Text ready to paste: Hello, I would like a refund'),
+])
+def test_failed_run_shows_its_result_then_the_link(task, result, reason):
+    task["execution"] = {"status": "failed", "result": result, "error": None, "final_url": "https://kela.example/form"}
+    assert render_execution_update(task, buttons=True) == [
+        f"Vali could not finish: {reason}. Finish here: https://kela.example/form"]
 
 
 def test_watch_update_and_check_texts():
