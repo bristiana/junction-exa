@@ -191,3 +191,10 @@ def test_whatsapp_approve_meets_the_same_guard(wa, how):
     execution = store.get_task(tid)['execution']
     assert execution['status'] == 'stopped' and execution['approval_decision'] == 'stopped', execution
     assert 'Nothing reached lomakkeet.dvv.fi' in execution['result']
+
+
+def test_me_says_demo_only_in_the_closed_demo(api):
+    client, application, *_ = api
+    assert client.get('/v1/me').json()['demo'] is False
+    application.state.config.closed = True
+    assert client.get('/v1/me').json()['demo'] is True

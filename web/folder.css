@@ -45,3 +45,21 @@ body:not(.signed-in) #folder { display: none; }
   .vali-says { left: auto; right: -96px; top: auto; bottom: -6px; max-width: 170px; border-radius: 14px 14px 4px 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .vali-says::before { animation: none; } }
+
+/* "Start here" for the closed judging demo, above the ask box */
+body:not(.signed-in) #welcome { display: none; }
+.welcome { margin: 0 auto 18px; text-align: left; }
+.welcome-card { padding: 16px 18px 14px; }
+.welcome-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.welcome-head .section-title { margin: 0; font-size: 18px; }
+.welcome-close { padding: 6px 12px; font-size: 13px; flex: none; }
+.welcome-who { margin: 8px 0 12px; font-size: 14px; line-height: 1.45; }
+.welcome-sub { margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.welcome-links, .welcome-try { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.welcome-links a { font-weight: 600; margin-right: 6px; }
+.welcome-links span { color: var(--muted); }
+.welcome-try li { padding-left: 14px; position: relative; }
+.welcome-try li::before { content: '·'; position: absolute; left: 3px; color: var(--muted); font-weight: 700; }
+.welcome-note { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+.welcome-again { display: block; margin: 0 auto; font-size: 13px; }
+@media (max-width: 480px) { .welcome-card { padding: 14px; } .welcome-links a { display: block; margin: 0; } }
