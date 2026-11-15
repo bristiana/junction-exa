@@ -199,3 +199,20 @@ def test_demo_stop_before_sending_keeps_its_message(api, monkeypatch):
     run_browser_session(tid, 'goal', 'https://example.com', {}, application)
     execution = store.get_task(tid)['execution']
     assert execution['status'] == 'stopped' and execution['result'] == demo
+
+
+def test_whatsapp_late_answer_to_a_paused_run_continues_it(wa, monkeypatch):
+    api, graph, deliver = wa
+    client, application, store, calls, polls, browsers, user = api
+    pair_whatsapp(api, deliver)
+    deliver('book a sauna in Espoo tomorrow', mid='new')
+    tid = store.list_tasks(user['user_id'])[0]['id']
+    poll_research_once(tid, application)
+    deliver('1', mid='execute')
+    unanswered_run(monkeypatch, application, tid)
+    deliver('Where can I buy a cheap bike in Espoo this week?', mid='newer')  # a new errand; it does not hide the paused one
+    assert len(store.list_tasks(user['user_id'])) == 2
+    deliver('19:30', mid='late')
+    execution = store.get_task(tid)['execution']
+    assert execution['status'] == 'starting' and execution['runs'] == 2
+    assert json.loads(browsers[-1][1])['resume']['answer'] == '19:30'
