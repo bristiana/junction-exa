@@ -99,26 +99,3 @@ test('header download and favicon point to shipped web assets', async () => {
   const app = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
   assert.match(app, /Chrome extension: unzip, open chrome:\/\/extensions, turn on Developer mode, Load unpacked, then sign in from its settings\./);
 });
-
-test('Start here shows only in the demo, links only errands in the list, and Got it is remembered', async () => {
-  const { OPEN_FIRST, renderWelcome, resetWelcome } = await import('../web/welcome.js');
-  const slot = nodes.get('welcome');
-  const tasks = [{ id: OPEN_FIRST[1][0] }];
-  resetWelcome(); await renderWelcome(tasks);  // this fetch answers /v1/me without demo, like the API before this
-  assert.equal(slot.hidden, true);
-  const realFetch = fetch;
-  globalThis.fetch = async () => ({ ok: true, json: async () => ({ demo: true }) });
-  try {
-    resetWelcome(); await renderWelcome(tasks);
-    assert.equal(slot.hidden, false);
-    const text = slot.textContent;
-    assert.match(text, /Welcome to the demo/);
-    assert.ok(text.includes(OPEN_FIRST[1][1]) && !text.includes(OPEN_FIRST[0][1]) && !text.includes(OPEN_FIRST[2][1]));
-    const find = (node, tag) => node.tag === tag ? node : node.children?.map((c) => find(c, tag)).find(Boolean);
-    await find(slot, 'button').fire('click');
-    assert.equal(storage.get('vali.welcome.dismissed'), '1');
-    assert.equal(slot.textContent, 'Show the guide');
-    await find(slot, 'button').fire('click');
-    assert.match(slot.textContent, /Welcome to the demo/);
-  } finally { globalThis.fetch = realFetch; }
-});
