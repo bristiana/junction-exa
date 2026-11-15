@@ -30,21 +30,30 @@ const AUTOCOMPLETE = {
 // Whole words only (Finnish words may take endings), so "company name" or "filename" never look like a name.
 const word = (alts) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, "iu");
 const WORDS = [
-  ["email", word("e-?mail|sähköposti\\p{L}*")],
-  ["phone", word("phone|telephone|tel|mobile|gsm|puhelin\\p{L}*|matkapuhelin\\p{L}*")],
+  // Finnish compounds count: "työsähköposti" is an email, "matkapuhelinnumero" a phone, "kotiosoite" an address.
+  ["email", word("e-?mail|email address|\\p{L}*sähköposti\\p{L}*")],
+  ["phone", word("phone|phone number|telephone|tel|mobile|gsm|puh|\\p{L}*puhelin\\p{L}*")],
   ["postal_code", word("postal code|post code|postcode|zip|zip code|postinumero")],
-  ["city", word("city|town|kaupunki|postitoimipaikka|kotikunta")],
-  ["country", word("country|maa|valtio")],
+  ["city", word("city|town|municipality|kaupunki|postitoimipaikka|kotikunta|kunta|asuinkunta|paikkakunta|asuinpaikkakunta")],
+  ["country", word("country|maa|valtio|asuinmaa")],
   ["date_of_birth", word("date of birth|birth date|birthday|syntymäaika|syntymäpäivä")],
   ["nationality", word("nationality|citizenship|kansalaisuus")],
-  ["address", word("address|street address|home address|street|katuosoite|lähiosoite|osoite")],
+  ["address", word("address|street address|home address|street|address line ?1|(?:koti|posti|lähi|katu|asuin)?osoit(?:e|tee)\\p{L}*")],
   ["first_name", word("first name|given names?|etunimi|etunimet")],
   ["last_name", word("last name|family name|surname|sukunimi")],
 ];
-// The full name only for a field that is plainly asking for it.
-const NAME_LABEL = /^(?:(?:full|your|customer|contact|applicant) )?name$|^(?:koko )?nimi$/;
-
-const norm = (s) => String(s || "").toLowerCase().replace(/[*:]/g, " ").replace(/\s+/g, " ").trim();
+// One field for the whole name, even when the label names both parts: "Etu- ja sukunimi", "First and last name".
+const FULL_NAME = /(?<![\p{L}])(?:etu-? ?ja sukunimi|first and last name|full name|koko nimi)(?![\p{L}])/iu;
+// A second address line, a flat, or the area or country code part of a split phone number: left for the user.
+const SECONDARY = {
+  address: /(?:line|rivi|addr_line|address|osoite) ?2|apartment|\bapt\b|huoneisto|c\/o/iu,
+  phone: /area|suunta|country code|maakoodi|maatunnus|prefix|\bcode\b/i,
+};
+// The full name only for a field that is plainly asking for it. Bilingual labels ("Nimi / Name") are checked part by part.
+const NAME_LABEL = /^(?:(?:full|your|customer|contact|applicant) )?name$|^(?:koko )?nimi$|^nimesi$|^namn$/;
+// "FirstName", "phone_number", "postal-code" read as words.
+const norm = (s) => String(s || "").replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2").toLowerCase().replace(/[*:_]/g, " ").replace(/\s+/g, " ").trim();
+const nameParts = (label) => norm(String(label || "").replace(/\((?:pakollinen|required|obligatorisk)\)/gi, "")).split(/ ?[/|] ?/);
 
 // The profile value for one detail; first and last name come from the full name.
 function profileValue(kind, profile) {
@@ -54,11 +63,29 @@ function profileValue(kind, profile) {
   return profile[kind] || "";
 }
 
+function kindOf(field) {
+  for (const token of String(field.hint || "").toLowerCase().split(/\s+/)) if (AUTOCOMPLETE[token]) return AUTOCOMPLETE[token];
+  const label = norm(field.label), hint = norm(field.hint);
+  if (FULL_NAME.test(label)) return "name";
+  // The label the user reads first; the name and id only when the label says nothing ("Kunta" over name="address[state]").
+  const byWords = (text) => (WORDS.find(([, re]) => re.test(text)) || [])[0];
+  return byWords(label) || (nameParts(field.label).some((p) => NAME_LABEL.test(p)) ? "name" : null) || byWords(hint) || (NAME_LABEL.test(hint) ? "name" : null);
+}
+
 function detailOf(field) {
-  for (const token of norm(field.hint).split(" ")) if (AUTOCOMPLETE[token]) return AUTOCOMPLETE[token];
-  const text = `${field.label || ""} ${field.hint || ""}`;
-  const kind = (WORDS.find(([, re]) => re.test(text)) || [])[0];
-  return kind || (NAME_LABEL.test(norm(field.label)) ? "name" : null);
+  const kind = kindOf(field);
+  if (kind && SECONDARY[kind]?.test(`${norm(field.label)} ${String(field.hint || "").toLowerCase()}`)) return null;
+  if (kind === "address" && /(?<![\p{L}\p{N}])2$/u.test(norm(field.label))) return null; // "Katuosoite 2"
+  return kind;
+}
+
+// A date typed into a text box: Finnish forms want 01.01.2000, not 2000-01-01.
+function dateForText(value, field) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return value;
+  if (/mm\/dd|kk\/pp/i.test(field.label || "")) return `${m[2]}/${m[3]}/${m[1]}`;
+  if (/yyyy-mm-dd|vvvv-kk-pp/i.test(field.label || "")) return value;
+  return `${m[3]}.${m[2]}.${m[1]}`;
 }
 
 // The errand's own values with their labels: the prepared form fill and what the cloud browser filled so far.
@@ -87,6 +114,7 @@ export function planFill(fields, { profile = {}, values = [] } = {}) {
     value = fillPlaceholders(String(value || ""), profile).trim();
     if (!value || unfilledPlaceholders(value).length) continue;
     if (f.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) continue;
+    if (kind === "date_of_birth" && f.type === "text") value = dateForText(value, f);
     plan.push({ field_id: f.id, value, label: f.label || f.id });
   }
   return plan;

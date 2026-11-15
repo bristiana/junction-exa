@@ -181,9 +181,17 @@ export function capturePage(mode) {
     const cs = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none";
   };
+  // Controls inside open shadow roots too (web components), after the ones in the page itself.
+  const deepAll = (root, sel, out = []) => {
+    out.push(...root.querySelectorAll(sel));
+    for (const host of root.querySelectorAll("*")) if (host.shadowRoot) deepAll(host.shadowRoot, sel, out);
+    return out;
+  };
+  const rootOf = (el) => (el.getRootNode ? el.getRootNode() : document);
   const labelOf = (el) => {
     if (el.id) {
-      const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+      const sel = `label[for="${CSS.escape(el.id)}"]`;
+      const l = rootOf(el).querySelector?.(sel) || document.querySelector(sel);
       if (l) return l.innerText;
     }
     const wrap = el.closest("label");
@@ -192,7 +200,7 @@ export function capturePage(mode) {
     if (aria) return aria;
     const by = el.getAttribute("aria-labelledby");
     if (by) {
-      const t = by.split(/\s+/).map((i) => document.getElementById(i)?.innerText || "").join(" ");
+      const t = by.split(/\s+/).map((i) => (rootOf(el).getElementById?.(i) || document.getElementById(i))?.innerText || "").join(" ");
       if (t.trim()) return t;
     }
     if (el.placeholder) return el.placeholder;
@@ -206,7 +214,7 @@ export function capturePage(mode) {
   const fields = [];
   const seenRadio = new Set();
   let n = 0;
-  const els = document.querySelectorAll("input, select, textarea");
+  const els = deepAll(document, "input, select, textarea");
   for (const el of els) {
     const type = (el.type || el.localName).toLowerCase();
     if (["hidden", "password", "file", "submit", "button", "reset", "image"].includes(type)) continue;
@@ -215,7 +223,7 @@ export function capturePage(mode) {
       const key = el.name || el.id;
       if (seenRadio.has(key)) continue;
       seenRadio.add(key);
-      const group = el.name ? [...document.querySelectorAll(`input[type=radio][name="${CSS.escape(el.name)}"]`)] : [el];
+      const group = el.name ? [...rootOf(el).querySelectorAll(`input[type=radio][name="${CSS.escape(el.name)}"]`)] : [el];
       const id = "h" + ++n;
       group.forEach((r) => r.setAttribute("data-vali-id", id));
       const legend = el.closest("fieldset")?.querySelector("legend")?.innerText;
@@ -251,6 +259,18 @@ export function isPage(expectedUrl) {
   try { const u = new URL(expectedUrl); return location.origin + location.pathname === u.origin + u.pathname; } catch (_) { return false; }
 }
 
+// The origins of the iframes the page shows as a real box (not a 1x1 tracker or a hidden widget). Only those frames are filled.
+export function shownFrameOrigins() {
+  const out = new Set();
+  for (const f of document.querySelectorAll("iframe")) {
+    const r = f.getBoundingClientRect();
+    const cs = getComputedStyle(f);
+    if (r.width < 120 || r.height < 60 || cs.visibility === "hidden" || cs.display === "none" || Number(cs.opacity) === 0) continue;
+    try { out.add(new URL(f.src, location.href).origin); } catch (_) {}
+  }
+  return [...out];
+}
+
 // Fills the tagged fields with the approved values. It never submits the form. expectedUrl is the page the user chose:
 // if this document is another page (origin or path), nothing is filled.
 export function fillPage(values, expectedUrl) {
@@ -277,7 +297,13 @@ export function fillPage(values, expectedUrl) {
   // Recheck the live control: a page can change a tagged field into a submit button after capture.
   const fillable = new Set(["text", "email", "tel", "textarea", "select-one", "date", "time", "number", "url", "radio"]);
   for (const { field_id, value } of values || []) {
-    const els = [...document.querySelectorAll(`[data-vali-id="${CSS.escape(field_id)}"]`)];
+    const sel = `[data-vali-id="${CSS.escape(field_id)}"]`;
+    let els = [...document.querySelectorAll(sel)];
+    if (!els.length) {
+      // capturePage() also tags controls inside open shadow roots
+      const walk = (root) => { for (const host of root.querySelectorAll("*")) if (host.shadowRoot) { els.push(...host.shadowRoot.querySelectorAll(sel)); walk(host.shadowRoot); } };
+      walk(document);
+    }
     const el = els[0];
     if (!el || value == null) { skipped.push(field_id); continue; }
     const v = String(value);

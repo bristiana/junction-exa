@@ -5,7 +5,7 @@
 
 import { createRun, getRun, getRunEvents, cancelRun, TERMINAL } from "./lib/exa.js";
 import { buildRunRequest } from "./lib/task.js";
-import { capturePage, fillPage, isPage } from "./lib/page-scripts.js";
+import { capturePage, fillPage, isPage, shownFrameOrigins } from "./lib/page-scripts.js";
 import { fillPlaceholders } from "./lib/actions.js";
 import { redactText } from "./lib/redact.js";
 import * as backend from "./lib/backend.js";
@@ -276,6 +276,7 @@ async function fillForm(taskId) {
   const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPage, args: [resolved, want] });
   return res?.result || { filled: 0, skipped: [] };
 }
+const originOf = (u) => { try { return new URL(u).origin; } catch (_) { return ""; } };
 // Asks the document itself, before anything in it is read or tagged; fillPage() checks again.
 async function showsPage(tabId, url) {
   const [res] = await chrome.scripting.executeScript({ target: { tabId }, func: isPage, args: [url] }).catch(() => []);
@@ -291,12 +292,25 @@ async function fillHere(taskId, tabId, url) {
   if (!tabId || !/^https?:/.test(url || "")) return { filled: 0, error: "Open the page with the form first." };
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (!tab || !samePage(tab.url, url) || !(await showsPage(tab.id, url))) return { filled: 0, error: PAGE_CHANGED };
-  const [cap] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage });
-  const plan = planFill(cap?.result?.fields, { profile, values: errandValues(t) });
-  if (!plan.length) return { filled: 0, error: "I found nothing here I can fill from your details. Check them in settings." };
-  const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPage, args: [plan.map(({ field_id, value }) => ({ field_id, value })), url] });
-  if (res?.result?.error) return { filled: 0, error: res.result.error };
-  const filled = res?.result?.filled || 0;
+  // Every frame of the tab: booking and contact forms are often embedded (an iframe from the booking system).
+  // A frame is filled only when the page shows it as a visible box; each frame checks its own address again.
+  const caps = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func: capturePage })
+    .catch(() => chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage }));
+  const [shown] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: shownFrameOrigins }).catch(() => []);
+  const origins = new Set(shown?.result || []);
+  const values = errandValues(t);
+  const plans = (caps || [])
+    .filter((c) => c?.result?.fields && (c.frameId === 0 || origins.has(originOf(c.result.url))))
+    .map((c) => ({ frameId: c.frameId, url: c.frameId === 0 ? url : c.result.url, plan: planFill(c.result.fields, { profile, values }) }))
+    .filter((p) => p.plan.length)
+    .sort((a, b) => (a.frameId === 0 ? -1 : 0) - (b.frameId === 0 ? -1 : 0));
+  if (!plans.length) return { filled: 0, error: "I found nothing here I can fill from your details. Check them in settings." };
+  let filled = 0;
+  for (const p of plans) {
+    const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id, frameIds: [p.frameId] }, func: fillPage, args: [p.plan.map(({ field_id, value }) => ({ field_id, value })), p.url] }).catch(() => []);
+    if (p.frameId === 0 && res?.result?.error) return { filled: 0, error: res.result.error };
+    filled += res?.result?.filled || 0;
+  }
   if (filled) chrome.tabs.sendMessage(tab.id, { type: "vali-say", text: `Filled ${filled} field${filled === 1 ? "" : "s"}. Check them and press submit yourself.` }).catch(() => {});
   return { filled };
 }

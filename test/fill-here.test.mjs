@@ -72,3 +72,44 @@ test("splits the full name, uses autocomplete hints, skips placeholders it canno
   const plan = planFill(fields, { profile: { ...PROFILE, date_of_birth: "1.2.1999" }, values: [{ label: "City", value: "{{city}}" }] });
   assert.deepEqual(plan.map((p) => [p.field_id, p.value]), [["a", "Aino"], ["b", "Virtanen"], ["c", "test@example.com"]]);
 });
+
+// Fields as capturePage() read them on real Finnish forms (Jotform, HSL, Google Forms, Nordea, PwC), November 2026.
+const DEMO = {
+  name: "Bogdan Caraeane", email: "demo@vali.demo", phone: "+358 40 123 4567", address: "Otakaari 1",
+  postal_code: "02150", city: "Espoo", country: "Finland", date_of_birth: "2000-01-01",
+};
+const plan = (fields) => Object.fromEntries(planFill(fields, { profile: DEMO }).map((p) => [p.field_id, p.value]));
+
+test("Finnish compounds, bilingual labels and camelCase names map to the right detail", () => {
+  assert.deepEqual(plan([
+    { id: "a", type: "email", label: "Työsähköposti", hint: " emailaddress1 emailaddress1" },
+    { id: "b", type: "text", label: "Nimi/Name", hint: "off  " },
+    { id: "c", type: "text", label: "FirstName", hint: " FirstName FirstName" },
+    { id: "d", type: "tel", label: "PhoneNumber", hint: " PhoneNumber PhoneNumber" },
+    { id: "e", type: "text", label: "Kotiosoite" },
+    { id: "f", type: "text", label: "Etu- ja sukunimi" },
+    { id: "g", type: "text", label: "Matkapuhelinnumero" },
+    { id: "h", type: "url", label: "Verkkosivuosoite" },
+    { id: "i", type: "text", label: "Nimi / Namn / Name *" },
+  ]), { a: "demo@vali.demo", b: "Bogdan Caraeane", c: "Bogdan", d: "+358 40 123 4567", e: "Otakaari 1", f: "Bogdan Caraeane", g: "+358 40 123 4567", i: "Bogdan Caraeane" });
+});
+
+test("the label wins over the name attribute, and second lines and area codes are left alone (Jotform address and phone)", () => {
+  assert.deepEqual(plan([
+    { id: "a", type: "tel", label: "Puhelinnumero", hint: " q4_puhelinnumero[area] input_4_area" },
+    { id: "b", type: "tel", label: "Puhelinnumero", hint: " q4_puhelinnumero[phone] input_4_phone" },
+    { id: "c", type: "text", label: "Katuosoite", hint: " q5_osoite[addr_line1] input_5_addr_line1" },
+    { id: "d", type: "text", label: "Katuosoite 2", hint: " q5_osoite[addr_line2] input_5_addr_line2" },
+    { id: "e", type: "text", label: "Kunta", hint: " q5_osoite[state] input_5_state" },
+    { id: "f", type: "text", label: "Postinumero", hint: " q5_osoite[postal] input_5_postal" },
+    { id: "g", type: "text", label: "Osoite", hint: " fieldOnboarding_1_2 fieldOnboarding_1_2" },
+  ]), { b: "+358 40 123 4567", c: "Otakaari 1", e: "Espoo", f: "02150", g: "Otakaari 1" });
+});
+
+test("a birth date typed into a text box is written the Finnish way (Nordea)", () => {
+  assert.deepEqual(plan([
+    { id: "a", type: "text", label: "Syntymäaika *", hint: " fieldOnboarding_1_4" },
+    { id: "b", type: "date", label: "Date of birth" },
+    { id: "c", type: "text", label: "Date of birth (mm/dd/yyyy)" },
+  ]), { a: "01.01.2000", b: "2000-01-01", c: "01/01/2000" });
+});
