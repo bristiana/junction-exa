@@ -1,6 +1,6 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, detailsOf, draftsOf, pageKind, errandStage, exaTrail, factsOf, fillBlanks, needsOf, quoteUrl, readableTitle, shorten, sourcesOf, stepsOf } from './model.js';
+import { claimsOf, detailsOf, draftsOf, pageKind, errandStage, exaTrail, factsOf, fillBlanks, needsOf, plainError, quoteUrl, readableTitle, shorten, sourcesOf, stepsOf } from './model.js';
 import { bookingCard, exaHelped, needsBlock, watchCard, watchMatchList } from './kinds.js';
 import { citePill } from './cite.js';
 import { renderState } from './state.js';
@@ -104,7 +104,7 @@ function unfinished(task, { onFollowUp }) {
   return h('div', { class: 'card unfinished' },
     h('p', { class: 'eyebrow' }, task.task),
     h('h1', { class: 'headline' }, cancelled ? 'Stopped. Nothing was sent.' : "Couldn't finish this one."),
-    h('p', { class: 'muted' }, cancelled ? 'You stopped this errand before Vali answered.' : task.research?.error || 'The research service did not answer.'),
+    h('p', { class: 'muted' }, cancelled ? 'You stopped this errand before Vali answered.' : plainError(task.research?.error) || 'The research service did not answer.'),
     h('button', { type: 'button', class: 'btn', onclick: () => onFollowUp(task.task) }, 'Try again'));
 }
 

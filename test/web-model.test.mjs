@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { activityOf, activityLine, channelOf, claimsOf, countersOf, draftsOf, errandStatus, factsOf, moodOf, pagesTouched, runStatus, findStats, primaryAction, publishedStamp, questionOf, sourcesOf, stepsOf } from "../web/model.js";
+import { activityOf, activityLine, errandStage, channelOf, claimsOf, countersOf, draftsOf, errandStatus, factsOf, moodOf, pagesTouched, runStatus, findStats, primaryAction, publishedStamp, questionOf, sourcesOf, stepsOf } from "../web/model.js";
 
 const legacy = {
   created_at: "2026-11-14T10:00:00Z", updated_at: "2026-11-14T10:00:20Z",
@@ -215,4 +215,12 @@ test("held, handed-to-you and blocked runs read in plain words", async () => {
   const broke = { research: done, execution: { status: 'failed', error: raw, steps: [] } };
   assert.equal(errandStatus(broke).detail, BLOCKED_LINE);
   assert.equal(failReason(broke).text, BLOCKED_LINE);
+});
+
+test("a research or browser error that is an object reads as its message on the errand page", () => {
+  const failed = { task: "x", research: { status: "failed", error: { message: "The research run failed." } } };
+  assert.equal(errandStage(failed).line, "The research run failed.");
+  const run = { task: "x", research: { status: "completed", output: {} }, execution: { status: "failed", current_url: "https://a.fi/", steps: [], error: { detail: "Browser crashed." } } };
+  assert.match(errandStage(run).line, /Browser crashed\.$/);
+  assert.doesNotMatch(errandStage(run).line, /object Object/);
 });
