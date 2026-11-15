@@ -36,8 +36,8 @@
 <main>
   <section id="home" class="view home">
     <div class="hero-slot" data-slot="home"></div>
-    <h1>Your valet for life in Finland.</h1>
-    <p class="sub">Hand Vali an errand on WhatsApp or here. It works in the background, reads today’s official pages with Exa, and comes back with the answer or a filled form for your OK.</p>
+    <h1>New in Finland? Vali handles it.</h1>
+    <p class="sub">The errand agent for your first year in Finland. Ask on WhatsApp. Vali reads today’s official pages with Exa, answers with the exact source, and fills the forms for your OK.</p>
     <form id="ask" class="ask">
       <label class="sr-only" for="errand">Your errand</label>
       <input id="errand" type="text" maxlength="2000" autocomplete="off" enterkeyhint="send"
@@ -62,66 +62,45 @@
    <section id="errands" class="errands"></section>
 
     <div class="landing">
-      <section class="story-intro">
-        <h2>Meet Bogdan.</h2>
-        <p>A master’s student from Romania, three weeks into life in Espoo. No Finnish personal ID yet, no Finnish bank, full price on every bus. The answers he needs sit on Finnish pages that change every year. A chatbot trained last year doesn’t know them. Vali reads them today.</p>
-      </section>
-
-      <section class="feature" aria-labelledby="story-1">
-        <div class="feature-text">
-          <p class="chapter-no">Monday</p>
-          <h2 id="story-1">“How do I open a bank account without a Finnish ID?”</h2>
-          <p>He sends it on WhatsApp and puts the phone away. In the background Exa searches the live web, reads the banks’ and Migri’s pages as they are today, and Vali keeps only the sentences a quote on the page backs.</p>
-          <p>Half a minute later: the answer for his case, the key facts, the exact Danske Bank and Migri links, and the one thing to do next.</p>
-        </div>
-        <div>
-          <img class="shot" src="landing/whatsapp-answer.jpg" width="1200" height="730" loading="lazy"
-             alt="WhatsApp chat: Vali explains how to open a bank account without a Finnish ID">
-        </div>
+      <section class="handles" aria-labelledby="handles-title">
+        <h2 id="handles-title">What Vali handles</h2>
+        <ul class="handles-grid">
+          <li><b>Bank and ID</b><span>A bank account without a Finnish ID. Your personal identity code at DVV.</span></li>
+          <li><b>Permits</b><span>EU registration and residence permits at Migri, with the documents to bring.</span></li>
+          <li><b>Money</b><span>Kela benefits and the student housing supplement, for your situation.</span></li>
+          <li><b>Getting around</b><span>The HSL student discount and the journey planner, already filled in.</span></li>
+          <li><b>Housing</b><span>HOAS and student flats. A daily watch tells you when a new one appears.</span></li>
+          <li><b>Weekends</b><span>A public sauna, a film, a court for Saturday. Booked for you, sent only on your OK.</span></li>
+        </ul>
       </section>
 
       <section class="band card fresh">
-        <p class="chapter-no">Why live search matters</p>
-        <h2>The rules moved, and Vali noticed.</h2>
-        <p>On 1 August 2025 Kela moved students from the general housing allowance to the student housing supplement, and students had to apply again. Migri updates its student permit queue almost every week. Vali reads the page as it is now and links the exact line, so you can check it yourself.</p>
+        <h2>Today’s rules, not last year’s.</h2>
+        <p>Finnish rules change every year. On 1 August 2025 Kela moved students to the student housing supplement and they had to apply again. A chatbot trained before that doesn’t know. Vali reads the page as it is now and links the exact line.</p>
         <p class="band-source">Source: <a href="https://www.kela.fi/news/students-will-be-transferred-from-the-general-housing-allowance-scheme-to-the-student-housing-supplement-scheme-on-1-august-2025" target="_blank" rel="noopener noreferrer">kela.fi</a></p>
       </section>
 
-      <section class="feature flip" aria-labelledby="story-2">
-        <div class="feature-text">
-          <p class="chapter-no">Saturday</p>
-          <h2 id="story-2">“Book a public sauna at Kulttuurisauna on Sunday at 17:30.”</h2>
-          <p>Vali opens the real booking page in its own private browser on Modal and fills it. He gets a picture of the filled form with Approve and Stop. Nothing is sent before he taps Approve, and Vali never pays for him.</p>
-          <p>Plans change? Stop now, Continue later. Vali picks up where it stopped without asking again.</p>
-        </div>
-        <img class="shot tall" src="landing/whatsapp-approve.jpg" width="900" height="1218" loading="lazy"
+      <section class="pair" aria-label="Vali on WhatsApp">
+        <figure>
+          <img class="shot" src="landing/whatsapp-answer.jpg" width="1200" height="730" loading="lazy"
+             alt="WhatsApp chat: Vali explains how to open a bank account without a Finnish ID, with sources">
+          <figcaption>Ask anything. The answer comes with the exact source.</figcaption>
+        </figure>
+        <figure>
+          <img class="shot" src="landing/whatsapp-approve.jpg" width="900" height="1218" loading="lazy"
              alt="WhatsApp: the filled sauna booking form with Approve and Stop buttons">
-      </section>
-
-      <section class="band card">
-        <p class="chapter-no">Every day</p>
-        <h2>Let a cheaper flat come to you.</h2>
-        <p>“Watch for HOAS flats in Espoo under €700.” An Exa Monitor checks the web every day and messages him only when something new appears.</p>
-      </section>
-
-      <section class="feature flip">
-        <div class="feature-text">
-          <p class="chapter-no">Any time</p>
-          <h2>Everything Vali did, in one place.</h2>
-          <p>Errands from WhatsApp, the web and Chrome land here. Each one says what he asked, what Vali found and how, and what is waiting for him.</p>
-        </div>
-        <img class="shot" src="landing/dashboard.jpg" width="1200" height="711" loading="lazy"
-             alt="Vali dashboard: errands, Exa searches, pages read">
+          <figcaption>Vali fills the real form. Nothing is sent before you tap Approve.</figcaption>
+        </figure>
       </section>
 
       <section class="band card exa-band">
         <h2>Built on Exa and Modal</h2>
-        <p>Exa does the finding and the checking. Modal gives Vali a private browser for the forms. You give the final OK.</p>
+        <p>Exa finds and checks every answer on the live web. Modal runs a private browser for the forms. You give the final OK, and Vali never pays for you.</p>
         <dl id="exa-uses" class="exa-uses"></dl>
       </section>
 
       <section class="closer">
-        <h2>Hand Vali the errand.</h2>
+        <h2>Hand Vali your first errand.</h2>
         <button type="button" id="landing-try" class="btn go">Ask Vali</button>
       </section>
     </div>
