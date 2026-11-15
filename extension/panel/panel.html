@@ -33,6 +33,17 @@
 
   <section id="settings" class="settings v-card" hidden>
     <h2>Settings</h2>
+    <h3>Sign in</h3>
+        <label class="field"><span>Email</span><input id="signEmail" class="v-input" type="email" autocomplete="username" /></label>
+    <label class="field">
+      <span>Password</span>
+      <div class="row">
+        <input id="signPassword" class="v-input" type="password" autocomplete="current-password" />
+        <button id="signInBtn" class="v-btn v-btn--quiet" type="button">Sign in</button>
+      </div>
+    </label>
+    <p id="signStatus" class="muted small" role="status"></p>
+    <div hidden style="display:none"><!-- closed for judging: one account, no server picking, no direct Exa mode -->
     <label class="field">
       <span>Exa API key</span>
       <div class="row">
@@ -41,15 +52,6 @@
       </div>
       <small id="keyStatus" class="muted"></small>
     </label>
-    <label class="field">
-      <span>Research depth</span>
-      <select class="v-input" id="effort">
-        <option value="minimal">Quick</option>
-        <option value="low" selected>Normal</option>
-        <option value="medium">Thorough</option>
-      </select>
-    </label>
-    <label class="check toggle"><input type="checkbox" id="presence" checked /> <span>Vali tips while you browse</span></label>
     <h3>Vali server</h3>
     <p class="muted small">Connect to Vali to share errands with the Mac app. Leave this empty to use your Exa key.</p>
     <label class="field">
@@ -60,25 +62,6 @@
       </div>
       <small id="backendStatus" class="muted"></small>
     </label>
-        <div class="field" hidden><!-- WhatsApp is parked until Meta verifies the business -->
-      <span>WhatsApp</span>
-      <div class="row">
-        <button id="pairBtn" class="v-btn v-btn--quiet" type="button">Link WhatsApp</button>
-        <small id="waStatus" class="muted"></small>
-      </div>
-      <p id="pairInfo" class="pair" hidden></p>
-    </div>
-    <h3>Sign in</h3>
-    <p class="muted small">Use the account you were sent. This browser will show that account’s errands.</p>
-    <label class="field"><span>Email</span><input id="signEmail" class="v-input" type="email" autocomplete="username" /></label>
-    <label class="field">
-      <span>Password</span>
-      <div class="row">
-        <input id="signPassword" class="v-input" type="password" autocomplete="current-password" />
-        <button id="signInBtn" class="v-btn v-btn--quiet" type="button">Sign in</button>
-      </div>
-    </label>
-    <p id="signStatus" class="muted small" role="status"></p>
     <h3>Link with Vali on your Mac</h3>
     <p class="muted small">Linking uses the same account on both devices. This browser will show that account’s errands.</p>
     <button id="showMacCode" class="v-btn v-btn--quiet" type="button">Show this browser’s code</button>
@@ -91,15 +74,33 @@
         <button id="linkMac" class="v-btn v-btn--quiet" type="button">Link</button>
       </div>
     </label>
+    <details class="developer">
+      <summary>Developer</summary>
+      <div id="serverPresets" class="presets server-presets"></div>
+    </details>
+    </div>
+    <label class="field">
+      <span>Research depth</span>
+      <select class="v-input" id="effort">
+        <option value="minimal">Quick</option>
+        <option value="low" selected>Normal</option>
+        <option value="medium">Thorough</option>
+      </select>
+    </label>
+    <label class="check toggle"><input type="checkbox" id="presence" checked /> <span>Vali tips while you browse</span></label>
+        <div class="field" hidden><!-- WhatsApp is parked until Meta verifies the business -->
+      <span>WhatsApp</span>
+      <div class="row">
+        <button id="pairBtn" class="v-btn v-btn--quiet" type="button">Link WhatsApp</button>
+        <small id="waStatus" class="muted"></small>
+      </div>
+      <p id="pairInfo" class="pair" hidden></p>
+    </div>
     <h3>Your details</h3>
     <p class="muted small">Used to fill forms and drafts. Your personal details stay in this browser.</p>
     <div id="profileFields" class="profile"></div>
     <h3>How Vali uses Exa</h3>
     <div id="exaUses"></div>
-    <details class="developer">
-      <summary>Developer</summary>
-      <div id="serverPresets" class="presets server-presets"></div>
-    </details>
     <div class="row end"><button id="saveSettings" class="v-btn">Save</button></div>
   </section>
   <main id="main" class="main">
