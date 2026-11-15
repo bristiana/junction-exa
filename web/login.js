@@ -44,17 +44,11 @@ export function renderLogin(next = '#/') {
     email, password, error,
     h('div', { class: 'login-buttons' }, h('button', { type: 'submit', class: 'btn' }, 'Sign in')));
 
-  const others = [];
-  if (session.hasDemo()) {
-    others.push(choice('Open the demo account', 'Bogdan, a master’s student at Aalto, settling in and at Junction. See what Vali did for him. View only.', () => { session.useDemo(); go(); }, true));
-  }
-
   show('login',
     h('div', { class: 'login card' },
       h('div', { class: 'hero-slot login-slot', 'data-slot': 'login' }),
       h('h1', { class: 'login-title' }, 'Sign in to Vali'),
       h('p', { class: 'muted login-sub' }, 'Your valet for life in Finland.'),
-      session.hasDemo() ? h('div', { class: 'login-choices' }, others.shift()) : null,
       form,
       h('p', { class: 'muted login-sub' }, 'Sign in with the account you were given.'),
       h('p', { class: 'muted login-sub' },
