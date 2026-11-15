@@ -836,6 +836,15 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     @application.post('/v1/tasks/{tid}/approve')
     def approve(tid: str, user=Depends(authenticate)):
         task = owned(tid, user)
+        config = application.state.config
+        host = (urlsplit((task['execution'] or {}).get('current_url') or (task['execution'] or {}).get('start_url') or '').hostname or '').lower()
+        safe = any(host == h or host.endswith('.' + h) for h in getattr(config, 'submit_hosts', ()))
+        if getattr(config, 'closed', False) and task['execution'] and task['execution'].get('status') == 'awaiting_approval' and not safe:
+            # The shared demo never sends a real application: Vali stops right before the submit.
+            application.state.store.patch_execution(tid, {'status': 'stopped', 'approval_decision': 'stopped', 'result': (
+                f'This is the demo, so Vali stopped right before sending. Nothing reached {host or "the site"}.')})
+            push_task(application, tid, render_execution_update)
+            return application.state.store.get_task(tid)
         if not application.state.store.approve_execution(tid, task['execution']):
             raise HTTPException(409, 'Execution is not awaiting approval')
         return application.state.store.get_task(tid)

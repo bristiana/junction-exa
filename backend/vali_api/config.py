@@ -36,6 +36,8 @@ class Config:
     readonly_tokens: frozenset = field(default_factory=lambda: frozenset(t for t in vali_env('VALI_READONLY_TOKEN_HASHES', 'ca81589bcab70d6b2428ae754a57dd6c268178dfe878badad8121a2314deeaf9').split(',') if t))
     # Invite only: no new accounts, no new WhatsApp links, and only owner_ids may write.
     closed: bool = field(default_factory=lambda: vali_env('VALI_CLOSED', '') == '1')
+    # In the closed demo, Approve sends only on these hosts; anywhere else Vali stops before sending.
+    submit_hosts: frozenset = field(default_factory=lambda: frozenset(t for t in vali_env('VALI_SUBMIT_HOSTS', 'httpbin.org').split(',') if t))
     owner_ids: frozenset = field(default_factory=lambda: frozenset(t for t in vali_env('VALI_OWNER_IDS', 'u_aef529c006304836b977614e08d2bc5c').split(',') if t))
     daily_cap_usd: float = field(default_factory=lambda: float(vali_env('VALI_DAILY_CAP_USD', '3.0')))
     global_daily_cap_usd: float = field(default_factory=lambda: float(vali_env('VALI_GLOBAL_DAILY_CAP_USD', '60.0')))
