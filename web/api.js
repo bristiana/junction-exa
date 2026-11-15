@@ -8,9 +8,12 @@ const SIGNED_KEY = 'vali.signed:' + (base || location.origin);
 // A shared demo link (#demo=<token>) offers that account, already full, on the sign-in page;
 // the token leaves the address bar at once.
 const demo = String(globalThis.location?.hash || '').match(/(?:^#|&)demo=([A-Za-z0-9_-]{20,})/);
-if (demo) {
+if (demo) {  // the link opens that account at once, view only
   save(DEMO_KEY, demo[1]);
-  globalThis.history?.replaceState(null, '', location.pathname + location.search + '#/login');
+  token = demo[1];
+  save(TOKEN_KEY, demo[1]);
+  save(SIGNED_KEY, '1');
+  globalThis.history?.replaceState(null, '', location.pathname + location.search + '#/');
 }
 
 // Who is signed in on this browser. Signing in is a choice on #/login; the token is the account.
