@@ -313,10 +313,13 @@ def render_execution_update(task, profile=None, buttons=False):
     elif status == "done":
         message = _text(execution.get("result") or "Done.", profile)
     elif status == "failed":
-        message = "Vali could not finish: " + _text(execution.get("error") or "the page could not be completed", profile)
+        # The agent puts why it stopped in result ("needs captcha: finish by hand at <url>"); error is often empty.
+        reason = str(execution.get("result") or execution.get("error") or "").strip()
+        reason = re.split(r"[;,.]?\s*finish by hand\b", reason, flags=re.I)[0].strip(" .;,:") or "the page could not be completed"
+        message = "Vali could not finish: " + _text(reason, profile) + "."
         url = execution.get("final_url") or execution.get("current_url") or execution.get("start_url")
         if url:
-            message += f"\nfinish here: {url}"
+            message += f" Finish here: {url}"
         if not buttons:
             message += CONTINUE_HINT
     elif status == "stopped":
