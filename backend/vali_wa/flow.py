@@ -37,15 +37,22 @@ def stale(task, now=None):
     return (now or datetime.now(timezone.utc)) - at > STALE
 
 
-def starts_new_errand(task, text):
-    """While a form waits for Approve it reads no messages, so a text that is clearly an errand of its own (a link,
-    a full sentence) starts one; so does any text once the run has gone quiet. A form's open question takes the reply."""
+def paused(task):
+    """A run that stopped because Vali's question went unanswered: the next reply is the answer and continues it."""
     execution = (task or {}).get("execution") or {}
-    if execution.get("status") not in ACTIVE or not text.strip():
+    return execution.get("status") == "stopped" and str(execution.get("result") or "").startswith("Paused:") \
+        and not stale(task)
+
+
+def starts_new_errand(task, text):
+    """While a form waits for Approve (or is paused on an unanswered question) it reads no messages, so a text that is
+    clearly an errand of its own (a link, a full sentence) starts one; so does any text once the run has gone quiet. A form's open question takes the reply."""
+    execution = (task or {}).get("execution") or {}
+    if not (execution.get("status") in ACTIVE or paused(task)) or not text.strip():
         return False
     if stale(task):
         return True
-    if execution.get("question") or execution.get("status") != "awaiting_approval":
+    if execution.get("question") or execution.get("status") not in {"awaiting_approval", "stopped"}:
         return False
     return bool(_URL.search(text)) or len(text.split()) >= 6
 
@@ -165,7 +172,7 @@ class WhatsAppFlow:
         fresh = msg.kind == "text" and command.kind == "new_errand" and starts_new_errand(task, text)
         # Short answers (yes, a number, etc.) belong to an outstanding question.
         if self.message and task and not fresh and msg.kind == "text" and text.strip() and (
-                execution.get("status") in {"starting", "running"} or execution.get("question")) and (
+                execution.get("status") in {"starting", "running"} or execution.get("question") or paused(task)) and (
                 command.kind not in {"stop", "status", "continue"} or (
                     execution.get("question") and text.strip().casefold() in {"no", "nu", "ei"})):
             await _call(self.message, task["id"], text)
