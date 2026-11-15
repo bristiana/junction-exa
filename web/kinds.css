@@ -96,12 +96,12 @@ a.booking-site:hover { color: var(--ink); text-decoration: underline; }
 .needs.soft { border-color: var(--line); background: var(--card); }
 .needs .section-title { margin-bottom: 8px; }
 .needs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.need { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding-left: 26px; position: relative; }
+.need { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding-left: 26px; position: relative; }
 .need::before { content: ''; position: absolute; left: 0; top: 4px; width: 14px; height: 14px; border: 2px solid var(--line-3); border-radius: 4px; background: var(--card); }
 .need-text { flex: 1 1 260px; font-size: 15px; }
 .need-k { display: block; font-size: 13px; color: var(--muted); font-weight: 600; }
 .need-act { flex: none; padding: 8px 14px; }
-.need-reply { flex: 1 1 100%; display: flex; gap: 8px; }
+.need-reply { flex: 1 1 100%; min-width: 0; display: flex; gap: 8px; }
 .need-reply .reply-input { background: var(--card); }
 
 /* a long fact folds after its first sentence */

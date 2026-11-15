@@ -165,7 +165,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .quiet-run .run-head { margin-bottom: 8px; }
 .quiet-run .run-frame { max-height: 300px; aspect-ratio: auto; width: auto; max-width: 100%; }
 .state .reply + .actions { margin-top: 10px; }
-.headline { font-size: 20px; line-height: 1.4; letter-spacing: -.01em; margin: 0; font-weight: 600; }
+.headline { font-size: 20px; line-height: 1.4; letter-spacing: -.01em; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .claims { font-size: 16px; line-height: 1.65; margin: 8px 0 0; color: var(--ink); }
 .claim.unsupported { color: var(--muted); text-decoration: underline dotted #c9b9e4; text-underline-offset: 4px; }
 .pill { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border: 0; border-radius: 999px; background: var(--fill); color: var(--accent); font-size: 12px; font-weight: 700; vertical-align: 3px; cursor: pointer; line-height: 1; }
