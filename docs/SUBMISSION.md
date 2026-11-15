@@ -43,7 +43,7 @@ New in Finland? Vali handles it. Ask on WhatsApp or the web: Exa reads today's o
 
 ## 3. Description (max 5000, markdown)
 
-Paste everything between the two lines. 4,233 characters (4,287 if the form counts line breaks as two).
+Paste everything between the two lines. 4,720 characters (4,779 if the form counts line breaks as two).
 
 ---
 
@@ -80,6 +80,8 @@ Answers and form facts come from pages Exa reads live, not from training data.
 
 Live eval on production, fresh account, fake details: 13 of 13 research errands answered, 24 of 26 facts confirmed on the source page (92%), median 25 s, $0.33 of Exa in total. After Stop and Continue, the form reached the Approve step on 4 of 5 sites (Kulttuurisauna, Allas Sea Pool, play.fi padel, a test form). Finnkino stops at its bot wall by design and hands the page over.
 
+Tonight, from WhatsApp, Vali also filled three real public forms with made-up details and stopped before each send: the City of Helsinki feedback form, Nordea's contact form and an Allas Sea Pool ticket. They wait in the demo account as "Filled form, not sent".
+
 On 15 Nov Vali made a real booking from WhatsApp: Kulttuurisauna, Sunday 22 Nov at 17:30, after a Stop and a Continue. The sauna confirmed it by email.
 
 ## You stay in control
@@ -101,7 +103,8 @@ Sign in on the live app with the demo account (email and password in the form's 
 
 1. `How can I open a bank account without a Finnish personal ID?`
 2. `I study my master's at Aalto. How do I get the HSL student discount?`
-3. `Book a public sauna at Kulttuurisauna on Sunday at 17:30, 1 man`, then tap **Fill it for me** and give any test name and email. Vali fills the real form and stops at Approve.
+3. `Book a public sauna at Kulttuurisauna on Sunday at 17:30, 1 man`, then tap **Fill it for me** and give any test name and email. Vali fills the real form and stops at Approve. In the demo account, Approve stops right before sending, so nothing reaches the site.
+4. Open any "Filled form, not sent" errand on Home to see the filled fields, the last picture from the cloud browser and the Exa trail.
 
 ---
 
