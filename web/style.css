@@ -721,3 +721,13 @@ body.signed-in #home .landing { display: none; }
 .pair figure { margin: 0; }
 .pair figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); text-align: center; }
 @media (max-width: 760px) { .handles-grid, .pair { grid-template-columns: 1fr; } }
+
+/* judges' review: long URLs in titles never push the page sideways; phone layouts */
+.errand-title, .errand-name, h1, h2 { overflow-wrap: anywhere; }
+h1 { text-wrap: balance; }
+.login-buttons { grid-template-columns: 1fr; }
+@media (max-width: 600px) {
+  .facts > div, .context > div { grid-template-columns: 1fr; gap: 2px; }
+  .facts dt { font-size: 13px; }
+  .top nav, .top .links { flex-wrap: nowrap; overflow-x: auto; }
+}
