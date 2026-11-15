@@ -56,12 +56,16 @@ export function deleteProfile() {
 // rule), that "Your details" does not hold yet.
 export function missingDetails(task, profile) {
   const text = JSON.stringify([task?.task, task?.research?.output?.structured]);
-  const used = new Set([...text.matchAll(/\{\{\s*([a-z_]+)\s*\}\}/gi)].map((m) => m[1].toLowerCase()));
+  const used = new Set([...text.matchAll(/\{\{\s*([a-z_]+)\s*\}\}/gi)].map((m) => m[1].toLowerCase().replace(/^(first|last|full)_name$/, 'name')));
   const named = (key) => new RegExp(`(?<!\\w)${key.replaceAll('_', '\\s*[_ ]\\s*')}(?!\\w)`, 'i').test(task?.task || '');
   return PROFILE_FIELDS.filter(([key]) => (used.has(key) || named(key)) && !profile[key]).map(([key, label]) => ({ key, label }));
 }
 
 // Placeholders in what the cloud browser filled, shown with your own values. Only on this page; nothing is sent.
+// The cloud browser also types {{first_name}}, {{last_name}} and {{full_name}}, split from the full name the way the
+// agent splits it (backend/vali_agent/scope.py with_name_parts): "Anna Maria Virtanen" -> "Anna Maria" + "Virtanen".
 export function fillPlaceholders(text, profile) {
-  return String(text ?? '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, key) => profile[key.toLowerCase()] || m);
+  const words = String(profile?.name || '').trim().split(/\s+/).filter(Boolean);
+  const parts = { full_name: words.join(' '), ...(words.length >= 2 ? { first_name: words.slice(0, -1).join(' '), last_name: words.at(-1) } : {}) };
+  return String(text ?? '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, key) => profile?.[key.toLowerCase()] || parts[key.toLowerCase()] || m);
 }
