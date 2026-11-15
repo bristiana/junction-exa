@@ -63,4 +63,4 @@ def test_closed_for_judging_only_the_demo_account_writes(api):
     assert 'mia@' not in client.get('/v1/tasks').text  # its emails are masked for whoever signs in
     client.headers['Authorization'] = 'Bearer ' + other['token']
     reply = client.post('/v1/tasks', json={'task': 'find café'})
-    assert reply.status_code == 403 and 'closed' in reply.json()['detail']
+    assert reply.status_code == 403 and 'account you were given' in reply.json()['detail']

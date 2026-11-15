@@ -33,6 +33,8 @@ def missing(task, mode):
 
 
 def early_question(task, mode):
+    if re.search(r'https?://\S+', task, re.I):
+        return None
     gaps = missing(task, mode)
     if not gaps:
         return None

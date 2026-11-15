@@ -417,7 +417,7 @@ TERMS_HTML = PAGE.format(title='terms', body=(
     '<p>Vali is a demo built for a hackathon. It prepares forms and bookings and always stops before the final '
     'button until you approve. You stay responsible for what you approve. No warranty.</p>'))
 
-CLOSED = 'Vali is closed while the judges try it. Sign in with the account you were sent.'
+CLOSED = 'Sign in with the account you were given.'
 CLOSED_PATHS = {'/v1/users', '/v1/auth/register', '/v1/pair'}
 
 def create_app(config=None, store=None, exa=None, spawn_research_poller=None, spawn_browser_session=None, jev=None, whatsapp_api=None,

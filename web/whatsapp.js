@@ -10,10 +10,10 @@ export function whatsappUrl(number, code) {
 
 export async function openWhatsapp() {
   const sheet = document.getElementById('whatsapp');
-  // Closed while the judges try Vali: no new WhatsApp links. The demo chat runs on Bogdan's own phone.
+  // Invite only: no new WhatsApp links. This account's chat runs on Bogdan's own phone.
   show('whatsapp-body',
-    h('p', {}, 'WhatsApp is closed while the judges try Vali.'),
-    h('p', { class: 'muted' }, 'The demo account is already linked to Bogdan’s phone, so its WhatsApp errands show up here. The video shows the chat.'));
+    h('p', {}, 'WhatsApp is linked to this account.'),
+    h('p', { class: 'muted' }, 'Its WhatsApp errands show up here. The video shows the chat.'));
   sheet.showModal();
   if (sheet) return;
   show('whatsapp-body', h('p', { class: 'muted', role: 'status' }, 'Getting your code.'));

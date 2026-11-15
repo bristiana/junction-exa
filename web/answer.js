@@ -1,6 +1,6 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, draftsOf, factsOf, sourcesOf, stepsOf, webWork } from './model.js';
+import { claimsOf, detailsOf, draftsOf, factsOf, sourcesOf, stepsOf, webWork } from './model.js';
 import { renderExecution } from './execution.js';
 import { citePill } from './cite.js';
 import { renderState } from './state.js';
@@ -41,13 +41,13 @@ function chapter(title, body, cls = '') {
 function asked(task) {
   const via = { whatsapp: 'WhatsApp', web: 'the web', extension: 'Chrome', voice: 'a call' }[task.channel || task.source] || 'the web';
   const when = task.created_at ? new Date(task.created_at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-  const known = Array.isArray(task.research?.known_details) ? task.research.known_details : [];
+  const known = detailsOf(task);
   const answered = task.research?.question?.answer ? [task.research.question.text, task.research.question.answer] : null;
   const page = task.page && (task.page.title || task.page.url);
   return h('dl', { class: 'context' },
     row('From', `${via}${when ? `, ${when}` : ''}`),
     page ? row('Page', task.page.title || task.page.url) : null,
-    row('Your details', known.length ? known.join(', ') : 'none shared'),
+    known.length ? row('Your details', known.join(', ')) : null,
     answered ? row(answered[0], answered[1]) : null);
 }
 

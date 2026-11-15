@@ -56,7 +56,7 @@ export function renderLogin(next = '#/dashboard') {
       h('p', { class: 'muted login-sub' }, 'Your valet for life in Finland.'),
       session.hasDemo() ? h('div', { class: 'login-choices' }, others.shift()) : null,
       form,
-      h('p', { class: 'muted login-sub' }, 'Vali is closed while the judges try it. Sign in with the account you were sent.'),
+      h('p', { class: 'muted login-sub' }, 'Sign in with the account you were given.'),
       h('p', { class: 'muted login-sub' },
         h('a', { href: '/vali-extension.zip', download: 'vali-extension.zip' }, 'Get the Chrome extension'),
         ': unzip it, open chrome://extensions, turn on Developer mode, choose Load unpacked, then sign in from its settings with the same account.')));

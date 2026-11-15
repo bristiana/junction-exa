@@ -165,3 +165,9 @@ def test_a_watch_answers_today_first_and_echoes_its_criteria(api):
     assert structured['steps'][-1]['title'] == 'Watch active' and task['research']['watch_id']
     assert [c[2]['query'] for c in calls if c[1] == '/search'][0].startswith('Errand: new flats under 900 eur in Espoo')
     assert task['research']['status'] == 'completed'  # the fake poller ran the quote check
+
+
+@pytest.mark.parametrize('url', ['https://httpbin.org/forms/post', 'http://httpbin.org/forms/post', 'HTTPS://httpbin.org/forms/post'])
+@pytest.mark.parametrize('mode', ['book', 'find'])
+def test_url_task_needs_no_early_question(url, mode):
+    assert early_question(f'Fill in the test order form at {url}', mode) is None

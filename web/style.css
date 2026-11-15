@@ -653,3 +653,5 @@ body.signed-in .top .guest { display: none; }
 
 /* the home errand list belongs to a signed-in account */
 body:not(.signed-in) #errands { display: none; }
+
+.extension-hint { font-size: 13px; margin: 12px 0 20px; }
