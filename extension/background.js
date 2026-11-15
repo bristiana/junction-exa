@@ -534,7 +534,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 
 // Until you save your own, the details are the demo's: the demo name, everything else mock.
 const DEMO_PROFILE = {
-  name: "Bogdan Caraeane", email: "demo@vali.demo", phone: "+358 40 123 4567", address: "Otakaari 1",
+  name: "Bogdan Caraeane", email: "bogdan.demo@example.com", phone: "+358 40 123 4567", address: "Otakaari 1",
   postal_code: "02150", city: "Espoo", country: "Finland", date_of_birth: "2000-01-01", nationality: "Romanian",
 };
 chrome.runtime.onInstalled.addListener(async () => {

@@ -75,7 +75,7 @@ test("splits the full name, uses autocomplete hints, skips placeholders it canno
 
 // Fields as capturePage() read them on real Finnish forms (Jotform, HSL, Google Forms, Nordea, PwC), November 2026.
 const DEMO = {
-  name: "Bogdan Caraeane", email: "demo@vali.demo", phone: "+358 40 123 4567", address: "Otakaari 1",
+  name: "Bogdan Caraeane", email: "bogdan.demo@example.com", phone: "+358 40 123 4567", address: "Otakaari 1",
   postal_code: "02150", city: "Espoo", country: "Finland", date_of_birth: "2000-01-01",
 };
 const plan = (fields) => Object.fromEntries(planFill(fields, { profile: DEMO }).map((p) => [p.field_id, p.value]));
@@ -91,7 +91,7 @@ test("Finnish compounds, bilingual labels and camelCase names map to the right d
     { id: "g", type: "text", label: "Matkapuhelinnumero" },
     { id: "h", type: "url", label: "Verkkosivuosoite" },
     { id: "i", type: "text", label: "Nimi / Namn / Name *" },
-  ]), { a: "demo@vali.demo", b: "Bogdan Caraeane", c: "Bogdan", d: "+358 40 123 4567", e: "Otakaari 1", f: "Bogdan Caraeane", g: "+358 40 123 4567", i: "Bogdan Caraeane" });
+  ]), { a: "bogdan.demo@example.com", b: "Bogdan Caraeane", c: "Bogdan", d: "+358 40 123 4567", e: "Otakaari 1", f: "Bogdan Caraeane", g: "+358 40 123 4567", i: "Bogdan Caraeane" });
 });
 
 test("the label wins over the name attribute, and second lines and area codes are left alone (Jotform address and phone)", () => {
@@ -128,5 +128,5 @@ test("one box for postal code and town gets both", () => {
 });
 
 test("an unlabelled email box gets the email, an unlabelled tel box gets nothing", () => {
-  assert.deepEqual(plan([{ id: "a", type: "email", label: "", hint: " input input" }, { id: "b", type: "tel", label: "", hint: " otp1" }, { id: "c", type: "tel", label: "", hint: " input" }]), { a: "demo@vali.demo" });
+  assert.deepEqual(plan([{ id: "a", type: "email", label: "", hint: " input input" }, { id: "b", type: "tel", label: "", hint: " otp1" }, { id: "c", type: "tel", label: "", hint: " input" }]), { a: "bogdan.demo@example.com" });
 });

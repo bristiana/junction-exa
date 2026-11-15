@@ -27,7 +27,7 @@ function clean(profile) {
 
 // The demo account's details until you save your own: the demo name, everything else mock.
 export const DEMO_PROFILE = {
-  name: 'Bogdan Caraeane', email: 'demo@vali.demo', phone: '+358 40 123 4567', address: 'Otakaari 1',
+  name: 'Bogdan Caraeane', email: 'bogdan.demo@example.com', phone: '+358 40 123 4567', address: 'Otakaari 1',
   postal_code: '02150', city: 'Espoo', country: 'Finland', date_of_birth: '2000-01-01', nationality: 'Romanian',
 };
 
