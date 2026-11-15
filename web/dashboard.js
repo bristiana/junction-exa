@@ -1,6 +1,6 @@
 // "Your errands": every errand of this account from every channel, newest first, with account counters on top.
 import { h, show } from './dom.js';
-import { channelOf, countersOf, errandLine, errandStatus, timeAgo } from './model.js';
+import { channelOf, countersOf, errandLine, errandStatus, readableTitle, timeAgo } from './model.js';
 
 export const CHANNELS = {
   web: ['Web', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.9 9h-3.9a15 15 0 0 0-2-6.6A8 8 0 0 1 19.9 11ZM12 4.3A13 13 0 0 1 14 11h-4a13 13 0 0 1 2-6.7ZM4.1 13h3.9a15 15 0 0 0 2 6.6A8 8 0 0 1 4.1 13Zm3.9-2H4.1A8 8 0 0 1 10 4.4 15 15 0 0 0 8 11Zm4 8.7A13 13 0 0 1 10 13h4a13 13 0 0 1-2 6.7Zm2 0a15 15 0 0 0 2-6.7h3.9a8 8 0 0 1-5.9 6.7Z'],
