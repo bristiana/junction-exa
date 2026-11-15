@@ -1,15 +1,19 @@
 // The card on top of an errand page, shaped by what the errand is: a booking or form, or a daily watch.
 import { api } from './api.js';
 import { h } from './dom.js';
-import { bookingStatus, missingInfo, bookingWhen, calendarWhere, domainOf, failReason, formTitle, filledOf, formExa, friendlySteps, needsOf, safeUrl, timeAgo, watchCriteria, watchMatches } from './model.js';
+import { bookingStatus, missingInfo, runStatus, stopNote, bookingWhen, calendarWhere, domainOf, failReason, formTitle, filledOf, formExa, friendlySteps, needsOf, safeUrl, timeAgo, watchCriteria, watchMatches } from './model.js';
 import { runFrame } from './execution.js';
 import { fillPlaceholders, loadProfile, missingDetails } from './profile.js';
 import { renderState, sendAnswer } from './state.js';
 
+const stepsSeen = new Map();
+const openSteps = new Set(); // "What Vali did" stays open across the 2 s redraws
+
 // A booking or form: what, where, when and where it stands, with the one action that moves it on and the form as Vali left it.
 export function bookingCard(task, handlers) {
   const run = task.execution;
-  const status = bookingStatus(task);
+  const note = stopNote(task);
+  const status = note ? { word: note.word, tone: note.kind === 'demo' ? 'stopped' : 'you' } : bookingStatus(task);
   const site = domainOf(run?.current_url || run?.start_url) || renderStateSite(task);
   const siteUrl = safeUrl(run?.current_url || run?.start_url);
   const when = bookingWhen(task);
@@ -19,8 +23,12 @@ export function bookingCard(task, handlers) {
   const profile = loadProfile(); // placeholders show your own values, on this page only
   const filled = filledOf(task);
   const steps = friendlySteps(task);
+  const before = stepsSeen.get(task.id) ?? steps.length; // only steps added since the last redraw fade in
+  const seen = before > steps.length ? 0 : before;          // a continued run starts its steps again
+  stepsSeen.set(task.id, steps.length);
   const shot = runFrame(task);
   const failed = failReason(task);
+  const live = ['starting', 'running', 'awaiting_approval', 'submitting'].includes(runStatus(task));
   return h('section', { class: `booking card tone-${status.tone}`, 'aria-label': 'The booking' },
     h('div', { class: 'booking-head' },
       h('span', { class: `kind-badge tone-${status.tone}` }, status.word),
@@ -38,10 +46,11 @@ export function bookingCard(task, handlers) {
           h('dl', { class: 'filled' }, filled.map((f) => h('div', {}, h('dt', {}, f.label), h('dd', {}, fillPlaceholders(f.value, profile)))))) : null,
         renderState(task, handlers)),
       shot ? h('figure', { class: 'booking-shot' }, shot,
-        h('figcaption', {}, 'Private cloud browser on Modal')) : null),
-    steps.length ? h('details', { class: 'booking-steps' },
+        h('figcaption', {}, live ? h('span', { class: 'live-dot', 'aria-hidden': 'true' }) : null,
+          live ? 'Live from a private browser on Modal' : 'Last picture from the private browser on Modal')) : null),
+    steps.length ? h('details', { class: 'booking-steps', open: openSteps.has(task.id) || null, ontoggle: (e) => { if (e.currentTarget.open) openSteps.add(task.id); else openSteps.delete(task.id); } },
       h('summary', {}, `What Vali did, ${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`),
-      h('ol', { class: 'run-steps' }, steps.map((step) => h('li', {}, fillPlaceholders(step, profile))))) : null);
+      h('ol', { class: 'run-steps' }, steps.map((step, i) => h('li', { class: i >= seen ? 'new' : null }, fillPlaceholders(step, profile))))) : null);
 }
 
 function renderStateSite(task) {
