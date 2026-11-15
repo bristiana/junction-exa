@@ -13,7 +13,9 @@ const asks = (t) => !!t?.execution?.question?.text && ["starting", "running", "s
 const DO_IT = new Set(["claim", "book", "write"]);
 export function hasNextStep(t) {
   const s = t.output?.structured;
-  return s?.status === "ready_to_approve" && !!(s.actions?.length || s.form_fill?.length || DO_IT.has(t.mode));
+  // A link to open is an option, not a step to approve (the web shows it as Done too); drafts and forms are.
+  const steps = (s?.actions || []).filter((a) => a?.type !== "open_link");
+  return s?.status === "ready_to_approve" && !!(steps.length || s.form_fill?.length || DO_IT.has(t.mode));
 }
 
 // One errand. The browser run (execution) comes after research, so once it exists it decides.
