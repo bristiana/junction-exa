@@ -180,3 +180,22 @@ def test_whatsapp_a_dead_approval_no_longer_swallows_texts(wa):
     deliver('cheap bike', mid='later')
     tasks = store.list_tasks(user['user_id'])
     assert len(tasks) == 2 and tasks[0]['task'] == 'cheap bike'
+
+
+def test_demo_stop_before_sending_keeps_its_message(api, monkeypatch):
+    from vali_agent.hooks import AgentHooks
+    client, application, store, calls, polls, browsers, user = api
+    tid = book(client, application, 'book a sauna in Espoo tomorrow')
+    client.post(f'/v1/tasks/{tid}/execute', json={})
+    demo = 'This is the demo, so Vali stopped right before sending. Nothing reached varaamo.hel.fi.'
+
+    def agent(**kwargs):
+        hooks = kwargs['hooks']
+        # What POST /approve does in closed demo mode while the agent waits for approval.
+        store.patch_execution(tid, {'status': 'stopped', 'approval_decision': 'stopped', 'result': demo})
+        assert hooks.wait_for_approval('Book sauna', []) is False
+        return {'status': 'stopped', 'result': 'Stopped by the user'}
+    monkeypatch.setitem(sys.modules, 'vali_agent', types.SimpleNamespace(run_browser_agent=agent, AgentHooks=AgentHooks))
+    run_browser_session(tid, 'goal', 'https://example.com', {}, application)
+    execution = store.get_task(tid)['execution']
+    assert execution['status'] == 'stopped' and execution['result'] == demo

@@ -393,9 +393,10 @@ def run_browser_session(task_id, goal, start_url, profile, application=None):
             hooks = AgentHooks(**base)
         result = run_browser_agent(goal=goal, start_url=start_url, profile=profile, hooks=hooks)
         value = result if isinstance(result, dict) else vars(result)
-        paused = str((store.get_task(task_id)['execution'] or {}).get('result') or '')
-        # A run that stopped waiting for an answer says so, not "Stopped by the user": the reply continues it.
-        keep = paused if should_stop() and paused.startswith(PAUSED) else None
+        said = (store.get_task(task_id)['execution'] or {}).get('result')
+        # A result the server set while stopping it (paused for an answer, the demo's stop before sending) is the
+        # truth, not the agent's generic "Stopped by the user".
+        keep = said if should_stop() and said else None
         patch_execution(task_id, {'status': 'stopped' if should_stop() else value['status'],
                                        'result': keep or value.get('result', ''), 'current_url': value.get('final_url'), 'error': value.get('error'),
                                        **{k: value[k] for k in ('usage', 'sources', 'filled', 'exa', 'private_view') if value.get(k) is not None}})
