@@ -204,10 +204,10 @@ export function capturePage(mode) {
     if (el.id) {
       const sel = `label[for="${CSS.escape(el.id)}"]`;
       const l = rootOf(el).querySelector?.(sel) || document.querySelector(sel);
-      if (l) return l.innerText;
+      if (l && l.innerText.trim()) return l.innerText; // an empty label (text in a slot) says nothing: look further
     }
     const wrap = el.closest("label");
-    if (wrap) return wrap.innerText;
+    if (wrap && wrap.innerText.trim()) return wrap.innerText;
     const aria = el.getAttribute("aria-label");
     if (aria) return aria;
     const by = el.getAttribute("aria-labelledby");

@@ -44,6 +44,8 @@ const WORDS = [
 ];
 // One field for the whole name, even when the label names both parts: "Etu- ja sukunimi", "First and last name".
 const FULL_NAME = /(?<![\p{L}])(?:etu-? ?ja sukunimi|first and last name|full name|koko nimi)(?![\p{L}])/iu;
+// One field for postal code and town: "Postinumero ja -toimipaikka" gets "02150 Espoo".
+const POSTAL_CITY = /postinumero ja -?(?:posti)?toimipaikka|postinumero ja kaupunki|postal code and (?:city|town)|zip(?: code)? and city/iu;
 // A second address line, a flat, or the area or country code part of a split phone number: left for the user.
 const SECONDARY = {
   address: /(?:line|rivi|addr_line|address|osoite) ?2|apartment|\bapt\b|huoneisto|c\/o/iu,
@@ -59,6 +61,7 @@ const nameParts = (label) => norm(String(label || "").replace(/\((?:pakollinen|r
 function profileValue(kind, profile) {
   const full = String(profile.name || "").trim();
   if (kind === "first_name") return profile.first_name || full.split(/\s+/).slice(0, -1).join(" ");
+  if (kind === "postal_city") return profile.postal_code && profile.city ? `${profile.postal_code} ${profile.city}` : "";
   if (kind === "last_name") return profile.last_name || (full.includes(" ") ? full.split(/\s+/).pop() : "");
   return profile[kind] || "";
 }
@@ -67,9 +70,11 @@ function kindOf(field) {
   for (const token of String(field.hint || "").toLowerCase().split(/\s+/)) if (AUTOCOMPLETE[token]) return AUTOCOMPLETE[token];
   const label = norm(field.label), hint = norm(field.hint);
   if (FULL_NAME.test(label)) return "name";
+  if (POSTAL_CITY.test(label)) return "postal_city";
   // The label the user reads first; the name and id only when the label says nothing ("Kunta" over name="address[state]").
   const byWords = (text) => (WORDS.find(([, re]) => re.test(text)) || [])[0];
-  return byWords(label) || (nameParts(field.label).some((p) => NAME_LABEL.test(p)) ? "name" : null) || byWords(hint) || (NAME_LABEL.test(hint) ? "name" : null);
+  return byWords(label) || (nameParts(field.label).some((p) => NAME_LABEL.test(p)) ? "name" : null) || byWords(hint) || (NAME_LABEL.test(hint) ? "name" : null)
+    || (field.type === "email" ? "email" : null); // an unlabelled email box is still an email box (never tel: code boxes are tel too)
 }
 
 function detailOf(field) {
