@@ -9,7 +9,7 @@ export function renderWorking(task, { onReply, onCancel }) {
   announce(lines.at(-1));
   show('working',
     h('div', { class: 'stage-slot', 'data-slot': 'working' }),
-    h('p', { class: 'eyebrow' }, 'Working on'),
+    h('p', { class: 'eyebrow' }, 'Research, step 2 of 4'),
     h('h2', { class: 'errand-title' }, task.task),
     h('p', { class: 'clock', id: 'clock' }, timerText(task)),
     stages(task),

@@ -81,7 +81,7 @@ $('dashboard-ask').addEventListener('submit', (event) => {
 for (const chip of document.querySelectorAll('#examples button.chip')) chip.addEventListener('click', () => ask(chip.textContent));
 startMic($('mic'), { onText: (text) => { $('errand').value = text; $('errand').focus(); }, onError: notice });
 createAskDock({ start: (text) => startErrand(text), mascot });
-$('landing-try').addEventListener('click', () => {
+$('landing-try')?.addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   $('errand').focus({ preventScroll: true });
 });

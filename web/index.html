@@ -41,6 +41,7 @@
     <div class="hero-slot" data-slot="home"></div>
     <h1>New in Finland? Vali handles it.</h1>
     <p class="sub">The errand agent for your first year in Finland. Ask on WhatsApp. Vali reads today’s official pages with Exa, answers with the exact source, and fills the forms for you.</p>
+    <div class="guest-cta guest-top"><a href="#/login" class="btn go">Log in</a><a href="/vali-extension.zip" download="vali-extension.zip" class="btn soft">Get the extension</a></div>
     <form id="ask" class="ask">
       <label class="sr-only" for="errand">Your errand</label>
       <input id="errand" type="text" maxlength="2000" autocomplete="off" enterkeyhint="send"
@@ -58,9 +59,10 @@
       <button type="button" class="chip">Basketball court for Saturday</button>
     </div>
     <ol class="how-it-works" aria-label="How Vali works">
-      <li><b>You ask</b><span>On WhatsApp, here, or from the Chrome extension. Then get on with your day.</span></li>
-      <li><b>Vali works in the background</b><span>Exa searches the live web, reads today’s official pages and checks every sentence against a quote.</span></li>
-      <li><b>You get it done</b><span>An answer with exact sources, or a real form filled in a cloud browser that waits for your Approve.</span></li>
+      <li><b>Ask</b><span>On WhatsApp, here, or in the Chrome extension. Then get on with your day.</span></li>
+      <li><b>Research</b><span>In the background, Exa reads today’s official pages. Every sentence is checked against a quote.</span></li>
+      <li><b>Fill</b><span>Vali fills the real form with your details, in a private browser on Modal.</span></li>
+      <li><b>Your OK</b><span>You check the filled form and tap Approve. Nothing is sent before that.</span></li>
     </ol>
    <section id="folder" class="folder"></section>
    <section id="errands" class="errands"></section>
@@ -105,7 +107,7 @@
 
       <section class="closer">
         <h2>Hand Vali your first errand.</h2>
-        <button type="button" id="landing-try" class="btn go">Ask Vali</button>
+        <div class="guest-cta"><a href="#/login" class="btn go">Log in</a><a href="/vali-extension.zip" download="vali-extension.zip" class="btn soft">Get the extension</a></div>
       </section>
     </div>
   </section>
