@@ -18,15 +18,15 @@
 <header class="top">
   <a class="brand" href="#/">Vali</a>
   <div class="top-right">
+    <a href="#/" class="link-btn signed" data-view="home">Home</a>
     <a href="/vali-extension.zip" download="vali-extension.zip" class="link-btn">Get the extension</a>
-    <a href="#/" class="link-btn signed" data-view="home">Your errands</a>
-    <a href="#/dashboard" id="to-errands" class="link-btn signed" data-view="dashboard">Exa activity</a>
-    <button type="button" id="to-whatsapp" class="link-btn signed">WhatsApp</button>
-    <button type="button" id="to-details" class="link-btn signed">Details</button>
-    <button type="button" id="to-logout" class="link-btn signed">Log out</button>
-    <span class="by-exa">Search by <b>Exa</b></span>
+    <a href="#/dashboard" id="to-errands" class="link-btn signed" data-view="dashboard">Activity</a>
+    <button type="button" id="to-whatsapp" class="link-btn signed" hidden>WhatsApp</button>
+    <button type="button" id="to-details" class="link-btn signed" hidden>Details</button>
+    <button type="button" id="to-logout" class="link-btn signed" hidden>Log out</button>
+    <span class="by-exa" hidden>Search by <b>Exa</b></span>
     <a href="#/login" id="to-login" class="btn login-btn guest">Log in</a>
-    <div class="palette-picker">
+    <div class="palette-picker" hidden>
       <button type="button" id="palette" class="palette-btn" aria-label="Vali's colours" aria-haspopup="menu"></button>
     </div>
   </div>

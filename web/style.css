@@ -735,3 +735,6 @@ h1 { text-wrap: balance; }
 /* signed in, the errands come first: the marketing headline is for visitors */
 body.signed-in #home > h1, body.signed-in #home > .sub { display: none; }
 body.signed-in #home .how-it-works { margin-top: 16px; }
+
+/* the header keeps three things: Home, Get the extension, Activity */
+.top [hidden] { display: none !important; }
