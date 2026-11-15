@@ -300,7 +300,7 @@ export function createMockServer({ researchMs = 6000, execMs = 4000, ask = false
       return send(res, 200, frameSvg(t, shot ? Number(shot[2]) : null), "image/svg+xml");
     }
     if (req.method === "GET" && path === "/v1/me") {
-      return send(res, 200, { user_id: user.user_id, whatsapp_linked: !!user.whatsapp, whatsapp_last4: user.whatsapp?.last4 || null, profile_synced: !!user.profile, demo: true });
+      return send(res, 200, { user_id: user.user_id, whatsapp_linked: !!user.whatsapp, whatsapp_last4: user.whatsapp?.last4 || null, profile_synced: !!user.profile });
     }
     if (req.method === "PUT" && path === "/v1/profile") {
       const p = body.profile || {};

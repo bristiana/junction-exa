@@ -564,8 +564,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
         return dict(user_id=user['id'], email=application.state.store.email_of(user['id']),
                     situation={k: v for k, v in (situation or {}).items() if k != 'asked'} or None,
                     whatsapp_linked=bool(number), whatsapp_last4=number[-4:] if number else None,
-                    profile_synced=False,  # profiles stay on the device; old clients read this
-                    demo=bool(config.closed))  # the closed judging demo: home shows the jury's Start here card
+                    profile_synced=False)  # profiles stay on the device; old clients read this
 
     @application.put('/v1/profile')
     def profile(body: ProfileBody, user=Depends(authenticate)):
