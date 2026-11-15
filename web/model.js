@@ -660,3 +660,20 @@ export function formTitle(task) {
 export function readableTitle(text) {
   return String(text || '').replace(/https?:\/\/[^\s)]+/g, (url) => domainOf(url.replace(/[.,;:]+$/, '')) || url).replace(/:\s*$/, '');
 }
+
+// Where the person's answer to a question on the errand page goes, so it reaches whoever asked:
+// 'execution' (a running form asked: POST /messages), 'continue' (a stopped or failed run asked: POST /continue),
+// 'research' (Vali's own open research.question: POST /messages refines it), else 'followup' (a new errand).
+// A completed research keeps a stale research.question, so only a question with that same text refines it.
+export function answerRoute(task, question = '') {
+  const stage = errandStage(task);
+  const status = runStatus(task);
+  const asked = String(question || '').trim();
+  const open = questionOf(task);
+  if (['starting', 'running', 'awaiting_approval'].includes(status)) return 'execution';
+  if (stage.next?.kind === 'refill' && (!asked || asked === String(stage.next.question || '').trim())) return 'continue';
+  if (open && (!asked || open.text.trim() === asked)) return 'research';
+  if (['stopped', 'failed'].includes(status)) return 'continue';
+  if (open) return 'research';
+  return 'followup';
+}

@@ -20,7 +20,10 @@ export function renderAnswer(task, handlers) {
   const head = [h('h1', { class: 'errand-title' }, readableTitle(task.task)), meta(task)];
   const asking = errandStage(task).next?.kind === 'answer'; // the needs block holds the answer box, so Now drops it
   const needs = needsBlock(task, handlers, { inline: kind !== 'form' });
-  const blocking = needs && needsOf(task, missingDetails(task, loadProfile())).some((item) => item.kind !== 'bring');
+  const needed = needs ? needsOf(task, missingDetails(task, loadProfile())) : [];
+  const blocking = needed.some((item) => item.kind !== 'bring');
+  // A question in the needs block is answered there only; the state block below keeps just its buttons.
+  if (needed.some((item) => item.kind === 'question')) handlers = { ...handlers, askedAbove: true };
   let body;
   if (kind === 'form') {
     body = [

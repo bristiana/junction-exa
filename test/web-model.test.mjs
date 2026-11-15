@@ -175,3 +175,15 @@ test("errand rows are shaped by kind: answer, booking, watch, draft", async () =
   assert.equal(shortWhen("22.11.2026 klo 17.30"), "Sun 22 Nov 17:30");
   assert.equal(siteName("https://www.dvv.fi/en"), "DVV");
 });
+
+test("an answer goes to whoever asked: running form, stopped run, Vali's own question, else a follow-up", async () => {
+  const { answerRoute } = await import('../web/model.js');
+  const stale = { text: 'Which city?', options: [], answer: null };
+  const base = { task: 'Book a sauna', mode: 'book', research: { status: 'completed', question: stale, output: { structured: { actions: [{ type: 'book', url: 'https://sauna.example/book' }] } } } };
+  const stopped = { ...base, execution: { status: 'stopped', steps: [{ text: 'Asked you: Which time, 17:30 or 19:00?' }] } };
+  assert.equal(answerRoute(stopped, 'Which time, 17:30 or 19:00?'), 'continue');  // not the stale research question
+  assert.equal(answerRoute({ ...base, execution: { status: 'running', question: { text: 'Which slot?' }, steps: [] } }, 'Which slot?'), 'execution');
+  assert.equal(answerRoute({ ...base, execution: { status: 'failed', steps: [] } }, ''), 'continue');
+  assert.equal(answerRoute(base, 'Which city?'), 'research');
+  assert.equal(answerRoute({ ...base, research: { ...base.research, question: { ...stale, answer: 'Espoo' } } }, 'Which date?'), 'followup');
+});

@@ -1,10 +1,10 @@
 // The card on top of an errand page, shaped by what the errand is: a booking or form, or a daily watch.
 import { api } from './api.js';
 import { h } from './dom.js';
-import { bookingStatus, bookingWhen, calendarWhere, domainOf, failReason, formTitle, filledOf, formExa, friendlySteps, needsOf, safeUrl, timeAgo, watchCriteria, watchMatches } from './model.js';
+import { bookingStatus, missingInfo, bookingWhen, calendarWhere, domainOf, failReason, formTitle, filledOf, formExa, friendlySteps, needsOf, safeUrl, timeAgo, watchCriteria, watchMatches } from './model.js';
 import { runFrame } from './execution.js';
 import { fillPlaceholders, loadProfile, missingDetails } from './profile.js';
-import { renderState } from './state.js';
+import { renderState, sendAnswer } from './state.js';
 
 // A booking or form: what, where, when and where it stands, with the one action that moves it on and the form as Vali left it.
 export function bookingCard(task, handlers) {
@@ -162,21 +162,16 @@ export function exaHelped(task) {
 // "What Vali needs from you": a short checklist, each item with the one action that provides it. Nothing needed, no block.
 // Every question is answered right here; the answer moves the errand on (see send below).
 export function needsBlock(task, handlers, { inline = false } = {}) {
-  const items = needsOf(task, missingDetails(task, loadProfile()));
+  // Several missing facts arrive as one joined question; each gets its own line and answer box.
+  const missing = missingInfo(task);
+  const items = needsOf(task, missingDetails(task, loadProfile())).flatMap((item) => item.kind === 'question' && missing.length > 1 && item.text === missing.join(' ')
+    ? missing.slice(0, 3).map((text) => ({ kind: 'question', text })) : [item]);
   if (!items.length) return null;
-  const { onFollowUp, onDetails, onReply, onResume } = handlers;
+  const { onDetails } = handlers;
   const title = items.some((item) => item.kind !== 'bring') ? 'What Vali needs from you' : 'Before you go';
-  // An answer goes where it moves the errand on: a running form hears it, a stopped one continues with it,
-  // anything else starts the follow-up errand.
-  const run = task?.execution?.status;
-  const send = (question, text, button) => {
-    const reply = `${question} ${text}`;
-    const open = task?.research?.question;  // Vali's own open question: the answer refines the research
-    if (open?.text && open.answer == null && onReply) return onReply(text, button);
-    if (['starting', 'running', 'awaiting_approval'].includes(run) && onReply) return onReply(text, button);
-    if (['stopped', 'failed', 'done'].includes(run) && onResume) return onResume(reply, button);
-    return onFollowUp?.(reply);
-  };
+  // An answer goes to whoever asked: a running form hears it, a stopped one continues with it,
+  // Vali's own open question refines the research, anything else starts the follow-up errand.
+  const send = (question, text, button) => sendAnswer(task, handlers, question, text, button);
   return h('section', { class: `needs card ${title === 'Before you go' ? 'soft' : ''}`.trim(), 'aria-label': title },
     h('h2', { class: 'section-title' }, title),
     h('ul', { class: 'needs-list' }, items.map((item) => {
@@ -199,3 +194,4 @@ function askBox(send) {
   return h('form', { class: 'reply need-reply', onsubmit: (event) => { event.preventDefault(); const text = input.value.trim(); if (text) send(text, event.submitter); } },
     input, h('button', { type: 'submit', class: 'btn' }, 'Send'));
 }
+
