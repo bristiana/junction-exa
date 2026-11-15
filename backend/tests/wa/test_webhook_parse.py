@@ -52,10 +52,10 @@ def test_signature_and_handshake():
 
 
 @pytest.mark.parametrize("text,kind", [
-    *[(text, "approve") for text in ["yes", "OK!", "Approve.", "KYLLÄ", "joo", "👍", "👍🏽", "(yes)", "“kyllä”", "👍️"]],
+    *[(text, "approve") for text in ["yes", "OK!", "Approve.", "KYLLÄ", "joo", "(yes)", "“kyllä”"]],
     *[(text, "stop") for text in ["stop", "No!", "cancel", "EI.", "lopeta"]],
     *[(text, "status") for text in ["status", "Tila!", "?", "?!", "???"]],
-    *[(text, "help") for text in ["help", "Apua!", "hi", "hello", "Moi.", "hei"]],
+    *[(text, "help") for text in ["help", "Apua!", "hi", "hello", "Moi.", "hei", "👍", "👍🏽", "👍️", "🙂👌"]],  # emoji-only never approves
     *[(text, "check") for text in ["check now", "Check now!", "check", "Tarkista."]],
     *[(text, "new_errand") for text in ["hello help with rent", "yes please book", "10", "0", "link 12345", "link 1234567", "moi etsi sauna", "check my rent"]],
 ])
