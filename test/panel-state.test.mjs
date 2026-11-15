@@ -39,3 +39,9 @@ test("panel research status distinguishes prepared work, answers, failure and st
   assert.deepEqual(errandStatus({ status: "failed" }), ["Couldn't finish", "danger"]);
   assert.deepEqual(errandStatus({ status: "cancelled" }), ["Stopped", "muted"]);
 });
+
+test("a found answer with only links is Done, like the web", () => {
+  const t = { status: "completed", seen: true, mode: "check", output: { structured: { status: "ready_to_approve", actions: [{ type: "open_link", url: "https://example.fi" }] } } };
+  assert.deepEqual(panelStatus(t), ["Done", "success"]);
+  assert.deepEqual(panelStatus({ ...t, mode: "book" }), ["Waiting for your OK", "warning"]);
+});
