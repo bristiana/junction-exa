@@ -658,7 +658,9 @@ export function formTitle(task) {
 
 // The errand's own words with web addresses shown as their site, so a pasted link does not fill the title.
 export function readableTitle(text) {
-  return String(text || '').replace(/https?:\/\/[^\s)]+/g, (url) => domainOf(url.replace(/[.,;:]+$/, '')) || url).replace(/:\s*$/, '');
+  return String(text || '')
+    .replace(/\s*\((?:test booker|details?|contact)[^)]*\)|\s*\([^)]*@[^)]*\)/gi, '')  // the contact details belong in the form, not the title
+    .replace(/https?:\/\/[^\s)]+/g, (url) => domainOf(url.replace(/[.,;:]+$/, '')) || url).replace(/:\s*$/, '');
 }
 
 // Where the person's answer to a question on the errand page goes, so it reaches whoever asked:

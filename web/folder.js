@@ -122,7 +122,7 @@ export function filesOf(tasks) {
     const form = Boolean(run && shots.length);
     if (form) {
       const domain = domainOf(run.start_url || run.current_url);
-      out.push({ kind: 'form', when, href, title: task.task, meta: ['Filled form', RUN_STATE[run.status]].filter(Boolean).join(', '),
+      out.push({ kind: 'form', when, href, title: readableTitle(task.task), meta: ['Filled form', RUN_STATE[run.status]].filter(Boolean).join(', '),
         place: domain, shot: run.private_view ? null : shots.at(-1).n, id: task.id });
     }
     for (const draft of draftsOf(task)) {
@@ -131,7 +131,7 @@ export function filesOf(tasks) {
     }
     const sources = sourcesOf(task);
     if (!form && task.research?.status === 'completed' && String(structured(task).answer || '').trim() && sources.length) {
-      out.push({ kind: 'answer', when, href, title: task.task, meta: `Answer, ${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`,
+      out.push({ kind: 'answer', when, href, title: readableTitle(task.task), meta: `Answer, ${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`,
         place: sources[0].domain });
     }
   }

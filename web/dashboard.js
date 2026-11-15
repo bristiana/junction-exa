@@ -76,7 +76,7 @@ function row(task, status, hidden) {
     h('a', { class: `errand ${status.tone} kind-${line.kind}`, href: `#/t/${encodeURIComponent(task.id)}` },
       h('span', { class: 'channel kind-icon', title: line.label }, icon(kindPath), h('span', { class: 'sr-only' }, `${line.label}: `)),
       h('span', { class: 'errand-text' },
-        h('span', { class: 'errand-name' }, task.task),
+        h('span', { class: 'errand-name' }, readableTitle(task.task)),
         h('span', { class: 'errand-status' }, line.word ? h('b', {}, line.word) : null,
           line.word && line.detail ? ` · ${line.detail}` : line.detail || '')),
       h('span', { class: 'errand-meta' },
