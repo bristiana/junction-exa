@@ -844,7 +844,7 @@ def create_app(config=None, store=None, exa=None, spawn_research_poller=None, sp
     def approve(tid: str, user=Depends(authenticate)):
         task = owned(tid, user)
         config = application.state.config
-        host = (urlsplit((task['execution'] or {}).get('current_url') or (task['execution'] or {}).get('start_url') or '').hostname or '').lower()
+        host = (urlsplit((task['execution'] or {}).get('current_url') or (task['execution'] or {}).get('start_url') or '').hostname or '').lower().rstrip('.')  # httpbin.org. is httpbin.org
         safe = any(host == h or host.endswith('.' + h) for h in getattr(config, 'submit_hosts', ()))
         if getattr(config, 'closed', False) and task['execution'] and task['execution'].get('status') == 'awaiting_approval' and not safe:
             # The shared demo never sends a real application: Vali stops right before the submit.
