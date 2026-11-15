@@ -236,6 +236,8 @@ export function capturePage(mode) {
     const f = { id, type, label: clip(labelOf(el), 120), required: !!el.required, hint: clip(`${el.getAttribute("autocomplete") || ""} ${el.name || ""} ${el.id || ""}`, 120) };
     if (el.localName === "select") f.options = [...el.options].map((o) => clip(o.text, 60)).filter(Boolean);
     if (el.value && type !== "checkbox") f.filled = true; // whether, never what: typed values are not read
+    // A select always has a value: it counts as filled only when someone picked an option other than the page's default.
+    if (el.localName === "select") f.filled = el.selectedIndex > 0 && !el.options[el.selectedIndex]?.defaultSelected;
     fields.push(f);
     if (fields.length >= 60) break;
   }

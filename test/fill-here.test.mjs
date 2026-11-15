@@ -113,3 +113,12 @@ test("a birth date typed into a text box is written the Finnish way (Nordea)", (
     { id: "c", type: "text", label: "Date of birth (mm/dd/yyyy)" },
   ]), { a: "01.01.2000", b: "2000-01-01", c: "01/01/2000" });
 });
+
+test("dropdowns: Finland is picked as Suomi, and a dropdown without the choice is left alone", () => {
+  assert.deepEqual(plan([
+    { id: "a", type: "select-one", label: "Maa", options: ["Valitse", "Ruotsi", "Suomi", "Viro"] },
+    { id: "b", type: "select-one", label: "Country", options: ["Choose", "Finland", "Sweden"] },
+    { id: "c", type: "select-one", label: "Asuinmaa", options: ["Valitse", "Ruotsi", "Viro"] },
+    { id: "d", type: "select-one", label: "Valitse maa", options: ["Valitse", "Suomi (+358)", "Ruotsi (+46)"] },
+  ]), { a: "Suomi", b: "Finland", d: "Suomi (+358)" });
+});
