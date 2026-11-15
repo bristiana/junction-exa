@@ -710,3 +710,14 @@ body.signed-in #home .landing { display: none; }
 .chapter-no { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--accent); }
 .band-source { font-size: 13px; color: var(--muted); }
 .band-source a { color: inherit; }
+
+/* landing: what Vali handles, and the two WhatsApp moments side by side */
+.handles { max-width: 980px; margin: 0 auto; text-align: center; }
+.handles-grid { list-style: none; margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: left; }
+.handles-grid li { padding: 18px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+.handles-grid b { display: block; font-size: 17px; margin-bottom: 4px; }
+.handles-grid span { display: block; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.pair { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; align-items: start; }
+.pair figure { margin: 0; }
+.pair figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); text-align: center; }
+@media (max-width: 760px) { .handles-grid, .pair { grid-template-columns: 1fr; } }
