@@ -1,5 +1,5 @@
 // The dashboard's numbers and lists, read from GET /v1/tasks, /v1/stats and /v1/watches. Pure, no DOM.
-import { TERMINAL, activityOf, channelOf, domainOf, errandStatus, friendlyStep, webWork, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
+import { TERMINAL, activityOf, channelOf, domainOf, errandStatus, friendlySteps, webWork, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
 import { exaUses } from './exa-uses.js';
 
 const list = (value) => (Array.isArray(value) ? value : []);
@@ -25,7 +25,7 @@ export function channelCounts(stats, tasks) {
   const counts = new Map(MAIN_CHANNELS.map((c) => [c, 0]));
   if (stats?.by_channel && typeof stats.by_channel === 'object') {
     for (const [raw, n] of Object.entries(stats.by_channel)) {
-      const channel = raw === 'desktop' ? 'mac' : raw;
+      const channel = channelOf({ channel: raw });
       counts.set(channel, (counts.get(channel) || 0) + (Number(n) || 0));
     }
   } else {
@@ -113,8 +113,6 @@ export function watchesOf(watches, tasks) {
 }
 
 // ---------- one errand as a conversation (#/dashboard/<id>) ----------
-// Browser steps that say nothing on their own; the thread skips them.
-const QUIET_STEP = /^(Read the page|Looked at the page|Scrolled\b|Pressed\b|Waiting for your approval|Finished|Stopped)$/;
 const RUN_WORD = {
   starting: 'Opening the page', running: 'Filling the form', awaiting_approval: 'Waiting for your OK',
   submitting: 'Submitting', completed: 'Done', done: 'Done', failed: "Couldn't finish", stopped: 'Stopped',
@@ -137,8 +135,8 @@ export function shortAnswer(task, n = 2) {
 
 // The browser steps worth reading, newest last: quiet steps dropped, "Opened <url>" shortened to its domain.
 export function runSteps(task, n = 4) {
-  const steps = list(task?.execution?.steps).map((s) => String(s?.text || '').trim()).filter((t) => t && !QUIET_STEP.test(t))
-    .map((t) => plainPlaceholders(friendlyStep(t))).filter(Boolean);
+  const steps = friendlySteps(task).map(plainPlaceholders)
+    .filter((text, i, all) => i === 0 || text !== all[i - 1]);
   return { steps: steps.slice(-n), more: Math.max(0, steps.length - n) };
 }
 

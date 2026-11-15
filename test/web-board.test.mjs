@@ -177,3 +177,12 @@ test("opened by Vali: sources first with https images, then reads, form-fill rea
   assert.equal(pages[2].title, "Price list");
   assert.deepEqual(pagesOpened({}), []);
 });
+
+test("API errands count as Web in both server totals and list totals", () => {
+  const server = channelCounts({ by_channel: { api: 13, web: 1, whatsapp: 15 } }, []);
+  assert.equal(new Map(server).get('web'), 14);
+  assert.equal(new Map(server).has('api'), false);
+  const tasks = [{ channel: 'api' }, { source: 'api' }, { channel: 'web' }];
+  assert.equal(new Map(channelCounts(null, tasks)).get('web'), 3);
+  assert.ok(feedOf(tasks).every((row) => row.channel === 'web'));
+});

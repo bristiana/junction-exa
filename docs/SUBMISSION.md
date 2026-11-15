@@ -4,7 +4,9 @@ Challenge: Exa, "The Internet Butler". Final deadline Sun 15 Nov 10:00 EET. Past
 
 Live app: https://bogdan-c-2206--vali-web.us-east.modal.run/
 
-Demo link for judges: the `#demo=<token>` link (kept out of the repo). It opens the sign-in page with **Open the demo account**. One tap and the demo account is open, already full of real errands.
+Judges' access: sign in with the demo account, already full of real errands, on the web and in the extension. The email and password go in the form's notes, not in the repo. The `#demo=<token>` link opens the same account, view only.
+
+Chrome extension: download it from **Get the extension** on the site (`/vali-extension.zip`), unzip it, open `chrome://extensions`, turn on Developer mode, choose **Load unpacked**, then sign in from its settings with the same account.
 
 ---
 
@@ -19,7 +21,7 @@ Demo link for judges: the `#demo=<token>` link (kept out of the repo). It opens 
 | Project Demo URL | The live app link above |
 | Source Code URL | github.com/bristiana/junction-exa (make it public first) |
 | Video link | The 2-minute video from section 5, public |
-| Other Link | The demo link |
+| Other Link | The extension zip: /vali-extension.zip on the live app |
 | Presentation | The slides as PDF |
 | Tech Challenge Participation | Modal, Aiven, plus any other we can back with the running product |
 
@@ -98,7 +100,7 @@ Every **Book it** runs in its own private Chromium browser on Modal (2 CPUs, 4 G
 
 ## Try it
 
-Open the demo link and tap **Open the demo account**, or create your own account on the live app and ask:
+Sign in on the live app with the demo account (email and password in the form's notes) and ask:
 
 1. `How can I open a bank account without a Finnish personal ID?`
 2. `I study my master's at Aalto. How do I get the HSL student discount?`

@@ -26,7 +26,7 @@ export function openBoard(id = null) {
   open = true;
   threadId = id;
   if (last) render(last);
-  else show('dashboard', h('p', { class: 'muted board-loading' }, 'Loading your dashboard…'));
+  else show('board-content', h('p', { class: 'muted board-loading' }, 'Loading your dashboard…'));
   load();
 }
 
@@ -59,7 +59,7 @@ async function load() {
   } catch (error) {
     if (mine !== gen || !open) return;
     failing = true;
-    if (!last) show('dashboard', h('p', { class: 'muted board-loading' }, `Couldn't load the dashboard: ${error.message}`));
+    if (!last) show('board-content', h('p', { class: 'muted board-loading' }, `Couldn't load the dashboard: ${error.message}`));
   }
   stamp();
   if (mine === gen && open) timer = setTimeout(load, failing ? POLL_MS * 2 : POLL_MS);
@@ -78,7 +78,7 @@ function render({ tasks, stats, watches, extra, checked }) {
   const feed = feedOf(tasks);
   const searches = searchesOf(tasks);
   const rows = watchesOf(watches, tasks);
-  show('dashboard', h('div', { class: 'board' },
+  show('board-content', h('div', { class: 'board' },
     h('div', { class: 'board-head' },
       h('div', {},
         h('h1', { class: 'board-title' }, 'Dashboard')),
@@ -112,14 +112,14 @@ function liveBadge() {
 function renderThread(task, checked) {
   const back = h('a', { class: 'back thread-back', href: '#/dashboard', 'data-key': 'back' }, '← Dashboard');
   if (!task) {
-    show('dashboard', h('div', { class: 'board thread-view' }, h('div', { class: 'thread-top' }, back, liveBadge()),
+    show('board-content', h('div', { class: 'board thread-view' }, h('div', { class: 'thread-top' }, back, liveBadge()),
       h('p', { class: 'muted board-loading' }, checked ? 'This errand is not in this account.' : 'Loading the errand…')));
     return stamp();
   }
   const focused = document.activeElement?.closest?.('#dashboard [data-key]')?.dataset.key;
   const [row] = feedOf([task]);
   const pages = pagesOpened(task);
-  show('dashboard', h('div', { class: 'board thread-view' },
+  show('board-content', h('div', { class: 'board thread-view' },
     h('div', { class: 'thread-top' }, back, liveBadge()),
     h('section', { class: 'card thread', 'aria-labelledby': 'thread-title' },
       h('header', { class: 'thread-head' },

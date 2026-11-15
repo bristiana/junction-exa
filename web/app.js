@@ -48,30 +48,35 @@ function notice(text, quiet = false) {
 // ---------- asking ----------
 // The one way an errand starts on this page: the home ask box, follow-ups and the corner bubble all call it.
 function startErrand(errand, previousTaskId) {
-  if (!session.signedIn()) {  // closed for judging: no new accounts, so sign in first
+  if (!session.signedIn()) {  // invite only: no new accounts, so sign in first
     location.hash = '#/login';
-    return Promise.reject(new Error('Sign in first.'));
+    return Promise.reject(Object.assign(new Error('Sign in first.'), { signInRequired: true }));
   }
   return api.createTask(errand, previousTaskId, Object.keys(loadProfile()));
 }
 
-async function ask(text, previousTaskId) {
+async function ask(text, previousTaskId, form = $('ask'), input = $('errand')) {
   const errand = text.trim();
   if (!errand) return;
   notice('');
-  $('ask').classList.add('busy');
+  if (form.classList.contains('busy')) return;
+  form.classList.add('busy');
   try {
     const task = await startErrand(errand, previousTaskId);
-    $('errand').value = '';
+    input.value = '';
     location.hash = '#/t/' + task.id;
   } catch (error) {
-    notice(`Couldn't start the errand: ${error.message}`);
+    if (!error.signInRequired) notice(`Couldn't start the errand: ${error.message}`);
   } finally {
-    $('ask').classList.remove('busy');
+    form.classList.remove('busy');
   }
 }
 
 $('ask').addEventListener('submit', (event) => { event.preventDefault(); ask($('errand').value); });
+$('dashboard-ask').addEventListener('submit', (event) => {
+  event.preventDefault();
+  ask($('dashboard-errand').value, undefined, $('dashboard-ask'), $('dashboard-errand'));
+});
 for (const chip of document.querySelectorAll('#examples button.chip')) chip.addEventListener('click', () => ask(chip.textContent));
 startMic($('mic'), { onText: (text) => { $('errand').value = text; $('errand').focus(); }, onError: notice });
 createAskDock({ start: (text) => startErrand(text), mascot });
@@ -178,6 +183,7 @@ function unfollow() {
 // ---------- your errands ----------
 // Loaded when home opens and when the tab comes back, never on a timer; /v1/stats is optional until the API ships it.
 async function loadDashboard() {
+  if (!session.signedIn()) return;
   try {
     const [{ tasks }, stats] = await Promise.all([api.tasks(), api.stats().catch(() => null)]);
     if (!$('home').hidden) renderDashboard(tasks, stats);
@@ -201,6 +207,7 @@ $('details').addEventListener('close', () => { if (followed?.task) { followed.ke
 
 // ---------- routes ----------
 function route() {
+  notice('');
   // Errands and the dashboard need a signed-in account; the landing page and sign-in do not.
   const gated = /^#\/(dashboard|t\/)/.test(location.hash);
   if (gated && !session.signedIn()) {

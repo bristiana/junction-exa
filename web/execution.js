@@ -1,7 +1,7 @@
 // The browser run behind "Fill it for me": the live frame, its steps, and Approve / Stop when it waits for you.
 import { api } from './api.js';
 import { h } from './dom.js';
-import { domainOf, friendlyStep, runStatus } from './model.js';
+import { domainOf, friendlySteps, runStatus } from './model.js';
 import { questionBlock } from './working.js';
 import { fillPlaceholders, loadProfile } from './profile.js';
 
@@ -23,14 +23,14 @@ export function renderExecution(task, { onApprove, onStop, onReply, quiet = fals
   const status = runStatus(task);
   const live = LIVE.has(status);
   const waiting = status === 'awaiting_approval';
-  const steps = (Array.isArray(run.steps) ? run.steps : []).map((step) => ({ ...step, text: friendlyStep(step.text) })).filter((step) => step.text).slice(-6);
+  const steps = friendlySteps(task).slice(-6);
   const profile = loadProfile(); // placeholders show your own values, on this page only
   return h('section', { class: quiet ? 'run quiet-run' : `run card ${waiting ? 'waiting' : ''}` },
     h('div', { class: 'run-head' },
       quiet ? null : h('span', { class: `badge ${live ? 'live' : status}` }, STATUS[status] || status),
       run.current_url ? h('span', { class: 'run-url' }, domainOf(run.current_url)) : null),
     frame(task, live),
-    steps.length ? h('ol', { class: 'run-steps' }, steps.map((step) => h('li', {}, fillPlaceholders(step.text, profile)))) : null,
+    steps.length ? h('ol', { class: 'run-steps' }, steps.map((step) => h('li', {}, fillPlaceholders(step, profile)))) : null,
     run.question?.text && !quiet ? questionBlock({ text: run.question.text, options: [] }, onReply) : null,
     waiting ? approval(run.approval, profile, onApprove, onStop, quiet) : null,
     run.result && !live && !quiet ? h('p', { class: 'run-result' }, run.result) : null,

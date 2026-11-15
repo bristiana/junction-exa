@@ -7,6 +7,7 @@
 <meta name="vali-api" content="">
 <title>Vali</title>
 <meta name="description" content="Vali is your valet for life in Finland. Documents, money, transport, bookings and housing, handled for you. You tap Approve.">
+<link rel="icon" href="vali-icon.png" type="image/png">
 <link rel="stylesheet" href="style.css">
 <script src="vendor/butler.js"></script>
 <script type="module" src="app.js"></script>
@@ -15,6 +16,7 @@
 <header class="top">
   <a class="brand" href="#/">Vali</a>
   <div class="top-right">
+    <a href="/vali-extension.zip" download="vali-extension.zip" class="link-btn">Get the extension</a>
     <a href="#/dashboard" class="link-btn signed" data-view="dashboard">Dashboard</a>
     <button type="button" id="to-errands" class="link-btn signed">Errands</button>
     <button type="button" id="to-whatsapp" class="link-btn signed">WhatsApp</button>
@@ -127,7 +129,15 @@
   <section id="answer" class="view answer" hidden></section>
   <section id="hub" class="view hub" hidden></section>
   <section id="login" class="view login-view" hidden aria-label="Sign in"></section>
-<section id="dashboard" class="view dashboard" hidden aria-label="Dashboard"></section>
+<section id="dashboard" class="view dashboard" hidden aria-label="Dashboard">
+  <form id="dashboard-ask" class="ask">
+    <label class="sr-only" for="dashboard-errand">Your errand</label>
+    <input id="dashboard-errand" type="text" maxlength="2000" autocomplete="off" enterkeyhint="send" placeholder="What do you need done?">
+    <button type="submit" class="btn go">Ask Vali</button>
+  </form>
+  <p class="muted extension-hint">Chrome extension: unzip, open chrome://extensions, turn on Developer mode, Load unpacked, then sign in from its settings.</p>
+  <div id="board-content"></div>
+</section>
 </main>
 
 <dialog id="trust" class="sheet" aria-labelledby="trust-title">

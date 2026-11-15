@@ -105,3 +105,51 @@ test("output.lead opens the claims as Vali's own line; it is not a claim with so
   const task = { research: { output: { lead: "Check kela.fi for your income limit.", claims: [{ text: "Not confirmed: x.", sources: [], supported: false }] } } };
   assert.deepEqual(claimsOf(task, []).map((c) => [c.text, c.supported]), [["Check kela.fi for your income limit.", true], ["Not confirmed: x.", false]]);
 });
+
+test("information links finish research without offering to fill a form", async () => {
+  const { errandStage, linkActions } = await import('../web/model.js');
+  for (const text of ['What are the pharmacy hours?', 'Which days is the museum open?', 'What do I need for a bank account?', 'How do I book a sauna?', 'Is this book in the library?']) {
+    const task = { task: text, research: { status: 'completed', output: { structured: { actions: [
+      { type: 'open_link', label: 'Visit the site', url: 'https://ainoapteekki.fi/hours' },
+    ] } } } };
+    assert.equal(errandStage(task).next.kind, 'done', text);
+    assert.deepEqual(errandStage(task).stages, ['Found', 'Done']);
+    assert.equal(linkActions(task)[0].domain, 'ainoapteekki.fi');
+  }
+});
+
+test("explicit form requests and structured form actions offer the correct action", async () => {
+  const { errandStage } = await import('../web/model.js');
+  const task = { task: 'Find options', research: { status: 'completed', output: { structured: { actions: [
+    { type: 'open_link', url: 'https://example.org/info' },
+    { type: 'book', url: 'https://example.org/booking' },
+  ] } } } };
+  for (const type of ['fill', 'book', 'apply']) {
+    task.research.output.structured.actions[1].type = type;
+    assert.equal(errandStage(task).next.kind, 'fill');
+    assert.equal(primaryAction(task).index, 1);
+  }
+  task.research.output.structured.actions.pop();
+  for (const text of ['Fill in the test order form', 'Please book a sauna', 'Can you fill this form?', 'I need you to book a table']) {
+    assert.equal(errandStage({ ...task, task: text }).next.kind, 'fill', text);
+  }
+  task.research.output.structured.actions = [];
+  assert.equal(errandStage({ ...task, task: 'Book a sauna' }).next.kind, 'done');
+});
+
+test("browser stories shorten navigation, collapse repeats and show detail names only", async () => {
+  const { detailsOf, friendlyStep, friendlySteps, errandStage } = await import('../web/model.js');
+  const { runSteps } = await import('../web/board-model.js');
+  assert.equal(friendlyStep('Navigated to https://www.httpbin.org/forms/post?secret=1'), 'Opened httpbin.org');
+  const task = { research: { status: 'completed', known_details: ['name'] }, execution: { status: 'stopped', steps: [
+    { text: 'Filled "Name" with Test Person' }, { text: 'Filled "Email" with test@example.com' },
+    { text: 'Filled "Email" with test@example.com' }, { text: 'Scrolled down' },
+    { text: 'Filled "Email" with test@example.com' }, { text: 'Ticked "Bacon"' },
+  ] } };
+  assert.deepEqual(detailsOf(task), ['name', 'email']);
+  assert.equal(friendlySteps(task).length, 3);
+  assert.equal(runSteps(task).steps.length, 3);
+  assert.match(errandStage(task).line, /after “Ticked Bacon”\./);
+  assert.deepEqual(detailsOf({ execution: { steps: [{ text: 'Opened https://example.org' }] } }), []);
+  assert.deepEqual(detailsOf({ execution: { steps: [{ text: 'Filled in your email' }] } }), ['email']);
+});

@@ -143,10 +143,11 @@ export function stepsOf(task) {
   }));
 }
 
-// The page Vali would open or fill: the first prepared action with a web address.
+// Prefer a prepared form action, otherwise the first action with a web address.
 export function primaryAction(task) {
   const actions = list(structured(task).actions);
-  const index = actions.findIndex((a) => safeUrl(a?.url));
+  const formIndex = actions.findIndex((a) => ['fill', 'book', 'apply'].includes(a?.type) && safeUrl(a?.url));
+  const index = formIndex >= 0 ? formIndex : actions.findIndex((a) => safeUrl(a?.url));
   return index < 0 ? null : { index, url: safeUrl(actions[index].url), domain: domainOf(actions[index].url), label: String(actions[index].label || '') };
 }
 
@@ -289,7 +290,12 @@ export function errandStage(task) {
   const last = steps.at(-1) || '';
   const asked = String(run?.question?.text || ((raw.at(-1) || '').match(/^Asked you: (.+)/) || [])[1] || '');
   const site = domainOf(run?.current_url) || action?.domain || '';
-  const stages = action || run ? ['Found', 'Filled', 'Your OK', 'Done'] : ['Found', 'Done'];
+  // Book, write and claim errands end on a form; find and check errands end on an answer with links.
+  const wantsForm = ['book', 'write', 'claim'].includes(task?.mode)
+    || list(structured(task).actions).some((a) => ['fill', 'book', 'apply'].includes(a?.type) && safeUrl(a?.url))
+    || /^(?:(?:please|can you|could you|help me|I want to|I need to|I need you to)\s+)*(?:fill\b|book\b|apply\b)/i.test(String(task?.task || '').trim());
+  const canFill = action && wantsForm;
+  const stages = canFill || run ? ['Found', 'Filled', 'Your OK', 'Done'] : ['Found', 'Done'];
   const done = stages.length - 1;
   const out = (at, tone, line, next, extra = {}) => ({ stages, at, tone, line, next, site, ...extra });
   if (!TERMINAL.has(research.status)) return out(0, 'working', 'Vali is reading the web with Exa.', null);
@@ -302,7 +308,7 @@ export function errandStage(task) {
     if (structured(task).status === 'needs_info' && missingInfo(task).length) {
       return out(0, 'you', `Vali needs one thing from you: ${missingInfo(task)[0]}`, { kind: 'answer', question: missingInfo(task).join(' ') });
     }
-    if (action) return out(0, 'ready', `Vali found it. Next: fill the form on ${action.domain}.`, { kind: 'fill' });
+    if (canFill) return out(0, 'ready', `Vali found it. Next: fill the form on ${action.domain}.`, { kind: 'fill' });
     return out(done, 'done', 'Done. Pick an option or ask Vali something else.', { kind: 'done' });
   }
   if (status === 'starting') return out(1, 'working', `Opening ${site}.`, { kind: 'stop' });
@@ -315,7 +321,7 @@ export function errandStage(task) {
   if (status === 'done' || status === 'completed') return out(done, 'done', sentences(run.result || '')[0] || 'Done.', { kind: 'done' });
   const reached = run.approval ? 2 : 1;
   if (status === 'stopped') {
-    const where = asked ? `while Vali was asking “${asked.replace(/[?.]\s*$/, '')}?”` : last ? `after “${last}”.` : `on ${site}.`;
+    const where = asked ? `while Vali was asking “${asked.replace(/[?.]\s*$/, '')}?”` : last ? `after “${last.replace(/[“”"‘’]/g, '')}”.` : `on ${site}.`;
     return out(reached, 'stopped', `You stopped it ${where} Nothing was sent.`, { kind: 'refill', question: asked, hint: asked ? 'Answer and Vali picks up from there.' : 'Continue and Vali picks up from there.' });
   }
   return out(reached, 'failed', `Couldn't finish on ${site}${last ? ` after: ${last}` : ''}. ${run.error || ''}`.trim(), { kind: 'refill', question: asked, hint: 'Continue to let Vali try again from there, or open the site and finish it yourself.' });
@@ -328,7 +334,7 @@ export function friendlyStep(text) {
   if (!t || NOISE.test(t) || /--\s*(make a choice|valitse)/i.test(t) || /timeout|locator|data-vali-ref/i.test(t)) return '';
   const clean = (v) => v.replace(/[*:]+$/, '').trim();
   let m;
-  if ((m = /^Opened\s+(\S+)/.exec(t)) && domainOf(m[1])) return `Opened ${domainOf(m[1])}`;
+  if ((m = /^(?:Opened|Navigated to)\s+(\S+)/i.exec(t)) && domainOf(m[1])) return `Opened ${domainOf(m[1])}`;
   if ((m = /^Chose "(.+?)" in ".*"$/.exec(t))) return `Chose ${clean(m[1])}`;
   if ((m = /^Clicked "(.+)"$/.exec(t))) return `Chose ${clean(m[1])}`;
   if ((m = /^Set (.+?) to "(.+)"$/.exec(t))) return `Set ${clean(m[1].replace(/^"|"$/g, ''))} to ${m[2]}`;
@@ -337,6 +343,22 @@ export function friendlyStep(text) {
     return `Filled in ${mine ? 'your ' : ''}${clean(m[1]).toLowerCase()}${mine ? '' : `: ${m[2]}`}`;
   }
   return t.replace(/"([^"]+)"/g, '“$1”');
+}
+
+// Friendly browser steps, with repeated consecutive descriptions collapsed.
+export function friendlySteps(task) {
+  return list(task?.execution?.steps).map((s) => friendlyStep(s?.text)).filter(Boolean)
+    .filter((text, i, steps) => i === 0 || text !== steps[i - 1]);
+}
+
+// Detail names only: never include the values typed into a form.
+export function detailsOf(task) {
+  const known = list(task?.research?.known_details).map(String);
+  const filled = friendlySteps(task).flatMap((text) => {
+    const match = /^Filled in (?:your )?([^:]+)(?::.*)?$/i.exec(text);
+    return match ? [match[1].trim().toLowerCase()] : [];
+  });
+  return [...new Set([...known, ...filled])];
 }
 
 // What Vali did on the web for this errand, as one plain sentence.

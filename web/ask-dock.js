@@ -66,7 +66,7 @@ export function createAskDock({ start, mascot }) {
       show(task);
     } catch (error) {
       mascot?.pose(null);
-      body.replaceChildren(h('p', { class: 'dock-error' }, `Couldn't start: ${error.message}`));
+      if (!error.signInRequired) body.replaceChildren(h('p', { class: 'dock-error' }, `Couldn't start: ${error.message}`));
     } finally {
       form.classList.remove('busy');
     }
