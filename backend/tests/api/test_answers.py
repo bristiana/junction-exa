@@ -216,3 +216,20 @@ def test_whatsapp_late_answer_to_a_paused_run_continues_it(wa, monkeypatch):
     execution = store.get_task(tid)['execution']
     assert execution['status'] == 'starting' and execution['runs'] == 2
     assert json.loads(browsers[-1][1])['resume']['answer'] == '19:30'
+
+
+def test_whatsapp_approve_in_the_closed_demo_says_the_demo_stop_once(wa):
+    api, graph, deliver = wa
+    client, application, store, *_, user = api
+    tid = waiting_for_approval(wa)
+    config = application.state.config
+    config.closed, config.submit_hosts = True, frozenset({'httpbin.org'})
+    config.owner_ids = frozenset({user['user_id']})
+    store.patch_execution(tid, {'current_url': 'https://varaamo.hel.fi/book'})
+    graph.sent.clear()
+    deliver('yes', mid='approve')
+    demo = 'This is the demo, so Vali stopped right before sending. Nothing reached varaamo.hel.fi.'
+    assert store.get_task(tid)['execution']['result'] == demo
+    texts = [str(sent) for sent in graph.sent]
+    assert sum(demo in text for text in texts) == 1, texts
+    assert not any('Nothing was sent' in text for text in texts), texts

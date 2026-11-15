@@ -322,6 +322,8 @@ def render_execution_update(task, profile=None, buttons=False):
             message += f" Finish here: {url}"
         if not buttons:
             message += CONTINUE_HINT
+    elif status == "stopped" and str(execution.get("result") or "").startswith("This is the demo"):
+        message = _text(execution["result"], profile)  # the closed demo's stop right before sending
     elif status == "stopped":
         message = "Stopped. Nothing was sent." + ("" if buttons else CONTINUE_HINT)
     elif status == "submitting":
