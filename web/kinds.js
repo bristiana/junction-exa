@@ -171,6 +171,8 @@ export function needsBlock(task, handlers, { inline = false } = {}) {
   const run = task?.execution?.status;
   const send = (question, text, button) => {
     const reply = `${question} ${text}`;
+    const open = task?.research?.question;  // Vali's own open question: the answer refines the research
+    if (open?.text && open.answer == null && onReply) return onReply(text, button);
     if (['starting', 'running', 'awaiting_approval'].includes(run) && onReply) return onReply(text, button);
     if (['stopped', 'failed', 'done'].includes(run) && onResume) return onResume(reply, button);
     return onFollowUp?.(reply);
