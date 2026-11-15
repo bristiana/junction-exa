@@ -301,12 +301,15 @@ FIND_SCHEMA = {'type': 'object', 'properties': {
     'answer': {'type': 'string', 'description': 'In the errand\'s language, 1-3 sentences. For a price or cost '
                'question, lead with the figure the pages state (the lowest price found and the option it is for); '
                '"varies" only together with those figures. Only when no page states a price, say so. For showtimes, '
-               'timetables or opening hours, name each item with its time as the page lists it, never "several others".'},
+               'timetables or opening hours, name each item with its time as the page lists it, never "several others". '
+               'Dates are relative to today: for "this week" or "today", first say plainly whether anything falls in '
+               'that period, and call a date that has passed past.'},
     'options': {'type': 'array', 'description': '3 to 5 different options (places, products or services), '
                 'each with its own page to book or buy', 'items': {'type': 'object', 'properties': {
         k: {'type': 'string'} for k in ('name', 'detail', 'price', 'url')},
         'required': ['name', 'detail', 'price', 'url']}},
-    'next_step': {'type': 'string'}, 'next_errand': {'type': 'string'}}, 'required': ['answer', 'options', 'next_step']}
+    'next_step': {'type': 'string', 'description': 'One thing the user does next, written to them as an instruction '
+                  '("Buy the ticket on the Ateneum site"), never about what you found or did.'}, 'next_errand': {'type': 'string'}}, 'required': ['answer', 'options', 'next_step']}
 
 
 def priced_answer(answer, options):
