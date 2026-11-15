@@ -1,13 +1,13 @@
 // The browser run behind "Fill it for me": the live frame, its steps, and Approve / Stop when it waits for you.
 import { api } from './api.js';
 import { h } from './dom.js';
-import { domainOf, friendlySteps, runStatus } from './model.js';
+import { blockedRun, domainOf, friendlySteps, plainError, runStatus } from './model.js';
 import { questionBlock } from './working.js';
 import { fillPlaceholders, loadProfile } from './profile.js';
 
 const STATUS = {
   starting: 'Opening the page', running: 'Filling the form', awaiting_approval: 'Waiting for your OK',
-  submitting: 'Submitting', done: 'Done', failed: "Couldn't finish", stopped: 'Stopped. Nothing was sent.',
+  submitting: 'Submitting', done: 'Done', failed: "Couldn't finish", stopped: 'Held, nothing sent',
 };
 const LIVE = new Set(['starting', 'running', 'awaiting_approval', 'submitting']);
 let frameTimer = 0;
@@ -27,14 +27,14 @@ export function renderExecution(task, { onApprove, onStop, onReply, quiet = fals
   const profile = loadProfile(); // placeholders show your own values, on this page only
   return h('section', { class: quiet ? 'run quiet-run' : `run card ${waiting ? 'waiting' : ''}` },
     h('div', { class: 'run-head' },
-      quiet ? null : h('span', { class: `badge ${live ? 'live' : status}` }, STATUS[status] || status),
+      quiet ? null : blockedRun(task) ? h('span', { class: 'badge you' }, 'Handed to you') : h('span', { class: `badge ${live ? 'live' : status}` }, STATUS[status] || status),
       run.current_url ? h('span', { class: 'run-url' }, domainOf(run.current_url)) : null),
     frame(task, live),
     steps.length ? h('ol', { class: 'run-steps' }, steps.map((step) => h('li', {}, fillPlaceholders(step, profile)))) : null,
     run.question?.text && !quiet ? questionBlock({ text: run.question.text, options: [] }, onReply) : null,
     waiting ? approval(run.approval, profile, onApprove, onStop, quiet) : null,
-    run.result && !live && !quiet ? h('p', { class: 'run-result' }, run.result) : null,
-    run.error && !(quiet && status === 'stopped') ? h('p', { class: 'run-error' }, run.error) : null,
+    run.result && !live && !quiet ? h('p', { class: 'run-result' }, status === 'failed' ? plainError(run.result) : run.result) : null,
+    run.error && !(quiet && status === 'stopped') ? h('p', { class: 'run-error' }, plainError(run.error)) : null,
     live && !waiting && !quiet ? h('button', { type: 'button', class: 'btn quiet', onclick: (e) => onStop(e.currentTarget) }, 'Stop') : null);
 }
 

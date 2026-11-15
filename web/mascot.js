@@ -12,6 +12,7 @@ const DOCK_SPEED = 360;    // px per second to and from the corner button
 const IDLE_MS = 20000;     // on home, this long without a click or key and he goes for a walk
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const narrow = matchMedia('(max-width: 600px)');
+const tiny = matchMedia('(max-width: 480px)'); // a phone: a smaller Vali on a smaller corner button
 
 export function createMascot() {
   const art = h('div', { class: 'buddy-art' });
@@ -45,8 +46,9 @@ export function createMascot() {
   // Standing on the corner button, feet on its pad.
   function docked() {
     dock.hidden = false;
-    const pad = dock.querySelector('.dock-btn').getBoundingClientRect(), scale = DOCK / SIZE;
-    return { mode: 'dock', x: pad.left + (pad.width - DOCK) / 2, y: pad.bottom - DOCK - 6, scale };
+    const size = tiny.matches ? 56 : DOCK;
+    const pad = dock.querySelector('.dock-btn').getBoundingClientRect(), scale = size / SIZE;
+    return { mode: 'dock', x: pad.left + (pad.width - size) / 2, y: pad.bottom - size - 4, scale };
   }
 
   // Walk there at a steady pace (a jump under Reduce motion, or when only the page scrolled).

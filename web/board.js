@@ -221,7 +221,7 @@ function tile(name, value, note) {
 
 function feedRow(row, fresh) {
   return h('li', { class: fresh ? 'fresh' : null },
-    h('a', { class: `feed-row tone-${row.tone}`, href: `#/dashboard/${encodeURIComponent(row.id)}`, 'data-key': row.id },
+    h('a', { class: `feed-row tone-${row.tone}`, href: `#/t/${encodeURIComponent(row.id)}`, 'data-key': row.id },
       h('span', { class: 'feed-top' },
         badge(row.channel),
         h('span', { class: 'feed-meta' }, h('b', {}, row.status), ', ', ago(row.at))),

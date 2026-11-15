@@ -260,6 +260,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px 120px; }
 .badge.live::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s infinite; }
 .badge.done { background: var(--good-soft); color: var(--good); }
 .badge.failed { background: var(--bad-soft); color: var(--bad); }
+.badge.you { background: var(--warn-soft); color: var(--warn); }
 .run-url { font-size: 13px; color: var(--muted); }
 .run-frame { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: contain; object-position: top; border-radius: 12px; border: 1px solid var(--line-2); background: var(--fill-2); }
 .run-steps { margin: 12px 0 0; padding-left: 20px; font-size: 14px; color: var(--muted); }
@@ -517,6 +518,14 @@ a.watch-criteria:hover { text-decoration: underline; text-decoration-color: var(
 .dock-glyph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--accent); }
 .dock-glyph svg { width: 26px; height: 26px; }
 .has-buddy .dock-glyph { display: none; }
+/* On a phone the corner is smaller, and on the errand page Vali steps off it so he never covers the answer. */
+@media (max-width: 480px) {
+  .dock { right: 12px; bottom: 12px; }
+  .dock-btn { width: 48px; height: 48px; }
+  body[data-view="answer"] .buddy { display: none; }
+  body[data-view="answer"] .has-buddy .dock-glyph { display: grid; }
+  body[data-view="answer"] main { padding-bottom: 64px; }
+}
 .dock-bubble { position: relative; width: min(340px, calc(100vw - 32px)); padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 22px 22px 8px 22px; box-shadow: var(--shadow-2); transform-origin: bottom right; animation: pop .18s ease-out; }
 .dock-head { display: flex; justify-content: space-between; align-items: center; margin: -2px -4px 10px 2px; }
 .dock-title { margin: 0; font-weight: 700; font-size: 15px; }
@@ -656,7 +665,6 @@ body.signed-in .top .guest { display: none; }
 /* the home errand list belongs to a signed-in account */
 body:not(.signed-in) #errands { display: none; }
 
-.extension-hint { font-size: 13px; margin: 12px 0 20px; }
 
 /* signed in, home is the ask box and your errands; the story about Vali is for visitors */
 body.signed-in #home .landing { display: none; }

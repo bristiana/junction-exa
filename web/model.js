@@ -217,9 +217,11 @@ export function errandStatus(task) {
     const last = activityOf(task).at(-1);
     return { word: 'Working', tone: 'working', detail: last ? activityLine(last) : 'Starting the research' };
   }
-  if (research.status === 'cancelled' || run === 'stopped') return { word: 'Stopped', tone: 'failed', detail: 'Nothing was sent.' };
+  // Stopped by you or held by the demo: neutral, listed with the stopped ones. A bot wall hands the errand to you.
+  if (heldRun(task)) return { word: 'Held, nothing sent', tone: 'held', group: 'failed', detail: 'Nothing was sent.' };
+  if (blockedRun(task)) return { word: 'Handed to you', tone: 'you', detail: BLOCKED_LINE };
   if (research.status === 'failed' || run === 'failed') {
-    return { word: "Couldn't finish", tone: 'failed', detail: errorText(research.error) || errorText(task.execution?.error) };
+    return { word: "Couldn't finish", tone: 'failed', detail: plainError(research.error) || plainError(task.execution?.error) };
   }
   if (structured(task).status === 'needs_info' && !run) return { word: 'Needs your answer', tone: 'you', detail: missingInfo(task)[0] || '' };
   return { word: 'Done', tone: 'done', detail: task.execution?.result || sentences(structured(task).answer)[0] || '' };
@@ -307,7 +309,7 @@ export function errandStage(task) {
   const done = stages.length - 1;
   const out = (at, tone, line, next, extra = {}) => ({ stages, at, tone, line, next, site, ...extra });
   if (!TERMINAL.has(research.status)) return out(0, 'working', 'Vali is reading the web with Exa.', null);
-  if (research.status === 'failed') return out(0, 'failed', research.error || 'The research did not finish.', { kind: 'retry' });
+  if (research.status === 'failed') return out(0, 'failed', plainError(research.error) || 'The research did not finish.', { kind: 'retry' });
   if (research.status === 'cancelled' && !run) return out(0, 'stopped', 'You stopped this errand. Nothing was sent.', { kind: 'retry' });
   // A finished research's leftover question is stale: the answer came without it.
   const question = research.status === 'completed' ? null : questionOf(task);
@@ -328,11 +330,13 @@ export function errandStage(task) {
   if (status === 'submitting') return out(2, 'working', `Sending it on ${site}.`, null);
   if (status === 'done' || status === 'completed') return out(done, 'done', sentences(run.result || '')[0] || 'Done.', { kind: 'done' });
   const reached = run.approval ? 2 : 1;
+  if (stopNote(task)?.kind === 'demo') return out(reached, 'stopped', stopNote(task).line, null);
   if (status === 'stopped') {
     const where = asked ? `while Vali was asking “${asked.replace(/[?.]\s*$/, '')}?”` : last ? `after “${last.replace(/[“”"‘’]/g, '')}”.` : `on ${site}.`;
     return out(reached, 'stopped', `You stopped it ${where} Nothing was sent.`, { kind: 'refill', question: asked, hint: asked ? 'Answer and Vali picks up from there.' : 'Continue and Vali picks up from there.' });
   }
-  return out(reached, 'failed', `Couldn't finish on ${site}${last ? ` after: ${last}` : ''}. ${run.error || ''}`.trim(), { kind: 'refill', question: asked, hint: 'Continue to let Vali try again from there, or open the site and finish it yourself.' });
+  if (blockedRun(task)) return out(reached, 'you', `Vali handed this to you. Open ${site} and finish it there.`, { kind: 'refill', question: asked, hint: 'Continue to let Vali try again from there, or open the site and finish it yourself.' });
+  return out(reached, 'failed', `Couldn't finish on ${site}${last ? ` after: ${last}` : ''}. ${plainError(run.error)}`.trim(), { kind: 'refill', question: asked, hint: 'Continue to let Vali try again from there, or open the site and finish it yourself.' });
 }
 
 // A browser step in words a non-technical person reads at a glance; '' for the browser's own bookkeeping.
@@ -486,10 +490,10 @@ export function errandLine(task) {
       return task.execution.question?.text ? line('Needs your answer', task.execution.question.text) : line(run === 'submitting' ? 'Sending' : 'Filling the form', where);
     }
     if (run === 'done' || run === 'completed') return line('Booked', where);
-    if (run === 'stopped') return line('Stopped, nothing sent', where);
-    if (run === 'failed') return line("Couldn't finish", where);
+    if (heldRun(task)) return line('Held, nothing sent', where);
+    if (run === 'failed') return line(blockedRun(task) ? 'Handed to you' : "Couldn't finish", where);
   }
-  if (status.tone === 'working' || status.tone === 'you' || status.tone === 'failed') return line(status.word, status.detail);
+  if (['working', 'you', 'failed', 'held'].includes(status.tone)) return line(status.word, status.detail);
   if (kind === 'watch') {
     const latest = list(research.updates).at(-1);
     if (!latest) return line('Checks daily', 'no new matches yet');
@@ -547,7 +551,8 @@ export function bookingStatus(task) {
     // A run that ended without your OK sent nothing: the answer is found, nothing is booked.
     return task.execution.approval_decision === 'approved' ? { word: sent, tone: 'done' } : { word: 'Not booked yet', tone: 'ready' };
   }
-  if (run === 'stopped') return { word: 'Stopped', tone: 'stopped' };
+  if (run === 'stopped') return { word: 'Held, nothing sent', tone: 'stopped' };
+  if (blockedRun(task)) return { word: 'Handed to you', tone: 'you' };
   return { word: "Couldn't finish", tone: 'failed' };
 }
 
@@ -634,8 +639,9 @@ export function failReason(task) {
   const error = String(run?.error || '').trim();
   const last = friendlySteps(task).at(-1) || '';
   const url = safeUrl(run?.current_url || run?.start_url);
-  if (error && !TECHNICAL.test(error)) return { text: shorten(error, 160), url };
-  if (error) return { text: `The site was too slow or changed while Vali was filling it${last ? `, after: ${last}` : ''}.`, url };
+  if (blockedRun(task)) return { text: `${BLOCKED_LINE} Finish it yourself:`, url };
+  if (error && !TECHNICAL.test(error) && plainError(error) === error) return { text: shorten(error, 160), url };
+  if (error) return { text: BLOCKED_LINE, url };
   if (/^Opened\b/.test(last)) return { text: 'The site stopped Vali right after the form opened. Open it yourself:', url };
   if (last) return { text: `Vali got stuck after: ${last.replace(/\.$/, '')}. Open it yourself:`, url };
   return { text: 'The site stopped Vali before the form opened. Open it yourself:', url };
@@ -686,10 +692,50 @@ export function stopNote(task) {
   const run = task?.execution;
   if (runStatus(task) !== 'stopped' && run?.status !== 'failed') return null;
   const result = String(run?.result || '').trim();
-  if (/^This is the demo\b/i.test(result)) return { kind: 'demo', line: result, word: 'Stopped before sending' };
+  if (/^This is the demo\b/i.test(result)) return { kind: 'demo', line: result, word: 'Held, nothing sent' };
   if (/^Paused:/i.test(result)) {
     const asked = String(run?.question?.text || '');
     return { kind: 'paused', line: asked ? `Vali paused, waiting for your answer: ${asked}` : 'Vali paused, waiting for your answer.', word: 'Waiting for you' };
   }
   return null;
+}
+
+// ---------- plain status words ----------
+// A page that stopped the cloud browser (a CAPTCHA or a bot wall), and any raw browser error, read as one sentence.
+export const BLOCKED_LINE = 'The page blocked the cloud browser. Nothing was sent.';
+const BOT_WALL = /captcha|turnstile|cloudflare|are you (?:a )?(?:human|robot)|verify (?:that )?you are human|bot (?:check|detection|wall)|unusual traffic|access denied/i;
+const RAW_ERROR = /shadowroot|traceback|stack|exception|playwright|locator|selector|timeout|net::|ERR_|\bnull\b|undefined|Error:|\n\s*at\s|\bat\s+\S+\s+\(/i;
+
+// A run that failed on a CAPTCHA or bot wall: the person finishes it by hand.
+export function blockedRun(task) {
+  const run = task?.execution;
+  if (runStatus(task) !== 'failed') return false;
+  const said = [errorText(run?.error), run?.result, ...list(run?.steps).slice(-3).map((s) => s?.text)].map((t) => String(t || '')).join(' ');
+  return BOT_WALL.test(said);
+}
+
+// An error the person may read: a sentence from the API as is, a bot wall or a raw browser error as BLOCKED_LINE.
+export function plainError(error) {
+  const text = errorText(error).trim();
+  if (!text) return '';
+  return BOT_WALL.test(text) || RAW_ERROR.test(text) || text.length > 240 ? BLOCKED_LINE : text;
+}
+
+// A run nobody should read as a failure: you stopped it, or the shared demo held it right before sending.
+export function heldRun(task) {
+  return task?.research?.status === 'cancelled' || runStatus(task) === 'stopped' || stopNote(task)?.kind === 'demo';
+}
+
+// ---------- citations to the exact line ----------
+// The source link scrolled to the quote: a text fragment of its first 8-12 words, cut before any ellipsis and
+// without trailing punctuation. An existing #fragment keeps its place; a URL that already has one is left alone.
+export function quoteUrl(url, quote) {
+  const safe = safeUrl(url);
+  if (!safe) return null;
+  const words = String(quote || '').split(/…|\.\.\./)[0].replace(/[“”"«»]/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (words.length < 3 || safe.includes(':~:')) return safe;
+  const slice = words.slice(0, words.length <= 12 ? 12 : 10).join(' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+  if (!slice) return safe;
+  const text = encodeURIComponent(slice).replace(/-/g, '%2D');
+  return safe.includes('#') ? `${safe}:~:text=${text}` : `${safe}#:~:text=${text}`;
 }

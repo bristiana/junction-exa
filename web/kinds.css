@@ -116,6 +116,8 @@ a.booking-site:hover { color: var(--ink); text-decoration: underline; }
 .booking-reason { margin: 0; color: var(--bad); font-weight: 600; }
 .booking-reason a { color: inherit; }
 .booking.tone-failed .state-line { display: none; }
+.booking.tone-you .booking-reason { color: var(--warn); }  /* handed to you: amber, not an error */
+.booking.tone-you:has(.booking-reason) .state-line { display: none; }
 .kind-badge.tone-ready { background: var(--fill); color: var(--accent); }
 .now-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
 .now-line { font-size: 14px; color: var(--muted); }

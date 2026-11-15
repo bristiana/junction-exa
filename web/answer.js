@@ -1,6 +1,6 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, detailsOf, draftsOf, pageKind, errandStage, exaTrail, factsOf, fillBlanks, needsOf, readableTitle, shorten, sourcesOf, stepsOf } from './model.js';
+import { claimsOf, detailsOf, draftsOf, pageKind, errandStage, exaTrail, factsOf, fillBlanks, needsOf, quoteUrl, readableTitle, shorten, sourcesOf, stepsOf } from './model.js';
 import { bookingCard, exaHelped, needsBlock, watchCard, watchMatchList } from './kinds.js';
 import { citePill } from './cite.js';
 import { renderState } from './state.js';
@@ -139,7 +139,7 @@ function facts(items) {
   if (!items.length) return null;
   return h('dl', { class: 'facts' }, items.map((fact) => h('div', { class: 'fact' },
     h('dt', {}, fact.label),
-    h('dd', {}, foldable(fact.value), fact.source ? [' ', h('a', { class: 'fact-source', href: fact.source.url, target: '_blank', rel: 'noopener noreferrer' }, fact.source.domain)] : null))));
+    h('dd', {}, foldable(fact.value), fact.source ? [' ', h('a', { class: 'fact-source', href: quoteUrl(fact.source.url, fact.source.quote) || fact.source.url, target: '_blank', rel: 'noopener noreferrer' }, fact.source.domain)] : null))));
 }
 
 // A long value shows its first sentence; the rest folds behind More.

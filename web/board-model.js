@@ -1,5 +1,5 @@
 // The dashboard's numbers and lists, read from GET /v1/tasks, /v1/stats and /v1/watches. Pure, no DOM.
-import { TERMINAL, activityOf, errorText, channelOf, domainOf, errandStatus, friendlySteps, webWork, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
+import { TERMINAL, activityOf, blockedRun, plainError, channelOf, domainOf, errandStatus, friendlySteps, webWork, missingInfo, output, runStatus, safeUrl, sentences, sourcesOf, structured } from './model.js';
 import { exaUses } from './exa-uses.js';
 
 const list = (value) => (Array.isArray(value) ? value : []);
@@ -115,7 +115,7 @@ export function watchesOf(watches, tasks) {
 // ---------- one errand as a conversation (#/dashboard/<id>) ----------
 const RUN_WORD = {
   starting: 'Opening the page', running: 'Filling the form', awaiting_approval: 'Waiting for your OK',
-  submitting: 'Submitting', completed: 'Done', done: 'Done', failed: "Couldn't finish", stopped: 'Stopped',
+  submitting: 'Submitting', completed: 'Done', done: 'Done', failed: "Couldn't finish", stopped: 'Held, nothing sent',
 };
 
 // "{{first_name}}" -> "your first name": the dashboard never shows saved details.
@@ -182,9 +182,9 @@ export function threadOf(task) {
   if (!TERMINAL.has(research.status)) {
     bubbles.push({ who: 'vali', text: status.detail || 'Working on it', label: 'Working', tone: 'working' });
   } else if (research.status === 'cancelled') {
-    bubbles.push({ who: 'vali', text: 'Stopped. Nothing was sent.', tone: 'failed' });
+    bubbles.push({ who: 'vali', text: 'Held, nothing sent.' });
   } else if (research.status === 'failed') {
-    bubbles.push({ who: 'vali', text: errorText(research.error) || "I couldn't finish this one.", tone: 'failed' });
+    bubbles.push({ who: 'vali', text: plainError(research.error) || "I couldn't finish this one.", tone: 'failed' });
   } else {
     const facts = list(structured(task).key_facts).filter((f) => f?.label && f?.value).slice(0, 3)
       .map((f) => ({ label: String(f.label), value: String(f.value) }));
@@ -202,7 +202,7 @@ function runBubbles(task) {
   const state = runStatus(task);
   const { steps, more } = runSteps(task);
   const where = domainOf(run.current_url || run.start_url);
-  const out = [{ who: 'vali', label: where ? `On ${where}` : 'On the site', text: RUN_WORD[state] || 'Working', steps, more,
+  const out = [{ who: 'vali', label: where ? `On ${where}` : 'On the site', text: (blockedRun(task) ? 'Handed to you' : RUN_WORD[state]) || 'Working', steps, more,
     tone: ['starting', 'running', 'submitting'].includes(state) ? 'working' : null }];
   const talk = [];
   if (run.question?.text) talk.push({ who: 'vali', text: String(run.question.text), at: String(run.question.at || ''), tone: 'you' });
@@ -216,7 +216,7 @@ function runBubbles(task) {
   }
   if (run.approval_decision === 'approved') out.push({ who: 'me', text: 'Approve' });
   if (run.approval_decision === 'stopped') out.push({ who: 'me', text: 'Stop' });
-  if (run.error) out.push({ who: 'vali', text: plainPlaceholders(errorText(run.error)), tone: 'failed' });
+  if (run.error || blockedRun(task)) out.push({ who: 'vali', text: plainPlaceholders(plainError(run.error) || plainError(run.result)), tone: blockedRun(task) ? 'you' : 'failed' });
   else if (state === 'stopped') { /* the state block under the chat says where it stopped */ }
   else if (run.result) out.push({ who: 'vali', text: plainPlaceholders(run.result), tone: 'done' });
   return out;

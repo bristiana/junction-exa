@@ -94,5 +94,8 @@ test('header download and favicon point to shipped web assets', async () => {
   assert.match(html, /<a href="\/vali-extension.zip" download="vali-extension.zip" class="link-btn">Get the extension<\/a>/);
   const icon = html.match(/<link rel="icon" href="([^"]+)"/)[1];
   assert.ok((await readFile(new URL('../web/' + icon, import.meta.url))).length > 0);
-  assert.match(html, /Chrome extension: unzip, open chrome:\/\/extensions, turn on Developer mode, Load unpacked, then sign in from its settings\./);
+  // The install steps show only after "Get the extension" is clicked, not on every page.
+  assert.doesNotMatch(html, /Chrome extension: unzip/);
+  const app = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
+  assert.match(app, /Chrome extension: unzip, open chrome:\/\/extensions, turn on Developer mode, Load unpacked, then sign in from its settings\./);
 });
