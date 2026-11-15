@@ -18,7 +18,7 @@ globalThis.fetch = async (url, init = {}) => {
 };
 
 const { api } = await import("../web/api.js");
-const { DEMO_PROFILE, deleteProfile, fillPlaceholders, loadProfile, missingDetails, saveProfile } = await import("../web/profile.js");
+const { DEMO_PROFILE, deleteProfile, fillPlaceholders, readableBlanks, loadProfile, missingDetails, saveProfile } = await import("../web/profile.js");
 
 const fake = { name: "Test Person", email: "test@example.com", phone: "+358 40 000 0000" };
 
@@ -67,4 +67,11 @@ test("the split name the cloud browser types fills in from the full name", () =>
   assert.equal(fillPlaceholders("{{first_name}} {{last_name}}", { name: "Madonna" }), "{{first_name}} {{last_name}}");
   assert.equal(fillPlaceholders("{{first_name}}", { name: "Anna Virtanen", first_name: "Own" }), "Own");
   assert.deepEqual(missingDetails({ task: "Book it", research: { output: { structured: { steps: ["{{first_name}}"] } } } }, {}).map((d) => d.key), ["name"]);
+});
+
+test("a placeholder Your details cannot fill shows as a readable blank, never raw", () => {
+  const text = "On {{application_date}} {{ name }} applied (ref {{Booking_Reference}}).";
+  assert.equal(readableBlanks(fillPlaceholders(text, { name: "Test Person" })), "On [application date] Test Person applied (ref [booking reference]).");
+  assert.equal(readableBlanks("no blanks here"), "no blanks here");
+  assert.equal(readableBlanks(undefined), "");
 });

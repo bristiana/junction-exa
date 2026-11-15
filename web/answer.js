@@ -1,10 +1,10 @@
 // The answer view: cited claims, key facts, next steps, the sources Vali read and how it found them.
 import { h, show } from './dom.js';
-import { claimsOf, detailsOf, draftsOf, pageKind, errandStage, exaTrail, factsOf, fillBlanks, needsOf, plainError, quoteUrl, readableTitle, shorten, sourcesOf, stepsOf } from './model.js';
+import { claimsOf, detailsOf, draftsOf, pageKind, errandStage, exaTrail, factsOf, needsOf, plainError, quoteUrl, readableTitle, shorten, sourcesOf, stepsOf } from './model.js';
 import { bookingCard, exaHelped, needsBlock, watchCard, watchMatchList } from './kinds.js';
 import { citePill } from './cite.js';
 import { renderState } from './state.js';
-import { loadProfile, missingDetails } from './profile.js';
+import { fillPlaceholders, loadProfile, missingDetails, readableBlanks } from './profile.js';
 
 // One errand, shaped by what it is: the card that matters most on top, the research below it, the plan folded.
 // Answers lead with the answer; bookings and forms with the booking; watches with the watch; drafts with the draft.
@@ -114,12 +114,12 @@ function claimText(claim, pill) {
     claim.text, claim.sources.map((n) => [' ', pill(n)]));
 }
 
-// The drafted email or message itself, ready to copy; placeholders such as {{name}} stay for the user to fill.
+// The drafted email or message itself, ready to copy; a placeholder Your details cannot fill shows as a blank like [name].
 function drafts(items) {
   if (!items.length) return null;
   return h('section', { class: 'drafts' }, items.map((draft) => {
     const profile = loadProfile();
-    const text = fillBlanks([draft.subject ? `Subject: ${draft.subject}` : '', draft.body].filter(Boolean).join('\n\n'), profile);
+    const text = readableBlanks(fillPlaceholders([draft.subject ? `Subject: ${draft.subject}` : '', draft.body].filter(Boolean).join('\n\n'), profile));
     const copy = h('button', { type: 'button', class: 'btn soft' }, 'Copy');
     copy.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(text); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select and copy'; }
@@ -129,7 +129,7 @@ function drafts(items) {
     more?.addEventListener('click', () => { pre.classList.remove('folded'); more.remove(); });
     return h('div', { class: 'draft card' },
       h('p', { class: 'draft-label' }, draft.label || (draft.type === 'email' ? 'Email draft' : 'Message')),
-      draft.to ? h('p', { class: 'draft-to' }, `To: ${fillBlanks(draft.to, profile)}`) : null,
+      draft.to ? h('p', { class: 'draft-to' }, `To: ${readableBlanks(fillPlaceholders(draft.to, profile))}`) : null,
       pre,
       h('div', { class: 'actions' }, copy, more));
   }));
