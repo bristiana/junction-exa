@@ -160,25 +160,28 @@ export function exaHelped(task) {
 }
 
 // "What Vali needs from you": a short checklist, each item with the one action that provides it. Nothing needed, no block.
-// inline: answer the question right here (answers, watches); else the Answer button jumps to the reply box in the card.
+// Every question is answered right here; the answer moves the errand on (see send below).
 export function needsBlock(task, handlers, { inline = false } = {}) {
   const items = needsOf(task, missingDetails(task, loadProfile()));
   if (!items.length) return null;
-  const { onFollowUp, onDetails } = handlers;
+  const { onFollowUp, onDetails, onReply, onResume } = handlers;
   const title = items.some((item) => item.kind !== 'bring') ? 'What Vali needs from you' : 'Before you go';
+  // An answer goes where it moves the errand on: a running form hears it, a stopped one continues with it,
+  // anything else starts the follow-up errand.
+  const run = task?.execution?.status;
+  const send = (question, text, button) => {
+    const reply = `${question} ${text}`;
+    if (['starting', 'running', 'awaiting_approval'].includes(run) && onReply) return onReply(text, button);
+    if (['stopped', 'failed', 'done'].includes(run) && onResume) return onResume(reply, button);
+    return onFollowUp?.(reply);
+  };
   return h('section', { class: `needs card ${title === 'Before you go' ? 'soft' : ''}`.trim(), 'aria-label': title },
     h('h2', { class: 'section-title' }, title),
     h('ul', { class: 'needs-list' }, items.map((item) => {
       if (item.kind === 'question') {
         return h('li', { class: 'need' },
           h('span', { class: 'need-text' }, item.text),
-          inline ? askBox((text) => onFollowUp?.(`${item.text} Answer: ${text}`)) : h('button', {
-            type: 'button', class: 'btn soft need-act', onclick: () => {
-              const box = document.querySelector('#answer .state .reply-input');
-              box?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-              box?.focus();
-            },
-          }, 'Answer'));
+          askBox((text, button) => send(item.text, text, button)));
       }
       if (item.kind === 'details') {
         return h('li', { class: 'need' },
@@ -191,6 +194,6 @@ export function needsBlock(task, handlers, { inline = false } = {}) {
 
 function askBox(send) {
   const input = h('input', { type: 'text', class: 'reply-input', maxlength: '2000', placeholder: 'Your answer', 'aria-label': 'Your answer' });
-  return h('form', { class: 'reply need-reply', onsubmit: (event) => { event.preventDefault(); const text = input.value.trim(); if (text) send(text); } },
+  return h('form', { class: 'reply need-reply', onsubmit: (event) => { event.preventDefault(); const text = input.value.trim(); if (text) send(text, event.submitter); } },
     input, h('button', { type: 'submit', class: 'btn' }, 'Send'));
 }
