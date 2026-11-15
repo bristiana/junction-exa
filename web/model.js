@@ -1,5 +1,6 @@
 // Pure reads of the task JSON. Newer fields (research.activity, output.claims, output.sources) win;
 // older tasks fall back to structured.answer, grounding citations and research.progress. No DOM here.
+import { readableBlanks } from './profile.js';
 export const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
 const LIVE_EXECUTION = new Set(['starting', 'running', 'awaiting_approval', 'submitting']);
 
@@ -503,7 +504,7 @@ export function errandLine(task) {
   if (kind === 'booking') return line(task?.mode === 'book' ? 'Ready to book' : 'Ready to fill', bookingWhere(task) || first);
   if (kind === 'draft') {
     const draft = draftsOf(task)[0];
-    return line('Draft ready', draft ? draft.subject || draft.label || sentences(draft.body)[0] : first);
+    return line('Draft ready', draft ? readableBlanks(draft.subject || draft.label || sentences(draft.body)[0]) : first);
   }
   return first ? line('', first) : line(status.word, status.detail);
 }
@@ -645,11 +646,6 @@ export function failReason(task) {
   if (/^Opened\b/.test(last)) return { text: 'The site stopped Vali right after the form opened. Open it yourself:', url };
   if (last) return { text: `Vali got stuck after: ${last.replace(/\.$/, '')}. Open it yourself:`, url };
   return { text: 'The site stopped Vali before the form opened. Open it yourself:', url };
-}
-
-// A draft with {{placeholders}} filled from your saved details, else a readable blank such as "[your name]".
-export function fillBlanks(text, profile = {}) {
-  return String(text ?? '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, key) => profile[key.toLowerCase()] || `[your ${key.toLowerCase().replaceAll('_', ' ')}]`);
 }
 
 // Which form this is, in a few words: the approval's first sentence, else the prepared action's label, else the site.

@@ -64,6 +64,11 @@ export function missingDetails(task, profile) {
 // Placeholders in what the cloud browser filled, shown with your own values. Only on this page; nothing is sent.
 // The cloud browser also types {{first_name}}, {{last_name}} and {{full_name}}, split from the full name the way the
 // agent splits it (backend/vali_agent/scope.py with_name_parts): "Anna Maria Virtanen" -> "Anna Maria" + "Virtanen".
+// What is still a {{placeholder}} after the profile pass reads as a blank to fill: {{application_date}} -> "[application date]".
+export function readableBlanks(text) {
+  return String(text ?? '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, key) => `[${key.toLowerCase().replaceAll('_', ' ')}]`);
+}
+
 export function fillPlaceholders(text, profile) {
   const words = String(profile?.name || '').trim().split(/\s+/).filter(Boolean);
   const parts = { full_name: words.join(' '), ...(words.length >= 2 ? { first_name: words.slice(0, -1).join(' '), last_name: words.at(-1) } : {}) };
