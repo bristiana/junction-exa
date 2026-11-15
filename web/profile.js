@@ -25,8 +25,17 @@ function clean(profile) {
   return out;
 }
 
+// The demo account's details until you save your own: the demo name, everything else mock.
+export const DEMO_PROFILE = {
+  name: 'Bogdan Caraeane', email: 'demo@vali.demo', phone: '+358 40 123 4567', address: 'Otakaari 1',
+  postal_code: '02150', city: 'Espoo', country: 'Finland', date_of_birth: '2000-01-01', nationality: 'Romanian',
+};
+
 export function loadProfile() {
-  try { return clean(JSON.parse(localStorage.getItem(STORE_KEY))); } catch { return {}; }
+  try {
+    const saved = clean(JSON.parse(localStorage.getItem(STORE_KEY)));
+    return Object.keys(saved).length ? saved : { ...DEMO_PROFILE };
+  } catch { return { ...DEMO_PROFILE }; }
 }
 
 // Returns false when this browser can't keep it (private window, storage off).
