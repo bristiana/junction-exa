@@ -274,20 +274,23 @@ export function fillPage(values, expectedUrl) {
 
   let filled = 0;
   const skipped = [];
+  // Recheck the live control: a page can change a tagged field into a submit button after capture.
+  const fillable = new Set(["text", "email", "tel", "textarea", "select-one", "date", "time", "number", "url", "radio"]);
   for (const { field_id, value } of values || []) {
     const els = [...document.querySelectorAll(`[data-vali-id="${CSS.escape(field_id)}"]`)];
     const el = els[0];
     if (!el || value == null) { skipped.push(field_id); continue; }
     const v = String(value);
     const type = (el.type || el.localName).toLowerCase();
+    if (!["input", "textarea", "select"].includes(el.localName) || !fillable.has(type) || el.disabled || el.readOnly) {
+      skipped.push(field_id);
+      continue;
+    }
     if (type === "radio") {
-      const target = els.find((r) => norm(r.value) === norm(v) || norm(r.closest("label")?.innerText || document.querySelector(`label[for="${CSS.escape(r.id || "")}"]`)?.innerText).includes(norm(v)));
+      const target = els.find((r) => r.localName === "input" && r.type === "radio" && !r.disabled && !r.readOnly && (norm(r.value) === norm(v) || norm(r.closest("label")?.innerText || document.querySelector(`label[for="${CSS.escape(r.id || "")}"]`)?.innerText).includes(norm(v))));
       if (!target) { skipped.push(field_id); continue; }
       target.click();
       mark(target.closest("label") || target);
-    } else if (type === "checkbox") {
-      skipped.push(field_id); // never ticked: checkboxes are consents and terms, the user decides
-      continue;
     } else if (el.localName === "select") {
       const opt = [...el.options].find((o) => norm(o.value) === norm(v) || norm(o.text) === norm(v)) || [...el.options].find((o) => norm(o.text).includes(norm(v)));
       if (!opt) { skipped.push(field_id); continue; }

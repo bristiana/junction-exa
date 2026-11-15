@@ -297,7 +297,7 @@ async function fillHere(taskId, tabId, url) {
   const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fillPage, args: [plan.map(({ field_id, value }) => ({ field_id, value })), url] });
   if (res?.result?.error) return { filled: 0, error: res.result.error };
   const filled = res?.result?.filled || 0;
-  if (filled) chrome.tabs.sendMessage(tab.id, { type: "vali-say", text: `I filled ${filled} field${filled === 1 ? "" : "s"}. Check and send it yourself.` }).catch(() => {});
+  if (filled) chrome.tabs.sendMessage(tab.id, { type: "vali-say", text: `Filled ${filled} field${filled === 1 ? "" : "s"}. Check them and press submit yourself.` }).catch(() => {});
   return { filled };
 }
 
