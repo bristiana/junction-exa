@@ -22,7 +22,7 @@ image = (
 secret = modal.Secret.from_name('vali')
 
 
-@app.function(image=image, secrets=[secret], timeout=900, cpu=2, memory=4096)
+@app.function(image=image, secrets=[secret], timeout=900, cpu=2, memory=4096, max_containers=10)
 def browser_session(task_id: str, goal: str, start_url: str, profile: dict):
     from vali_api.app import create_app, run_browser_session
     from vali_api.config import Config

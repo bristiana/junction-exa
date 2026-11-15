@@ -222,11 +222,11 @@ def test_errands_per_account_and_new_accounts_per_ip(api, monkeypatch):
 
     client, application, *_ = api
     limiter = application.state.limiter
-    assert (limiter.user_limit, limiter.seconds, limiter.signup_limit, limiter.signup_seconds) == (40, 60, 20, 3600)
+    assert (limiter.user_limit, limiter.seconds, limiter.signup_limit, limiter.signup_seconds) == (40, 60, 300, 3600)
     current = [1000.0]
     monkeypatch.setattr(guard, 'time', SimpleNamespace(monotonic=lambda: current[0]))
     limiter.events.clear()
-    for _ in range(20):
+    for _ in range(300):
         assert client.post('/v1/users').status_code == 200
     blocked = client.post('/v1/users')
     assert blocked.status_code == 429 and blocked.headers['retry-after'] == '3600'

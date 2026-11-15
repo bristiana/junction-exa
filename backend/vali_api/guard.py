@@ -17,10 +17,10 @@ class RateLimited(HTTPException):
 class SlidingWindow:
     """In-memory limits scoped to one process; shared storage is needed across replicas.
 
-    Errands are limited per account (40 a minute, so a burst of 10 always fits); new accounts per IP (20 an hour);
+    Errands are limited per account (40 a minute, so a burst of 10 always fits); new accounts and sign-ins per IP (300 an hour; wrong passwords lock per email);
     any other write per IP, loosely (600 in 10 minutes: a room of judges shares one venue address). Reads (GET polls)
     are never limited per IP."""
-    def __init__(self, user_limit=40, seconds=60, signup_limit=20, signup_seconds=3600, ip_limit=600, ip_seconds=600):
+    def __init__(self, user_limit=40, seconds=60, signup_limit=300, signup_seconds=3600, ip_limit=600, ip_seconds=600):
         self.user_limit, self.seconds = user_limit, seconds
         self.signup_limit, self.signup_seconds = signup_limit, signup_seconds
         self.ip_limit, self.ip_seconds = ip_limit, ip_seconds

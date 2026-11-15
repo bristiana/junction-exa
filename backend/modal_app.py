@@ -62,7 +62,7 @@ def research_poller(task_id: str):
         application.state.store.close()
 
 
-@app.function(image=image, secrets=[secret], timeout=900, cpu=2, memory=4096)
+@app.function(image=image, secrets=[secret], timeout=900, cpu=2, memory=4096, max_containers=10)
 def browser_session(task_id: str, goal: str, start_url: str, profile: dict):
     from vali_api.app import run_browser_session
     application = worker_app()
